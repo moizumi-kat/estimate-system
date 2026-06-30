@@ -1,0 +1,4 @@
+__pycache__/
+*.bak_*
+*.rpm
+app.py.new

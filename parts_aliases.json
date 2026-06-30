@@ -1,0 +1,438 @@
+{
+ "T/U": {
+  "aliases": [
+   "t/u"
+  ],
+  "prefix": "True"
+ },
+ "リモコンSW": {
+  "aliases": [
+   "リモコンsw"
+  ],
+  "prefix": "True"
+ },
+ "MDF": {
+  "aliases": [
+   "mdf"
+  ],
+  "prefix": "True"
+ },
+ "端子盤": {
+  "aliases": [
+   "端子盤"
+  ],
+  "prefix": "True"
+ },
+ "分配器": {
+  "aliases": [
+   "分配器"
+  ],
+  "prefix": "True"
+ },
+ "増幅器": {
+  "aliases": [
+   "増幅器"
+  ],
+  "prefix": "True"
+ },
+ "混合器": {
+  "aliases": [
+   "混合器"
+  ],
+  "prefix": "True"
+ },
+ "UHFアンテナ": {
+  "aliases": [
+   "uhf"
+  ],
+  "prefix": "False"
+ },
+ "BS-110CSアンテナ": {
+  "aliases": [
+   "bs-110"
+  ],
+  "prefix": "False"
+ },
+ "アンテナ": {
+  "aliases": [
+   "アンテナ"
+  ],
+  "prefix": "False"
+ },
+ "インターホン": {
+  "aliases": [
+   "インターホン"
+  ],
+  "prefix": "True"
+ },
+ "ネットワークカメラ": {
+  "aliases": [
+   "ネットワークカメラ"
+  ],
+  "prefix": "False"
+ },
+ "カメラ": {
+  "aliases": [
+   "カメラ"
+  ],
+  "prefix": "False"
+ },
+ "カードリーダー": {
+  "aliases": [
+   "カードリーダー"
+  ],
+  "prefix": "True"
+ },
+ "TV BOX": {
+  "aliases": [
+   "tvbox"
+  ],
+  "prefix": "False"
+ },
+ "TV": {
+  "aliases": [
+   "tv-"
+  ],
+  "prefix": "False"
+ },
+ "自動力率調整器": {
+  "aliases": [
+   "自動力率調整",
+   "自動力率",
+   "apfc"
+  ],
+  "prefix": "True"
+ },
+ "マルチ指示計": {
+  "aliases": [
+   "マルチ指示計"
+  ],
+  "prefix": "True"
+ },
+ "マルチT/D": {
+  "aliases": [
+   "マルチt/d"
+  ],
+  "prefix": "True"
+ },
+ "電圧計": {
+  "aliases": [
+   "電圧計"
+  ],
+  "prefix": "True"
+ },
+ "電流計": {
+  "aliases": [
+   "電流計"
+  ],
+  "prefix": "True"
+ },
+ "電力計": {
+  "aliases": [
+   "電力計"
+  ],
+  "prefix": "True"
+ },
+ "力率計": {
+  "aliases": [
+   "力率計"
+  ],
+  "prefix": "True"
+ },
+ "VM": {
+  "aliases": [
+   "vm"
+  ],
+  "prefix": "True"
+ },
+ "AM": {
+  "aliases": [
+   "am"
+  ],
+  "prefix": "True"
+ },
+ "VS": {
+  "aliases": [
+   "vs"
+  ],
+  "prefix": "True"
+ },
+ "AS": {
+  "aliases": [
+   "as"
+  ],
+  "prefix": "True"
+ },
+ "WHM": {
+  "aliases": [
+   "whm"
+  ],
+  "prefix": "False"
+ },
+ "MGS": {
+  "aliases": [
+   "mgs"
+  ],
+  "prefix": "True"
+ },
+ "PAS": {
+  "aliases": [
+   "pas"
+  ],
+  "prefix": "True"
+ },
+ "VCB": {
+  "aliases": [
+   "vcb",
+   "vgb"
+  ],
+  "prefix": "True"
+ },
+ "VCT": {
+  "aliases": [
+   "vct"
+  ],
+  "prefix": "True"
+ },
+ "LBS": {
+  "aliases": [
+   "lbs"
+  ],
+  "prefix": "True"
+ },
+ "DS": {
+  "aliases": [
+   "ds"
+  ],
+  "prefix": "True"
+ },
+ "CH": {
+  "aliases": [
+   "ch"
+  ],
+  "prefix": "True"
+ },
+ "L-S": {
+  "aliases": [
+   "l-s"
+  ],
+  "prefix": "False"
+ },
+ "INV": {
+  "aliases": [
+   "インバータ",
+   "inv"
+  ],
+  "prefix": "False"
+ },
+ "OCR": {
+  "aliases": [
+   "ocr"
+  ],
+  "prefix": "True"
+ },
+ "DGR": {
+  "aliases": [
+   "dgr"
+  ],
+  "prefix": "True"
+ },
+ "RPR": {
+  "aliases": [
+   "rpr"
+  ],
+  "prefix": "True"
+ },
+ "OVGR": {
+  "aliases": [
+   "ovgr"
+  ],
+  "prefix": "True"
+ },
+ "LG-RY": {
+  "aliases": [
+   "lg-ry"
+  ],
+  "prefix": "True"
+ },
+ "LGR": {
+  "aliases": [
+   "lgr"
+  ],
+  "prefix": "True"
+ },
+ "ZPD": {
+  "aliases": [
+   "zpd"
+  ],
+  "prefix": "True"
+ },
+ "ZCTT": {
+  "aliases": [
+   "zctt"
+  ],
+  "prefix": "True"
+ },
+ "ZCT": {
+  "aliases": [
+   "zct"
+  ],
+  "prefix": "True"
+ },
+ "VTT": {
+  "aliases": [
+   "vtt"
+  ],
+  "prefix": "True"
+ },
+ "CTT": {
+  "aliases": [
+   "ctt"
+  ],
+  "prefix": "True"
+ },
+ "M)LUG": {
+  "aliases": [
+   "m)lug"
+  ],
+  "prefix": "True"
+ },
+ "M)MCB": {
+  "aliases": [
+   "m)mcb"
+  ],
+  "prefix": "True"
+ },
+ "M)ELB": {
+  "aliases": [
+   "m)elb"
+  ],
+  "prefix": "True"
+ },
+ "B)MCB": {
+  "aliases": [
+   "b)mcb"
+  ],
+  "prefix": "True"
+ },
+ "B)ELB": {
+  "aliases": [
+   "b)elb"
+  ],
+  "prefix": "True"
+ },
+ "MCB": {
+  "aliases": [
+   "mcb"
+  ],
+  "prefix": "True"
+ },
+ "ELB": {
+  "aliases": [
+   "elb"
+  ],
+  "prefix": "True"
+ },
+ "VT": {
+  "aliases": [
+   "vt"
+  ],
+  "prefix": "True"
+ },
+ "CT": {
+  "aliases": [
+   "ct"
+  ],
+  "prefix": "True"
+ },
+ "PF": {
+  "aliases": [
+   "pf"
+  ],
+  "prefix": "True"
+ },
+ "LA": {
+  "aliases": [
+   "la"
+  ],
+  "prefix": "True"
+ },
+ "SC": {
+  "aliases": [
+   "sc"
+  ],
+  "prefix": "True"
+ },
+ "SR": {
+  "aliases": [
+   "sr"
+  ],
+  "prefix": "True"
+ },
+ "TR": {
+  "aliases": [
+   "tr"
+  ],
+  "prefix": "True"
+ },
+ "FL-10W": {
+  "aliases": [
+   "fl-10w"
+  ],
+  "prefix": "True"
+ },
+ "PBS": {
+  "aliases": [
+   "pbs"
+  ],
+  "prefix": "True"
+ },
+ "SPD": {
+  "aliases": [
+   "spd"
+  ],
+  "prefix": "True"
+ },
+ "MCTT": {
+  "aliases": [
+   "mctt"
+  ],
+  "prefix": "True"
+ },
+ "換気扇": {
+  "aliases": [
+   "換気扇"
+  ],
+  "prefix": "True"
+ },
+ "コンセント": {
+  "aliases": [
+   "コンセント"
+  ],
+  "prefix": "True"
+ },
+ "伝送": {
+  "aliases": [
+   "伝送"
+  ],
+  "prefix": "True"
+ },
+ "R.RY": {
+  "aliases": [
+   "リモコンリレー"
+  ],
+  "prefix": "False"
+ },
+ "R.TR": {
+  "aliases": [
+   "リモコントランス"
+  ],
+  "prefix": "False"
+ },
+ "TB": {
+  "aliases": [
+   "端子台"
+  ],
+  "prefix": "True"
+ }
+}

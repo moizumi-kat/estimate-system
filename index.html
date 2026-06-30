@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>積算コード選定システム</title>
+<style>
+:root{--ink:#16201a;--paper:#f7f5ef;--line:#d6d1c4;--green:#1e3a28;--green2:#2e5e40;
+--ok:#e8f0e8;--okbd:#3a7d4f;--warn:#fff4d6;--warnbd:#c79a2e;--chk:#fce4e4;--chkbd:#c0504d;
+--mono:'SFMono-Regular',Consolas,Menlo,monospace;}
+*{box-sizing:border-box}body{margin:0;font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif;background:var(--paper);color:var(--ink);font-size:14px}
+header{background:var(--green);color:#f4f1ea;padding:14px 22px;display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--green2)}
+header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.04em}header .ver{font-size:11px;opacity:.7;font-family:var(--mono)}
+header .db{margin-left:auto;font-size:11px;opacity:.85;font-family:var(--mono)}
+.container{max-width:1180px;margin:0 auto;padding:22px}
+.steps{display:flex;gap:8px;margin-bottom:18px;font-size:12px}
+.steps .s{flex:1;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:#fff;color:#9a9488;text-align:center}
+.steps .s.active{background:var(--green);color:#fff;border-color:var(--green);font-weight:700}
+.steps .s.done{background:#eef2ee;color:var(--green2);border-color:var(--green2)}
+.drop{border:2px dashed var(--line);border-radius:10px;background:#fbfaf6;padding:36px;text-align:center;cursor:pointer;transition:.15s}
+.drop.over{border-color:var(--green2);background:#f0f5f0}
+.drop .big{font-size:16px;font-weight:700;color:var(--green2)}.drop .sub{font-size:12px;color:#7a7568;margin-top:8px}
+.drop input{display:none}
+.bar{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.fname{font-family:var(--mono);font-size:12px;color:#555}
+.btn{padding:10px 18px;background:var(--green);color:#f4f1ea;border:0;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}
+.btn:hover{background:var(--green2)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.sec{background:#fff;color:var(--green);border:1px solid var(--line)}
+.btn.stop{background:#c0504d}.btn.stop:hover{background:#a23f3d}
+.status{margin-top:16px;padding:12px 16px;border-radius:8px;background:#fff;border:1px solid var(--line);font-size:13px;display:none;align-items:center;gap:10px}
+.status.show{display:flex}.status .step{color:var(--green2);font-weight:700}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--green2);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.summary{display:none;gap:10px;margin:18px 0;flex-wrap:wrap}.summary.show{display:flex}
+.stat{flex:1;min-width:96px;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}
+.stat .n{font-size:26px;font-weight:800;font-family:var(--mono);line-height:1}.stat .l{font-size:10px;color:#7a7568;margin-top:5px;letter-spacing:.05em}
+.stat.ok .n{color:var(--okbd)}.stat.warn .n{color:var(--warnbd)}.stat.chk .n{color:var(--chkbd)}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;background:#fff}
+th{background:var(--green);color:#f4f1ea;text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0}
+td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}tr:hover td{background:#fffef9}
+tr.pnl td{background:#eef2ee;font-weight:700;color:var(--green2)}
+.code{font-family:var(--mono);font-weight:700}.badge{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:5px;font-weight:800}
+.b-ok{background:var(--ok);color:var(--okbd);border:1px solid var(--okbd)}.b-warn{background:var(--warn);color:var(--warnbd);border:1px solid var(--warnbd)}.b-chk{background:var(--chk);color:var(--chkbd);border:1px solid var(--chkbd)}
+.note{font-size:11px;color:#7a7568}.qty{font-family:var(--mono);text-align:center;color:#555}
+.err{color:#c0504d;background:#fce4e4;border:1px solid #c0504d;padding:12px;border-radius:8px;margin-top:14px;display:none}
+.err.show{display:block}
+.confirm{display:none;margin-top:16px;padding:16px;border:1px solid var(--warnbd);background:var(--warn);border-radius:8px}
+.confirm.show{display:block}.confirm p{margin:0 0 12px;font-size:14px}
+.fbar{display:none;gap:8px;margin:14px 0 4px}.fbar.show{display:flex}.fbar button{border:1px solid var(--line);background:#fff;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px}.fbar button.on{background:var(--green);color:#fff}
+.foot{font-size:11px;color:#9a9488;margin-top:10px;line-height:1.7}
+.hl{color:var(--green2);font-weight:700}
+select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;max-width:240px;font-family:inherit;background:#fff}
+.manual{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px}
+</style></head>
+<body>
+<header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span></header>
+<div class="container">
+  <div class="steps">
+    <div class="s active" id="st1">1. 図面アップロード</div>
+    <div class="s" id="st2">2. 部品を抽出</div>
+    <div class="s" id="st3">3. コード選定</div>
+  </div>
+
+  <div class="drop" id="drop">
+    <div class="big">図面をここにドラッグ＆ドロップ</div>
+    <div class="sub">または クリックして選択（PDF / PNG / JPG / DXF / ZIP・最大40MB）<br>複数の図面をまとめて選択できます（盤ごとに分けた図面の一括処理に便利）。DXFはCAD文字を抽出して構造化</div>
+    <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.dxf,.zip" multiple>
+  </div>
+  <div class="bar">
+    <span class="fname" id="fname"></span>
+    <button class="btn" id="goExtract" disabled>① 部品を抽出</button>
+    <button class="btn stop" id="stopBtn" style="display:none">■ 中止</button>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="err" id="err"></div>
+
+  <!-- 抽出後の確認 -->
+  <div class="confirm" id="confirm">
+    <p><span class="hl">部品を抽出しました。</span>下の抽出結果を確認してください。問題なければコード選定に進みます。<br>
+       選定するとClaude APIを使用します（課金が発生します）。</p>
+    <button class="btn" id="goSelect">② この内容でコード選定を実行</button>
+    <button class="btn sec" id="reset">最初からやり直す</button>
+  </div>
+
+  <div class="summary" id="sum"></div>
+  <div class="fbar" id="fbar"><span style="font-size:12px;align-self:center">表示：</span>
+    <button data-f="all" class="on">すべて</button><button data-f="◎">◎</button><button data-f="○">○</button><button data-f="△">△</button></div>
+  <div class="bar" id="xlsbar" style="display:none">
+    <button class="btn sec" id="xls">Excelで保存</button>
+  </div>
+  <div id="out"></div>
+  <div class="foot">◎=確定（DB実在コード）／○=ほぼ確定／△=要確認（人の判断対象）。AIはコードを生成しません。コードはv9.2 DBと確定ルールからのみ選定します。</div>
+</div>
+<script>
+let curFiles=null, extracted=null, lastData=null, controller=null;
+const $=id=>document.getElementById(id);
+fetch('/api/health').then(r=>r.json()).then(d=>{$('db').textContent='DB '+d.db+'コード'+(d.key?'':' / APIキー未設定');});
+
+const drop=$('drop'),file=$('file');
+drop.onclick=()=>file.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')};
+drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer.files.length)setFiles(e.dataTransfer.files)};
+file.onchange=()=>{if(file.files.length)setFiles(file.files)};
+function setFiles(fl){
+  curFiles=Array.from(fl);
+  $('fname').textContent = curFiles.length===1 ? curFiles[0].name : curFiles.length+'件: '+curFiles.map(f=>f.name).join(', ');
+  $('goExtract').disabled=false;
+  $('err').classList.remove('show');resetResults();
+}
+function resetResults(){
+  extracted=null;lastData=null;
+  $('confirm').classList.remove('show');$('sum').className='summary';$('fbar').className='fbar';
+  $('xlsbar').style.display='none';$('out').innerHTML='';
+  setStep(1);
+}
+function setStep(n){
+  [1,2,3].forEach(i=>{const el=$('st'+i);el.className='s'+(i<n?' done':i===n?' active':'');});
+}
+function showStop(show){$('stopBtn').style.display=show?'inline-block':'none';}
+function busy(msg){$('status').className='status show';$('status').innerHTML='<span class="spinner"></span><span class="step">'+msg+'</span>';}
+function idle(){$('status').className='status';}
+function fail(m){idle();showStop(false);$('err').textContent='エラー: '+m;$('err').classList.add('show');}
+
+// 中止ボタン
+$('stopBtn').onclick=()=>{ if(controller){controller.abort();} idle();showStop(false);
+  $('err').textContent='処理を中止しました。';$('err').classList.add('show');};
+
+// ① 抽出
+$('goExtract').onclick=async()=>{
+  if(!curFiles||!curFiles.length)return;
+  $('err').classList.remove('show');$('goExtract').disabled=true;setStep(2);
+  busy('[1/2] 図面から部品を抽出しています…（'+curFiles.length+'件・30秒〜数分）');showStop(true);
+  controller=new AbortController();
+  const fd=new FormData();curFiles.forEach(f=>fd.append('file',f));
+  try{
+    const r=await fetch('/api/extract',{method:'POST',body:fd,signal:controller.signal});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'抽出に失敗しました');
+    extracted=d.panels;idle();showStop(false);
+    renderExtracted(d);
+    $('confirm').classList.add('show');
+  }catch(e){
+    if(e.name==='AbortError')return;
+    fail(e.message);
+  }finally{$('goExtract').disabled=false;}
+};
+
+// 抽出結果テーブル（コードなし、品名と数量だけ）
+function renderExtracted(d){
+  let h='<table><thead><tr><th>盤</th><th>抽出された部品（図面表記）</th><th>数量</th></tr></thead><tbody>';
+  for(const p of d.panels){
+    h+='<tr class="pnl"><td colspan="3">'+esc(p.panel)+'</td></tr>';
+    for(const it of p.items){
+      h+='<tr><td></td><td>'+esc(it.name)+(it.unclear?' <span style="color:#c0504d">（読取不明瞭）</span>':'')+'</td><td class="qty">'+esc(it.qty||'')+'</td></tr>';
+    }
+  }
+  h+='</tbody></table>';
+  $('out').innerHTML='<div style="margin:10px 0;font-size:13px"><span class="hl">抽出：'+d.npanels+'盤 / '+d.count+'部品</span></div>'+h;
+}
+
+// ② 選定
+$('goSelect').onclick=async()=>{
+  if(!extracted)return;
+  $('confirm').classList.remove('show');setStep(3);
+  busy('[2/2] コード選定をしています…');showStop(true);
+  controller=new AbortController();
+  try{
+    const r=await fetch('/api/select',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({panels:extracted}),signal:controller.signal});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'選定に失敗しました');
+    lastData=d;idle();showStop(false);render(d,'all');$('xlsbar').style.display='flex';
+  }catch(e){
+    if(e.name==='AbortError')return;
+    fail(e.message);
+  }
+};
+
+$('reset').onclick=()=>{curFiles=null;$('fname').textContent='';$('goExtract').disabled=true;resetResults();};
+
+$('xls').onclick=async()=>{
+  if(!lastData)return;
+  const r=await fetch('/api/excel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({panels:lastData.panels})});
+  const blob=await r.blob();const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='積算コード選定.xlsx';a.click();
+};
+
+function render(d,filter){
+  const s=d.summary;
+  $('sum').className='summary show';
+  $('sum').innerHTML=stat('',s.total,'抽出機器')+stat('ok',s.ok,'◎ 確定')+stat('warn',s.warn,'○ ほぼ確定')+stat('chk',s.chk,'△ 要確認')+stat('',s.rate+'%','自動確定率');
+  $('fbar').className='fbar show';
+  const bdg={'◎':'<span class="badge b-ok">◎</span>','○':'<span class="badge b-warn">○</span>','△':'<span class="badge b-chk">△</span>'};
+  let h='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+
+    '<button id="allbtn" onclick="toggleAll()" style="background:#305496;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">全行を一括チェック</button>'+
+    '<span style="font-size:12px;color:#888">もう一度押すと全解除</span></div>';
+  h+='<table><thead><tr><th>部品名＋仕様〈幹線〉(負荷名称)</th><th>数量</th><th>提示</th><th>判定</th><th>最終選択コード</th><th>品名</th><th>確認</th></tr></thead><tbody>';
+  let gid=0;
+  for(const p of d.panels){
+    const rows=p.rows.filter(r=>!r.load_detail&&(filter==='all'||r.conf===filter));
+    if(!rows.length)continue;
+    h+='<tr class="pnl"><td colspan="7">'+esc(p.panel)+'</td></tr>';
+    for(const r of rows){
+      const id=gid++;
+      // プルダウン候補(コード（品名）)。確定コードを先頭に含め、重複排除。
+      let opts=[]; const seen={};
+      if(r.code){opts.push({code:r.code,label:r.code+'（'+(r.official||'')+'）'});seen[r.code]=1;}
+      for(const c of (r.cand_opts||[])){if(!seen[c.code]){opts.push(c);seen[c.code]=1;}}
+      let osel=opts.map(o=>'<option value="'+esc(o.code)+'"'+(o.code===r.code?' selected':'')+'>'+esc(o.label)+'</option>').join('');
+      osel+='<option value="__manual__">― 自分で入力 ―</option>';
+      h+='<tr id="row'+id+'" data-code="'+esc(r.code||'')+'">'+
+        '<td>'+esc(r.name)+'</td>'+
+        '<td class="qty"><input type="number" min="0" value="'+esc(r.qty||'1')+'" style="width:48px;text-align:center;font-size:13px;padding:3px;border:1px solid #bbb;border-radius:5px" onchange="markChange('+gid+')"></td>'+
+        '<td class="code">'+(r.code||'—')+'</td>'+
+        '<td>'+bdg[r.conf]+'</td>'+
+        '<td><select onchange="onSel('+id+',this)">'+osel+'</select>'+
+          '<input id="m'+id+'" class="manual" style="display:none;margin-top:4px;width:200px" placeholder="コードを入力" oninput="onChk()"></td>'+
+        '<td class="note" id="nm'+id+'">'+esc(r.official||'')+'</td>'+
+        '<td style="text-align:center"><input type="checkbox" style="width:20px;height:20px" onchange="onChk()"></td>'+
+      '</tr>';
+    }
+  }
+  h+='</tbody></table>';
+  h+='<div style="position:sticky;bottom:0;margin-top:14px;padding:14px;background:#fff;border:1px solid #ddd;border-radius:10px;display:flex;align-items:center;justify-content:space-between">'+
+     '<div style="font-size:13px">確認済み <b id="done" style="color:#305496;font-size:15px">0</b> / <span id="rtotal">'+gid+'</span> 行</div>'+
+     '<button id="cbtn" disabled onclick="confirmLearn()" style="background:#aaa;color:#fff;border:none;padding:11px 22px;border-radius:8px;font-size:14px;font-weight:600;cursor:not-allowed">確定して学習</button>'+
+     '</div>';
+  $('out').innerHTML=h;
+  window._rtotal=gid;
+}
+function onSel(id,sel){
+  const m=document.getElementById('m'+id);
+  const nm=document.getElementById('nm'+id);
+  if(sel.value==='__manual__'){m.style.display='block';m.focus();nm.textContent='';}
+  else{m.style.display='none';
+    // 選んだコードの品名(option文字列の（）内)を品名欄に表示
+    const lbl=sel.options[sel.selectedIndex].text;
+    const mt=lbl.match(/（(.*)）/); nm.textContent=mt?mt[1]:'';
+  }
+  onChk();
+}
+function toggleAll(){
+  const boxes=[...document.querySelectorAll('#out tbody input[type=checkbox]')];
+  const allOn=boxes.every(b=>b.checked);
+  boxes.forEach(b=>b.checked=!allOn);
+  document.getElementById('allbtn').textContent=allOn?'全行を一括チェック':'全行を一括解除';
+  onChk();
+}
+function onChk(){
+  const done=[...document.querySelectorAll('#out tbody input[type=checkbox]:checked')].length;
+  document.getElementById('done').textContent=done;
+  const btn=document.getElementById('cbtn');
+  if(done===window._rtotal&&done>0){btn.style.background='#2e7d32';btn.style.cursor='pointer';btn.disabled=false;}
+  else{btn.style.background='#aaa';btn.style.cursor='not-allowed';btn.disabled=true;}
+}
+function confirmLearn(){
+  // 各行の最終選択コードを収集(第三段階で /api/confirm に送信予定)
+  const result=[];
+  document.querySelectorAll('#out tbody tr[id^=row]').forEach(tr=>{
+    const id=tr.id.replace('row','');
+    const sel=tr.querySelector('select'); if(!sel)return;
+    let val=sel.value==='__manual__'?document.getElementById('m'+id).value:sel.value;
+    const qin=tr.querySelector('input[type=number]');
+    const qty=qin?qin.value:'';
+    result.push({presented:tr.dataset.code,final:val,qty:qty,spec:tr.cells[0].textContent});
+  });
+  const changed=result.filter(r=>r.final&&r.final!==r.presented).length;
+  alert('確定しました（'+result.length+'行）。\n提示から変更: '+changed+'行。\n\n※学習機能(サーバ保存・3回昇格・DB追加候補検出)は第三段階で実装予定です。');
+}
+function stat(cls,n,l){return '<div class="stat '+cls+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>';}
+function esc(s){return(s+'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+document.querySelectorAll('.fbar button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.fbar button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  if(lastData)render(lastData,b.dataset.f);
+});
+</script></body></html>
