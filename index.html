@@ -206,6 +206,10 @@ function render(d,filter){
       if(r.code){opts.push({code:r.code,label:r.code+'（'+(r.official||'')+'）'});seen[r.code]=1;}
       for(const c of (r.cand_opts||[])){if(!seen[c.code]){opts.push(c);seen[c.code]=1;}}
       let osel=opts.map(o=>'<option value="'+esc(o.code)+'"'+(o.code===r.code?' selected':'')+'>'+esc(o.label)+'</option>').join('');
+      // 計上しない(空白)。付属吸収などで非計上にしたい行はこれを選ぶ。
+      // サーバが非計上(absorbed / code空)にした行は初期選択にする。
+      const noCount = (r.absorbed===true)||(!r.code&&(r.conf==='—'));
+      osel+='<option value="__none__"'+(noCount?' selected':'')+'>― 計上しない(空白) ―</option>';
       osel+='<option value="__manual__">― 自分で入力 ―</option>';
       h+='<tr id="row'+id+'" data-code="'+esc(r.code||'')+'">'+
         '<td>'+esc(r.name)+'</td>'+
@@ -231,6 +235,7 @@ function onSel(id,sel){
   const m=document.getElementById('m'+id);
   const nm=document.getElementById('nm'+id);
   if(sel.value==='__manual__'){m.style.display='block';m.focus();nm.textContent='';}
+  else if(sel.value==='__none__'){m.style.display='none';nm.textContent='(計上しない)';}
   else{m.style.display='none';
     // 選んだコードの品名(option文字列の（）内)を品名欄に表示
     const lbl=sel.options[sel.selectedIndex].text;
@@ -258,7 +263,10 @@ function confirmLearn(){
   document.querySelectorAll('#out tbody tr[id^=row]').forEach(tr=>{
     const id=tr.id.replace('row','');
     const sel=tr.querySelector('select'); if(!sel)return;
-    let val=sel.value==='__manual__'?document.getElementById('m'+id).value:sel.value;
+    let val;
+    if(sel.value==='__manual__') val=document.getElementById('m'+id).value;
+    else if(sel.value==='__none__') val='';   // 計上しない(空白)
+    else val=sel.value;
     const qin=tr.querySelector('input[type=number]');
     const qty=qin?qin.value:'';
     result.push({presented:tr.dataset.code,final:val,qty:qty,spec:tr.cells[0].textContent});

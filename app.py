@@ -1203,6 +1203,42 @@ def extract_panels(fname, data_bytes):
     _EXTRACT_CACHE[key]=res
     return res
 
+# ===== 付属品の親吸収（二重計上の防止） =====
+# 同一盤内で、親機器が付属検出器を内蔵している場合、単独計上された付属行を
+# 「計上対象外(—/△)」に落として二重計上を防ぐ。消さずに残し理由を明記(トレーサビリティ)。
+def _is_standalone_zct(row):
+    """行が『単独のZCT/ZCTT』か。ZCT内蔵型の継電器(LG-RY/EL-RY等)や、
+    名称にZCT以外の主機器を含むものは対象外(誤吸収防止)。"""
+    nm=norm(row.get('raw',''))
+    if not re.search(r'(?<![a-z])zct{1,2}(?![a-z])', nm):  # zct / zctt
+        return False
+    # 主機器名を伴う場合は付属でなく本体扱い → 吸収しない
+    if re.search(r'(lgr|lg-ry|el-ry|igr|dgr|ry|mcb|elb|lbs|vcb|tr|変圧器)', nm):
+        return False
+    return True
+
+def _has_zct_builtin_relay(rows):
+    """盤内に ZCT内蔵型の地絡継電器(LG-RY/EL-RY 等、DB spec 'ZCT付'/'ZCT含')が
+    選定されている行があれば True。"""
+    for r in rows:
+        code=r.get('code','')
+        d=byCode.get(code,{})
+        nm=d.get('name','')+d.get('spec','')
+        if code and ('ZCT付' in nm or 'ZCT含' in nm or 'LG-RY' in d.get('name','')):
+            return True
+    return False
+
+def absorb_accessories(rows):
+    """盤内の付属吸収を適用。現状はB案件: LGR(ZCT付)内蔵時の単独ZCTを非計上にする。"""
+    if _has_zct_builtin_relay(rows):
+        for r in rows:
+            if _is_standalone_zct(r):
+                r['code']=''
+                r['conf']='—'
+                r['note']='LGR(ZCT付)に内蔵のため計上対象外(二重計上防止)'
+                r['absorbed']=True
+    return rows
+
 def select_from_extracted(data):
     out=[]
     # 受変電部で上段に出たマルチ指示計のコードを記憶し、下段のV/電流計に継承する。
@@ -1280,6 +1316,8 @@ def select_from_extracted(data):
             mfeed=re.match(r'\s*(\d+[A-Za-z]+\d*)', it.get('name','') or '')
             row['feed']=mfeed.group(1) if mfeed else ''
             rows.append(row)
+        # 付属品の親吸収(二重計上防止): 盤内で確定後にまとめて適用
+        rows=absorb_accessories(rows)
         # 各行の表示名「部品名＋仕様 〈幹線〉(負荷名称)」を組み立てる
         for r in rows:
             base=r.get('raw','')
