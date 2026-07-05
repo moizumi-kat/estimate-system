@@ -1459,13 +1459,39 @@ def api_select():
                 continue
             c[r['conf']]+=1
     tot=sum(c.values()) or 1
+    # 確実ダウンロード用: 直近の選定結果をセッション単位でメモリ保持。
+    # (POST+Blob方式はiOSで落ちるため、GETでファイル取得できるようにする)
+    try:
+        sid=session.get('sid')
+        if not sid:
+            sid=secrets.token_hex(8); session['sid']=sid
+        _LAST_RESULT[sid]=panels
+    except Exception:
+        pass
     return jsonify(panels=panels, summary=dict(total=sum(c.values()),ok=c['◎'],warn=c['○'],chk=c['△'],
         detail=ndetail, rate=round((c['◎']+c['○'])/tot*100)))
+
+# 直近の選定結果(セッションID→panels)。プロセス内メモリ。再起動で消えるが実用上十分。
+_LAST_RESULT={}
 
 @app.route('/api/excel', methods=['POST'])
 @login_required
 def api_excel():
     panels=request.get_json().get('panels',[])
+    buf=make_excel(panels)
+    ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
+    return send_file(buf,as_attachment=True,download_name=f'積算コード選定_{ts}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+# 確実ダウンロード(GET): ブラウザでURLを開くだけで保存できる。iOS/PC問わず動作。
+@app.route('/api/excel/download', methods=['GET'])
+@login_required
+def api_excel_download():
+    sid=session.get('sid')
+    panels=_LAST_RESULT.get(sid)
+    if not panels:
+        return Response('選定結果がありません。先に図面を読み込み、コード選定を実行してください。',
+                        status=404, mimetype='text/plain; charset=utf-8')
     buf=make_excel(panels)
     ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
     return send_file(buf,as_attachment=True,download_name=f'積算コード選定_{ts}.xlsx',

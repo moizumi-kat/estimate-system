@@ -177,11 +177,11 @@ $('goSelect').onclick=async()=>{
 
 $('reset').onclick=()=>{curFiles=null;$('fname').textContent='';$('goExtract').disabled=true;resetResults();};
 
-$('xls').onclick=async()=>{
+$('xls').onclick=()=>{
   if(!lastData)return;
-  const r=await fetch('/api/excel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({panels:lastData.panels})});
-  const blob=await r.blob();const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='積算コード選定.xlsx';a.click();
+  // 確実ダウンロード: サーバのGETエンドポイントを開くだけ。iOS/PC問わず保存できる。
+  // (従来のfetch+Blob+a.click()はiPhoneのSafari/Chromeで無反応になるため置換)
+  window.location.href='/api/excel/download';
 };
 
 function render(d,filter){
