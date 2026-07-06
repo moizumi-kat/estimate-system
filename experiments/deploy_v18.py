@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# 積算コード選定システム 改修反映 -> v1.8  (patch不要・python3のみ)
+#   [1] 問題B: 部品種別/電圧/属性のいずれも認識できない項目に無関係な候補が
+#       並ぶ不具合を修正(option_bonusの一律加点でDB先頭「標準」コードが上位化)。
+#       識別材料が皆無なら候補を返さず「DB該当なし・要確認」を明示。 app.py gen_candidates
+#   [2] 判定◉(二重◯)を新設: 読取不明瞭でも候補が1件のみ=コードが一意に決まる
+#       項目は△に落とさず◉(一意確定・読取要確認)とする。◎の純度は維持。
+#       app.py select_from_extracted / api_select / make_excel
+#   [3] 品質ゲート: 読取不明瞭が35%以上の図面は攻めず、より精度の良い図面を要求。
+#       app.py api_extract
+#   [4] 抽出のコスト/精度改修: プロンプトキャッシュ、モデル階層(EXTRACT_MODEL/
+#       EXTRACT_MODEL_FAST)、タイル分割(TILE_GRID)+Haikuカスケード+重複マージ。
+#       app.py extract / extract_pdf_hires(+ヘルパ)
+#   環境変数(任意): EXTRACT_MODEL(既定=SELECT_MODEL) / EXTRACT_MODEL_FAST(既定 claude-haiku-4-5)
+#                   / TILE_GRID(既定 1x1=分割なし・従来動作。2x2等で分割読み)
+# 安全策: 各アンカーが「ちょうど1回」出現するか検査。適用済みならスキップ。
+#         バックアップ後に書き込み、app.py 構文チェック。
+import os, sys, ast, datetime, shutil, json
+PATCHES = json.loads(r'''{"app.py": [["MODEL=os.environ.get('SELECT_MODEL','claude-opus-4-8')\napp=Flask(__name__)", "MODEL=os.environ.get('SELECT_MODEL','claude-opus-4-8')\n# 抽出(Vision)のモデル階層とタイル設定\n#   EXTRACT_MODEL      : 既定の読み取り/難所再読(高精度)\n#   EXTRACT_MODEL_FAST : タイル分割時の一次読み(安価)。カスケードで難所のみ上位モデルへ\n#   TILE_GRID          : '1x1'=分割なし(既定/安全) '2x2'等=分割してタイルごとに高解像度で読む\nEXTRACT_MODEL=os.environ.get('EXTRACT_MODEL', MODEL)\nEXTRACT_MODEL_FAST=os.environ.get('EXTRACT_MODEL_FAST','claude-haiku-4-5')\nTILE_GRID=os.environ.get('TILE_GRID','1x1')\napp=Flask(__name__)"], ["\ndef extract_pdf_hires(cli, data_bytes):\n    \"\"\"PDFを高解像度画像に変換し、ページごとにVisionへ送る。\n    APIにPDFをそのまま渡すより解像度を制御でき、密集機器・細かい容量の\n    読み取り精度が上がる。複数ページは各々抽出してpanelsを統合する。\"\"\"\n    try:", "\ndef _tile_grid():\n    try:\n        a,b=str(TILE_GRID).lower().split('x'); return max(1,int(a)),max(1,int(b))\n    except Exception:\n        return 1,1\n\ndef _unclear_ratio(res):\n    items=[it for p in res.get(\"panels\",[]) for it in p.get(\"items\",[])]\n    if not items: return 0.0\n    return sum(1 for it in items if it.get(\"unclear\"))/len(items)\n\ndef _extract_page_tiled(cli, page, nx, ny, ov=0.10):\n    \"\"\"ページを nx×ny の格子(10%重複)に分割し、各タイルを長辺1568pxで読む。\n    一次は安価モデル、不明瞭が多いタイルのみ高精度モデルで再読(カスケード)。\"\"\"\n    import fitz\n    r=page.rect; out=[]\n    for iy in range(ny):\n        for ix in range(nx):\n            x0=r.width*(ix/nx-ov); x1=r.width*((ix+1)/nx+ov)\n            y0=r.height*(iy/ny-ov); y1=r.height*((iy+1)/ny+ov)\n            clip=fitz.Rect(max(0,x0),max(0,y0),min(r.width,x1),min(r.height,y1))\n            zoom=1568.0/max(clip.width,clip.height)  # タイル長辺を1568pxへ(縮小前提)\n            png=page.get_pixmap(matrix=fitz.Matrix(zoom,zoom), clip=clip).tobytes(\"png\")\n            res=extract(cli, png, \"image/png\", EXTRACT_MODEL_FAST)   # 一次: 安価\n            if _unclear_ratio(res)>=0.30:                            # 難所のみ高精度で再読\n                res=extract(cli, png, \"image/png\", EXTRACT_MODEL)\n            out.append(res)\n    return out\n\ndef _merge_panels(panels):\n    \"\"\"タイル境界の重複を解消。盤名で束ね、盤内アイテムは署名(名称+数量+記号+幹線)で\n    重複排除する。同一署名は不明瞭でない読取を優先採用。\"\"\"\n    merged={}; order=[]\n    for p in panels:\n        key=norm(p.get(\"panel\",\"\")) or f\"__{len(order)}\"\n        if key not in merged:\n            merged[key]={\"panel\":p.get(\"panel\",\"\"),\"items\":[],\"_sig\":{}}; order.append(key)\n        m=merged[key]\n        if len(p.get(\"panel\",\"\")) > len(m[\"panel\"]): m[\"panel\"]=p.get(\"panel\",\"\")\n        for it in p.get(\"items\",[]):\n            sig=(norm(it.get(\"name\",\"\")),str(it.get(\"qty\",\"\")),str(it.get(\"symbol\",\"\")),str(it.get(\"group\",\"\")))\n            prev=m[\"_sig\"].get(sig)\n            if prev is None:\n                m[\"_sig\"][sig]=len(m[\"items\"]); m[\"items\"].append(it)\n            elif m[\"items\"][prev].get(\"unclear\") and not it.get(\"unclear\"):\n                m[\"items\"][prev]=it\n    return [{\"panel\":m[\"panel\"],\"items\":m[\"items\"]} for m in (merged[k] for k in order)]\n\ndef extract_pdf_hires(cli, data_bytes):\n    \"\"\"PDFを高解像度画像に変換してVisionへ送る。\n    TILE_GRID='1x1'(既定): ページ全体を3倍で1枚読み(高精度モデル)。従来動作。\n    TILE_GRID='2x2'等    : ページを格子分割し各タイルを高解像度で読む→重複マージ。\n                           タイルは安価モデルで一次読みし、難所のみ高精度で再読。\"\"\"\n    try:"], ["    except ImportError:\n        # PyMuPDF未導入なら従来方式(PDFそのまま)にフォールバック\n        return extract(cli, data_bytes, \"application/pdf\")\n    all_panels=[]", "    except ImportError:\n        return extract(cli, data_bytes, \"application/pdf\")  # 未導入時はPDFそのまま\n    nx,ny=_tile_grid()\n    all_panels=[]"], ["    for page in doc:\n        # 3倍解像度でレンダリング(細部の文字が潰れないように)\n        pix=page.get_pixmap(matrix=fitz.Matrix(3,3))\n        png=pix.tobytes(\"png\")\n        res=extract(cli, png, \"image/png\")\n        for p in res.get(\"panels\",[]):\n            all_panels.append(p)\n    return {\"panels\":all_panels}", "    for page in doc:\n        if nx<=1 and ny<=1:\n            pix=page.get_pixmap(matrix=fitz.Matrix(3,3))\n            res=extract(cli, pix.tobytes(\"png\"), \"image/png\", EXTRACT_MODEL)\n            all_panels.extend(res.get(\"panels\",[]))\n        else:\n            tiles=_extract_page_tiled(cli, page, nx, ny)\n            all_panels.extend(_merge_panels([p for t in tiles for p in t.get(\"panels\",[])]))\n    return {\"panels\":all_panels}"], ["\ndef extract(cli, data_bytes, media):\n    src={\"type\":\"base64\",\"media_type\":media,\"data\":base64.standard_b64encode(data_bytes).decode()}\n    block={\"type\":\"document\",\"source\":src} if media==\"application/pdf\" else {\"type\":\"image\",\"source\":src}\n    with cli.messages.stream(model=MODEL,max_tokens=64000,\n        messages=[{\"role\":\"user\",\"content\":[block,{\"type\":\"text\",\"text\":EXTRACT_PROMPT}]}]) as stream:\n        msg=stream.get_final_message()", "\ndef extract(cli, data_bytes, media, model=None):\n    model=model or EXTRACT_MODEL\n    src={\"type\":\"base64\",\"media_type\":media,\"data\":base64.standard_b64encode(data_bytes).decode()}\n    block={\"type\":\"document\",\"source\":src} if media==\"application/pdf\" else {\"type\":\"image\",\"source\":src}\n    # 抽出プロンプトは毎回同一の長文。先頭に置いてキャッシュ(prefix一致で約90%コスト減)。\n    # 画像は都度変わるためプロンプトの後ろに置く(キャッシュ対象外)。\n    prompt_block={\"type\":\"text\",\"text\":EXTRACT_PROMPT,\"cache_control\":{\"type\":\"ephemeral\"}}\n    with cli.messages.stream(model=model,max_tokens=64000,\n        messages=[{\"role\":\"user\",\"content\":[prompt_block,block]}]) as stream:\n        msg=stream.get_final_message()"], ["    out.sort(key=lambda x:-x[0])\n    return meta,[d for s,d in out[:8]]", "    out.sort(key=lambda x:-x[0])\n    # 【問題B対策】部品種別キーワード・電圧帯・属性(極数/容量/AF等)のいずれも\n    # 認識できない項目は、option_bonusの一律加点でDB内「標準」表記コード(避雷器/\n    # 補助リレー等)が機械的に上位化し、無関係な候補が並ぶ(=誤選択の誘発)。\n    # 識別材料が皆無なら候補を返さず「DB該当なし・要確認」を明示する。\n    if not main_kw and not vb and not dvals:\n        return meta, []\n    return meta,[d for s,d in out[:8]]"], ["            if it.get('unclear') and sel['conf']!='△':\n                sel['conf']='△'; sel['note']='図面読取不明瞭・'+sel['note']\n            row=dict(sel)", "            if it.get('unclear') and sel['conf']!='△':\n                # 【一意確定の救済】読取が不明瞭(属性を完全に取れない)でも、候補が\n                # 1件のみ=該当コードが一意に決まるなら△に落とさず「◉(二重◯)」とする。\n                # 一意なので曖昧さは無いが読取は要確認。◎(完全確定)の純度は維持する。\n                if sel.get('code') and len(sel.get('candidates') or [])==1:\n                    sel['conf']='◉'; sel['note']='一意確定(読取要確認)・'+sel['note']\n                else:\n                    sel['conf']='△'; sel['note']='図面読取不明瞭・'+sel['note']\n            row=dict(sel)"], ["    hf=PatternFill('solid',start_color='1E3A28')\n    cf={'◎':PatternFill('solid',start_color='E8F0E8'),'○':PatternFill('solid',start_color='FFF8E0'),'△':PatternFill('solid',start_color='FCE4E4')}\n    wb=Workbook(); ws=wb.active; ws.title='選定結果'", "    hf=PatternFill('solid',start_color='1E3A28')\n    cf={'◎':PatternFill('solid',start_color='E8F0E8'),'◉':PatternFill('solid',start_color='DCEBF7'),'○':PatternFill('solid',start_color='FFF8E0'),'△':PatternFill('solid',start_color='FCE4E4')}\n    wb=Workbook(); ws=wb.active; ws.title='選定結果'"], ["        c.font=Font(name=FONT,bold=True,color='FFFFFF'); c.fill=hf; c.border=bd; c.alignment=Alignment(horizontal='center',wrap_text=True)\n    nok=nw=nc=ndetail=0; prev=None\n    for p in panels:", "        c.font=Font(name=FONT,bold=True,color='FFFFFF'); c.fill=hf; c.border=bd; c.alignment=Alignment(horizontal='center',wrap_text=True)\n    nok=nu=nw=nc=ndetail=0; prev=None\n    for p in panels:"], ["            if r['conf']=='◎': nok+=1\n            elif r['conf']=='○': nw+=1", "            if r['conf']=='◎': nok+=1\n            elif r['conf']=='◉': nu+=1\n            elif r['conf']=='○': nw+=1"], ["    ws.freeze_panes='A2'; ws.auto_filter.ref=f'A1:G{ws.max_row}'\n    tot=nok+nw+nc or 1\n    ws2=wb.create_sheet('集計',0)\n    ws2.append(['積算コード選定システム v1.6 結果']); ws2['A1'].font=Font(name=FONT,bold=True,size=13); ws2.append([])\n    for lab,val in [('抽出機器数',tot),('◎ 確定',nok),('○ ほぼ確定',nw),('△ 要確認',nc),('自動確定率',f'{round((nok+nw)/tot*100)}%'),('負荷明細(計上対象外)',ndetail)]:\n        ws2.append([lab,val])", "    ws.freeze_panes='A2'; ws.auto_filter.ref=f'A1:G{ws.max_row}'\n    tot=nok+nu+nw+nc or 1\n    ws2=wb.create_sheet('集計',0)\n    ws2.append(['積算コード選定システム v1.6 結果']); ws2['A1'].font=Font(name=FONT,bold=True,size=13); ws2.append([])\n    for lab,val in [('抽出機器数',tot),('◎ 確定',nok),('◉ 一意確定(読取要確認)',nu),('○ ほぼ確定',nw),('△ 要確認',nc),('自動確定率',f'{round((nok+nu+nw)/tot*100)}%'),('負荷明細(計上対象外)',ndetail)]:\n        ws2.append([lab,val])"], ["    nitems=sum(len(p.get('items',[])) for p in all_panels)\n    return jsonify(panels=all_panels, count=nitems, npanels=len(all_panels),\n                   nfiles=nfiles, warnings=errors)\n", "    nitems=sum(len(p.get('items',[])) for p in all_panels)\n    # 【品質ゲート】読取不明瞭の比率が高い図面は、無理に攻めても信頼できる◎を作れない。\n    # ◎の誤りゼロを最優先し、攻めずに「より精度の良い図面」を要求する。\n    nunclear=sum(1 for p in all_panels for it in p.get('items',[]) if it.get('unclear'))\n    ratio=(nunclear/nitems) if nitems else 0.0\n    quality='ok'\n    if nitems and ratio>=0.35:\n        quality='poor'\n        errors.append(\n            f'⚠ 図面の読取品質が低い可能性があります(読取不明瞭 約{round(ratio*100)}%)。'\n            '◎の精度を保証できないため、可能なら精度の良い図面をご用意ください: '\n            '①元のCAD由来のPDF(文字が選択できるもの) ②300dpi以上のスキャン ③盤ごとに分割した図面')\n    return jsonify(panels=all_panels, count=nitems, npanels=len(all_panels),\n                   nfiles=nfiles, warnings=errors, quality=quality,\n                   unclear=nunclear, unclear_ratio=round(ratio,3))\n"], ["        return jsonify(error=str(e)),500\n    c={'◎':0,'○':0,'△':0}\n    ndetail=0", "        return jsonify(error=str(e)),500\n    c={'◎':0,'◉':0,'○':0,'△':0}\n    ndetail=0"], ["    tot=sum(c.values()) or 1\n    return jsonify(panels=panels, summary=dict(total=sum(c.values()),ok=c['◎'],warn=c['○'],chk=c['△'],\n        detail=ndetail, rate=round((c['◎']+c['○'])/tot*100)))\n", "    tot=sum(c.values()) or 1\n    return jsonify(panels=panels, summary=dict(total=sum(c.values()),ok=c['◎'],uniq=c['◉'],warn=c['○'],chk=c['△'],\n        detail=ndetail, rate=round((c['◎']+c['◉']+c['○'])/tot*100)))\n"]]}''')
+BASE = os.path.expanduser("~/estimate_code_system_v1.4")
+os.chdir(BASE)
+TS = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+def apply_file(fn, plist):
+    src = open(fn, encoding="utf-8").read()
+    applied, skipped = 0, 0
+    for old, new in plist:
+        if new in src and old not in src:
+            skipped += 1; continue
+        c = src.count(old)
+        if c == 0:
+            print(f"  \u2717 {fn}: アンカー未検出。中止。\n    先頭: {old[:60]!r}"); return None
+        if c > 1:
+            print(f"  \u2717 {fn}: アンカーが{c}箇所に一致(一意でない)。中止。\n    先頭: {old[:60]!r}"); return None
+        src = src.replace(old, new, 1); applied += 1
+    return src, applied, skipped
+
+for fn in PATCHES:
+    if not os.path.exists(fn):
+        print(f"\u2717 {fn} が見つかりません。中止。"); sys.exit(1)
+    shutil.copy(fn, f"{fn}.bak_{TS}")
+print(f"[1/3] バックアップ作成: *.bak_{TS}")
+
+results = {}
+for fn, plist in PATCHES.items():
+    r = apply_file(fn, plist)
+    if r is None:
+        print("  \u2192 変更は書き込まれていません。"); sys.exit(1)
+    results[fn] = r
+
+try:
+    ast.parse(results["app.py"][0])
+except SyntaxError as e:
+    print(f"  \u2717 app.py 構文エラー: {e}。書き込みません。"); sys.exit(1)
+print("[2/3] 置換シミュレーション OK / app.py 構文OK")
+
+for fn, (src, applied, skipped) in results.items():
+    open(fn, "w", encoding="utf-8").write(src)
+    print(f"       {fn}: 適用{applied}箇所 スキップ{skipped}箇所")
+
+print(f"[3/3] 反映完了。サービス再起動:  sudo systemctl restart estimate")
+print(f"      ロールバック: cp app.py.bak_{TS} app.py")

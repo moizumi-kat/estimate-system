@@ -2,3 +2,12 @@ __pycache__/
 *.bak_*
 *.rpm
 app.py.new
+
+# secrets / caches (experiments)
+.gemini_key
+*.gemini_key
+pc_cache.json
+cc_*.json
+adj_cache.json
+experiments/*.pdf
+experiments/*.xlsx
