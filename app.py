@@ -1405,8 +1405,32 @@ SC_REQ={'低圧':['meter','phase','cap'],'高圧':['role','meter','vcb','op'],
         '段積':['role','meter','vcb'],'段積VCS':['role','op']}
 SC_ALWAYS_CONFIRM={'meter'}   # 計器種別は単線図で確定しづらく誤ると◎誤答→常に人が確認
 
+# セットが発火した盤で「セット内包の計器・変成器」を型で抑制する判定。
+# 受電/低圧セット(11/16/17系)は計器一式(VM/AM/VS/AS/W/Wh/力率/マルチ指示計)と
+# 計器用変成器(VT/CT/ZCT)をセット内に含む→積算ソフトがセットコードから展開するので個別計上しない。
+# 個別に別計上する品(主変圧器TR・LBS・PF・分岐MCB・函体・SPD等)は抑制しない(TR/LBS/PFは別コード)。
+_SET_METER_RE=re.compile(
+    r'電圧計|電流計|電力計|電力量計|力率計|指示計|マルチ(指示計|メ[ータ]|)|'
+    r'計器用変[成流圧]|変流器|'
+    r'(?<![a-z0-9])(vm|am|vs|as|wh|whm|pfm|cos|vt|ct|zct)(?![a-z])', re.I)
+
+def _is_set_internal_meter(name):
+    """セット内包の計器/変成器か。主変圧器(変圧器/TR/kVA)や開閉器(LBS/PF/VCB)は除外。"""
+    n=norm(name)
+    if re.search(r'変圧器|(?<![a-z])tr(?![a-z])|kva|lbs|pas|vcb|vcs|(?<![a-z])pf(?![a-z])|mccb|mcb|elb|elcb|端子|函|盤$', n):
+        return False
+    return bool(_SET_METER_RE.search(n))
+
 def _sc_capval(s):
     m=re.search(r'(\d+)',str(s or '')); return int(m.group(1)) if m else None
+
+def _sc_meter_key(m):
+    """計器種別の表記ゆれを吸収(DBは高圧/段積='普通'・低圧='普通角'、UI既定='普通角')。"""
+    m=str(m or '')
+    if 'マルチ' in m: return 'マルチ'
+    if '広角' in m or m=='広': return '広角'
+    if '普通' in m: return '普通'
+    return m
 
 def sc_classify(panel_name):
     n=str(panel_name or '')
@@ -1436,7 +1460,7 @@ def sc_apply_defaults(attrs):
 def sc_select(attrs):
     st=attrs.get('settype'); pool=[c for c in SET_CODES if c.get('settype')==st]
     if st=='低圧':
-        cs=[c for c in pool if c.get('meter')==attrs.get('meter') and c.get('phase')==attrs.get('phase')]
+        cs=[c for c in pool if _sc_meter_key(c.get('meter'))==_sc_meter_key(attrs.get('meter')) and c.get('phase')==attrs.get('phase')]
         kva=_sc_capval(attrs.get('cap'))
         if kva is None: return '','△','容量不明→確認'
         cs=[c for c in cs if _sc_capval(c.get('cap'))>=kva]
@@ -1445,11 +1469,11 @@ def sc_select(attrs):
         if _sc_capval(best.get('cap'))==kva: return best['code'],'◎',''
         return best['code'],'○','容量切上 %d→%dKVA'%(kva,_sc_capval(best.get('cap')))
     if st=='高圧':
-        cs=[c for c in pool if c.get('role')==attrs.get('role') and c.get('meter')==attrs.get('meter')
+        cs=[c for c in pool if c.get('role')==attrs.get('role') and _sc_meter_key(c.get('meter'))==_sc_meter_key(attrs.get('meter'))
             and c.get('vcb')==attrs.get('vcb') and c.get('op')==attrs.get('op')]
         return (cs[0]['code'],'◎','') if len(cs)==1 else ('','△','高圧セット属性不一致→確認')
     if st=='段積':
-        cs=[c for c in pool if c.get('role')==attrs.get('role') and c.get('meter')==attrs.get('meter') and c.get('vcb')==attrs.get('vcb')]
+        cs=[c for c in pool if c.get('role')==attrs.get('role') and _sc_meter_key(c.get('meter'))==_sc_meter_key(attrs.get('meter')) and c.get('vcb')==attrs.get('vcb')]
         return (cs[0]['code'],'◎','') if len(cs)==1 else ('','△','段積セット属性不一致→確認')
     if st=='段積VCS':
         cs=[c for c in pool if c.get('role')==attrs.get('role') and c.get('op')==attrs.get('op')]
@@ -1566,6 +1590,14 @@ def select_from_extracted(data):
                     sel=dict(code=_tr[0],name=nmp,conf=_tr[1],note='端子盤 極数選定'+(('・'+_tr[2]) if _tr[2] else ''))
             # セット内包品(計器/TR/LBS/LG-RY等)はセットコードから積算ソフトが展開→個別計上しない
             if _set_expand and sel.get('code') in _set_expand:
+                continue
+            # セット発火盤の計器・変成器(VM/AM/VS/AS/W/Wh/力率/マルチ指示計・VT/CT/ZCT)は、
+            # 選定コードがexpand表に無くてもセット内包→個別計上しない(主変圧器TR/LBS/PFは除外・別計上)。
+            if _set_expand and _is_set_internal_meter(nm):
+                # 抑制する前にMDA(マルチ指示計)なら型を記憶(下流の非セット盤の計器統一に使う)。
+                if sel.get('code','')[:3]=='420' and 'マルチ指示計' in byCode.get(sel.get('code',''),{}).get('name','') \
+                   or 'マルチ指示計' in nm or 'mda' in norm(nm):
+                    if sel.get('code','')[:3]=='420': multi_meter_code=sel['code']
                 continue
             nn=norm(nm)
 
