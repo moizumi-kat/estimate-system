@@ -621,6 +621,7 @@ def gen_candidates(name, volt='', panel=''):
     meta=dict(qty=qty,qname=qname,main=main_label,main_kw=main_kw,opts=opts,vb=vb,kw=kw,kva=kva,ratio=ratio,af=af,dvals=dvals)
     out=[]
     for d in DB:
+        if d.get('settype'): continue  # 配電盤セットコードは専用セレクタ(setcode)で選定。個別選定からは除外。
         dn=norm(d['name'])
         if main_kw:
             if prefix:
@@ -1260,6 +1261,111 @@ def absorb_accessories(rows):
                 r['absorbed']=True
     return rows
 
+# ===== 配電盤セットコード選定（決定的・確認ゲート付き / CLAUDE.md 第6章）=====
+# 選定はDBの settype 付きレコード(11/16/17系)を属性完全一致＋容量切上で1つに決める。AI推測なし。
+# 読み切れない仕様は推測せず確認ゲート(コンボボックス)へ。計器種別・端子盤極数は常に確認。
+SET_CODES=[d for d in DB if d.get('settype')]
+SC_DEFAULTS={'meter':'普通角'}
+SC_OPTIONS={'meter':['普通角','広角','マルチ'],'phase':['1φ3W','3φ3W','スコット'],
+            'role':['受電盤','饋電盤','一段積','二段積','三段積','母線連絡','母線連絡+一段積'],
+            'vcb':['8KA','12.5KA'],'op':['手動','電動','電動引出','電磁','電磁引出PF'],'cap':[]}
+SC_REQ={'低圧':['meter','phase','cap'],'高圧':['role','meter','vcb','op'],
+        '段積':['role','meter','vcb'],'段積VCS':['role','op']}
+SC_ALWAYS_CONFIRM={'meter'}   # 計器種別は単線図で確定しづらく誤ると◎誤答→常に人が確認
+
+def _sc_capval(s):
+    m=re.search(r'(\d+)',str(s or '')); return int(m.group(1)) if m else None
+
+def sc_classify(panel_name):
+    n=str(panel_name or '')
+    if re.search(r'受電',n): return {'settype':'高圧','role':'受電盤'}
+    if re.search(r'饋電|き電',n): return {'settype':'高圧','role':'饋電盤'}
+    if re.search(r'スコット|ｽｺｯﾄ',n): return {'settype':'低圧','phase':'スコット'}
+    if re.search(r'電灯',n): return {'settype':'低圧','phase':'1φ3W'}
+    if re.search(r'動力',n) and re.search(r'低圧',n): return {'settype':'低圧','phase':'3φ3W'}
+    if re.search(r'コンデンサ|ｺﾝﾃﾞﾝｻ',n): return {'settype':None}
+    return {'settype':None}
+
+def sc_needs_confirm(attrs):
+    return [k for k in SC_REQ.get(attrs.get('settype'),[]) if not attrs.get(k)]
+
+def sc_confirm_form(attrs):
+    st=attrs.get('settype'); fields=list(sc_needs_confirm(attrs))
+    for k in SC_REQ.get(st,[]):
+        if k in SC_ALWAYS_CONFIRM and k not in fields: fields.append(k)
+    return [{'spec':k,'options':SC_OPTIONS.get(k,[]),'default':(attrs.get(k) or SC_DEFAULTS.get(k,''))} for k in fields]
+
+def sc_apply_defaults(attrs):
+    a=dict(attrs)
+    for k in sc_needs_confirm(a):
+        if k in SC_DEFAULTS: a[k]=SC_DEFAULTS[k]
+    return a
+
+def sc_select(attrs):
+    st=attrs.get('settype'); pool=[c for c in SET_CODES if c.get('settype')==st]
+    if st=='低圧':
+        cs=[c for c in pool if c.get('meter')==attrs.get('meter') and c.get('phase')==attrs.get('phase')]
+        kva=_sc_capval(attrs.get('cap'))
+        if kva is None: return '','△','容量不明→確認'
+        cs=[c for c in cs if _sc_capval(c.get('cap'))>=kva]
+        if not cs: return '','△','該当容量なし→確認(コード表に無い小容量は追加せず人へ)'
+        best=min(cs,key=lambda c:_sc_capval(c.get('cap')))
+        if _sc_capval(best.get('cap'))==kva: return best['code'],'◎',''
+        return best['code'],'○','容量切上 %d→%dKVA'%(kva,_sc_capval(best.get('cap')))
+    if st=='高圧':
+        cs=[c for c in pool if c.get('role')==attrs.get('role') and c.get('meter')==attrs.get('meter')
+            and c.get('vcb')==attrs.get('vcb') and c.get('op')==attrs.get('op')]
+        return (cs[0]['code'],'◎','') if len(cs)==1 else ('','△','高圧セット属性不一致→確認')
+    if st=='段積':
+        cs=[c for c in pool if c.get('role')==attrs.get('role') and c.get('meter')==attrs.get('meter') and c.get('vcb')==attrs.get('vcb')]
+        return (cs[0]['code'],'◎','') if len(cs)==1 else ('','△','段積セット属性不一致→確認')
+    if st=='段積VCS':
+        cs=[c for c in pool if c.get('role')==attrs.get('role') and c.get('op')==attrs.get('op')]
+        return (cs[0]['code'],'◎','') if len(cs)==1 else ('','△','VCS段積属性不一致→確認')
+    return '','△','盤種セット対象外'
+
+def sc_resolve(panel_name, set_attrs=None):
+    attrs=dict(sc_classify(panel_name))
+    if set_attrs:
+        for k,v in set_attrs.items():
+            if v and k!='settype': attrs[k]=v
+        if set_attrs.get('settype'): attrs['settype']=set_attrs['settype']
+    if not attrs.get('settype'): return None
+    form=sc_confirm_form(attrs)
+    code,conf,note=sc_select(sc_apply_defaults(attrs))
+    return {'settype':attrs['settype'],'attrs':attrs,'code':code,'conf':conf,'note':note,'confirm':form}
+
+# ---- 弱電端子盤(62系)選定: 極数P＋端子指標で最近傍上位。極数が読めなければ確認(呼出側) ----
+_TERM_EXCLUDE=re.compile(r'MCB|ELB|MCCB|ELCB|LBS|VCB|VCS|DS|TR|SC|SR|CT|VT|MGS|MCTT|ﾌﾞ-ｽﾀ|ｾﾊﾟﾚ|ｺﾝｾﾝﾄ|コンセント|ﾋｰﾀ|換気|FL|PL|RY|BZ|COS|PBS')
+_TERM_POS=re.compile(r'端子|MDF|主配線|保安器|安定器|E1|E2|E3|ﾄｸE|トクE|接地|T付|(^|\s)TB(\s|$)|電話|放送|情報|通信|LAN|露出盤')
+def _term_poles(name):
+    m=re.search(r'(\d+)\s*[PＰ]',str(name)); return int(m.group(1)) if m else None
+def terminal_select(name):
+    n=re.sub(r'[（）]',lambda m:'(' if m.group()=='（' else ')',str(name))
+    if _TERM_EXCLUDE.search(n) and not re.search(r'端子|MDF|保安器',n): return None
+    p=_term_poles(n)
+    if p is None or not _TERM_POS.search(n): return None
+    if re.search(r'E1|E2|E3|ﾄｸE|トクE|接地',n): fam='接地端子盤'
+    elif '保安器' in n: fam='保安器函'
+    elif re.search(r'MDF|主配線',n): fam='MDF(主配線盤)'
+    elif '安定器' in n: fam='安定器'
+    else: fam='端子盤'
+    tsuki = bool(re.search(r'T付|端子付',n)) or not re.search(r'端子無',n)
+    def pool(pred):
+        out=[]
+        for c,row in byCode.items():
+            pp=_term_poles(row['name'])
+            if pp and pred(row['name']): out.append((pp,c))
+        return sorted(out)
+    if fam=='端子盤':
+        cand=pool(lambda nm:'端子盤' in nm and ('端子付' if tsuki else '端子無') in nm)
+    else:
+        cand=pool(lambda nm:fam.split('(')[0] in nm)
+    pick=next((c for pp,c in cand if pp>=p),(cand[-1][1] if cand else None))
+    if not pick: return None
+    gp=_term_poles(byCode[pick]['name'])
+    return pick,('◎' if gp==p else '○'),('' if gp==p else '極数切上%dP→%dP'%(p,gp))
+
 def select_from_extracted(data):
     out=[]
     # 受変電部で上段に出たマルチ指示計のコードを記憶し、下段のV/電流計に継承する。
@@ -1269,6 +1375,17 @@ def select_from_extracted(data):
         prev_is_main=False
         panel_nm=p.get('panel','')
         is_jushaden = ('受電' in panel_nm or '受変電' in panel_nm or '高圧' in panel_nm)
+        # --- 配電盤セット判定(後方互換: set_attrs が無ければ従来通り全item個別選定) ---
+        # set_attrs があればセットコードを1行出力。セット内包品(計器/TR/LBS等)は個別計上せず抑制。
+        _set_expand=set()
+        if p.get('set_attrs') and p['set_attrs'].get('settype'):
+            _sc=sc_resolve(panel_nm, p['set_attrs'])
+            if _sc and _sc.get('code'):
+                _srow=byCode.get(_sc['code'],{})
+                _set_expand={x.split('x')[0] for x in (_srow.get('expand','') or '').split(';') if x}
+                rows.append(dict(code=_sc['code'],name=_srow.get('name',''),conf=_sc['conf'],
+                                 note=_sc['note'],raw=panel_nm,qty='1',is_setcode=True,
+                                 set_confirm=_sc['confirm'],load_detail=False,feed=''))
         for it in p.get('items',[]):
             nm=it.get('name','')
             # 負荷明細行(親分岐MCBの負荷内訳)は、直前の機器行(親)に集約してリストから外す。
@@ -1308,6 +1425,16 @@ def select_from_extracted(data):
             # 品名に「×N」がある場合はそれを数量の正とする(抽出側の数量より優先)
             if qsuf: it['qty']=qsuf
             sel=select_one(cleaned if qsuf else nm, p.get('panel',''), prev_is_main, it.get('volt',''), it.get('symbol',''), it.get('kw',''), it.get('group',''))
+            # 弱電端子盤の救済: 未選定/△なら terminal_select(極数P＋端子指標)で62系を選定。
+            # (見積書「端子盤」語なし表記や図面「電話20P/放送30P」に対応。遮断器・コンセントは除外済)
+            if (not sel.get('code')) or sel.get('conf')=='△':
+                _tr=terminal_select(nm)
+                if _tr and _tr[0]:
+                    nmp=byCode.get(_tr[0],{}).get('name','')
+                    sel=dict(code=_tr[0],name=nmp,conf=_tr[1],note='端子盤 極数選定'+(('・'+_tr[2]) if _tr[2] else ''))
+            # セット内包品(計器/TR/LBS/LG-RY等)はセットコードから積算ソフトが展開→個別計上しない
+            if _set_expand and sel.get('code') in _set_expand:
+                continue
             nn=norm(nm)
 
             # --- マルチ指示計(MDA)の型継承(案件全体・盤またぎ) ---
