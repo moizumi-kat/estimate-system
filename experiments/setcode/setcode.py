@@ -36,6 +36,9 @@ REQ = {'低圧': ['meter', 'phase', 'cap'],
        '高圧': ['role', 'meter', 'vcb', 'op'],
        '段積': ['role', 'meter', 'vcb'],
        '段積VCS': ['role', 'op']}
+# 常時確認項目: 抽出値があっても必ず人に確認させる仕様(単線図で確定しづらく、誤ると◎誤答になる)。
+# 計器種別は単線図に描かれないことが多いので、推測させず毎回コンボボックスで確認する(既定/推定を初期選択)。
+ALWAYS_CONFIRM = {'meter'}
 
 
 def _cap(s):
@@ -68,9 +71,16 @@ def needs_confirm(attrs):
 
 
 def confirm_form(attrs):
-    """確認ゲートUI用: 未確定仕様の選択肢＋既定を返す。"""
-    return [{'spec': k, 'options': OPTIONS.get(k, []), 'default': DEFAULTS.get(k, '')}
-            for k in needs_confirm(attrs)]
+    """確認ゲートUI用: 確認すべき仕様の選択肢＋初期選択を返す。
+    対象= 空の必須仕様 ＋ 常時確認仕様(ALWAYS_CONFIRM)。
+    初期選択= 抽出値があればそれ、無ければ既定(DEFAULTS)。UIはコンボボックスで提示。"""
+    st = attrs.get('settype')
+    fields = list(needs_confirm(attrs))
+    for k in REQ.get(st, []):
+        if k in ALWAYS_CONFIRM and k not in fields:
+            fields.append(k)
+    return [{'spec': k, 'options': OPTIONS.get(k, []),
+             'default': (attrs.get(k) or DEFAULTS.get(k, ''))} for k in fields]
 
 
 def apply_defaults(attrs):
