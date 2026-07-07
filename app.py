@@ -966,8 +966,33 @@ def _get_amp(n):
     import re as _re
     m=_re.search(r'(\d+)a', n); return m.group(1) if m else ''
 
+# リモコン設備(65系): 数値属性が無く gen_candidates で落ちるため、名称で直接引く。
+_REMOCON_MAP=[
+ (r'伝送ユニット|伝送ﾕﾆｯﾄ','65022'),
+ (r'(年間)?(プログラム|ﾌﾟﾛｸﾞﾗﾑ)タイマ','65019'),
+ (r'ＥＥ|EE.{0,4}連動|ｉ?ｅｅ.{0,4}連動','65018'),
+ (r'(パターン|ﾊﾟﾀ-ﾝ|タイプ|ﾀｲﾌﾟ).{0,6}設定','65050'),
+ (r'蛍光灯調光|調光.{0,3}[TＴ]／?[UＵ]','65037'),
+ (r'接点入力','65040'),
+ (r'ノイズフィルタトランス|ﾉｲｽﾞﾌｨﾙﾀﾄﾗﾝｽ','65016'),
+ (r'信号線?用?.{0,3}サージ|ｻ-ｼﾞ保護.{0,3}(信号|ﾕﾆｯﾄ)','65017'),
+ (r'リモコン(ト)?ランス|ﾘﾓｺﾝﾄﾗﾝｽ|R[.\s]?TR','65000'),
+]
+def _remocon_code(name):
+    s=str(name)
+    # リモコンリレー(1P/2P)
+    if ('リモコン' in s and 'リレー' in s) or re.search(r'R[.\s]?RY|ﾘﾓｺﾝﾘﾚ', s, re.I):
+        return ('65002' if re.search(r'2\s*[PＰ]', s) else '65001'),'○','リモコンリレー(65系)'
+    for pat,code in _REMOCON_MAP:
+        if re.search(pat, s, re.I) and code in byCode:
+            return code,'○','リモコン設備(65系)'
+    return None
+
 # 統合: 1機器を選定
 def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', group=''):
+    # リモコン設備(65系)は名称直引き(数値属性が無く候補生成に乗らないため)
+    _rc=_remocon_code(name)
+    if _rc: return R(_rc[0],_rc[1],_rc[2])
     # 動力盤: 主回路記号があれば記号方式を最優先
     if symbol:
         shikyu=('支給' in str(name))
@@ -1084,10 +1109,15 @@ def _mcb_code(name, panel, meta):
             af=str(next((s for s in STD_AF if s>=base_val), STD_AF[-1]))
     except: pass
     pole=_pole(n)
-    # 盤種別判定: 制御盤=50系 / 分電盤=60系(欠相保護有が標準) / 配電盤=40系
-    if any(k in pn for k in ['制御','動力']): kind='ctrl'
-    elif any(k in pn for k in ['分電','電灯','ел']): kind='bunden'
-    elif any(k in pn for k in ['配電','受電','高圧']): kind='haiden'
+    # 盤種別判定: 制御盤=50系 / 分電盤=60系 / 配電盤(受変電の低圧電灯・動力盤)=40系
+    # ※「電灯/動力」は配電盤(低圧○○盤)と分電盤(電灯分電盤/1L-1)の両方に出るので区別する:
+    #   低圧+電灯/動力 or 配電/受電/高圧/キュービクル → 配電盤40系
+    #   分電 or 1L-1/2L-2 形式 or 単独の電灯 → 分電盤60系  / 制御 → 制御盤50系
+    if '制御' in pn: kind='ctrl'
+    elif '分電' in pn or re.match(r'^\d*[lｌ][ｰ\-－]?\d', pn) or re.match(r'^\d*[lｌ][ｍm]?[ｰ\-－]?\d', pn): kind='bunden'
+    elif ('低圧' in pn and ('電灯' in pn or '動力' in pn)) or any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): kind='haiden'
+    elif '動力' in pn: kind='ctrl'   # 動力制御盤(制御表記なし)
+    elif '電灯' in pn: kind='bunden'
     else: kind='bunden'  # 既定は分電盤
     # 主幹MCB 3P
     afmap_main={
@@ -1111,8 +1141,10 @@ def _branch_candidates(pole, af, is_elb, kind):
     AF桁: 50→5,100→1,225→2,400→4,600→6,800→8。盤: 配電40/制御50/分電60。"""
     afdig={'50':'5','100':'1','225':'2','200':'2','400':'4','600':'6','800':'8','30':'3'}.get(af,'')
     if not afdig: return []
-    # 盤種別の基番号（複数試す。配電40/分電60/制御50）
-    bases = ['40','60','50'] if kind!='ctrl' else ['50','40','60']
+    # 盤種別の基番号を優先順で（分電盤=60系優先, 配電盤=40系優先, 制御盤=50系優先）
+    if kind=='ctrl': bases=['50','40','60']
+    elif kind=='haiden': bases=['40','60','50']
+    else: bases=['60','40','50']   # bunden(分電盤)は60系優先
     out=[]
     for base in bases:
         if pole=='2':
