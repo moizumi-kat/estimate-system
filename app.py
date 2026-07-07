@@ -641,6 +641,50 @@ def _set_code(name, vb):
     if code: return code,f'分岐回路 {typ} {pick}kW {volt}'
     return '',f'分岐回路 {typ} {kw}kW {volt}・容量外/該当なし要確認'
 
+# ===== 制御盤 適用表→分岐回路コード（たすき掛け変換）=====
+# ①パターン集の凡例(記号→回路種別)を覚え ②適用表の記号を読んだら即その型に変換 ③型+kW+●○でコード。
+# 記号→回路種別の既定対応(図面に凡例があればそれで上書き。図面ごとに割付が違う場合に備える)
+_PATTERN_TYPE_DEFAULT={
+    'A':'L-S(AM付)','B':'L-S(AM付)','C':'L-S(AM付)','E':'L-S(AM付)',
+    'D':'スターデルタ','F':'スターデルタ','G':'スターデルタ','H':'スターデルタ',
+    'I':'INV','J':'INV','L':'INV','K':'INV(スターデルタ)'}
+def _normalize_type(t):
+    """凡例側の型表記を DB表記(L-S(AM付)/スターデルタ/INV/INV(スターデルタ))に正規化。"""
+    u=str(t or '').upper()
+    if re.search(r'スタ[ー\-]?デルタ|ｽﾀ[ｰ\-]?ﾃﾞﾙﾀ|STAR|Y[\-]?Δ',u):
+        return 'INV(スターデルタ)' if 'INV' in u else 'スターデルタ'
+    if 'INV' in u or 'インバータ' in str(t): return 'INV'
+    if re.search(r'L[ー\-]?S|直入',u): return 'L-S(AM付)'
+    return str(t or '').strip()
+def _dev_from_breaker(brk, ax=False):
+    b=str(brk or ''); U=b.upper()
+    elb=('○' in b) or ('ELB' in U) or ('ELCB' in U) or ('漏電' in b)
+    if elb: return 'ELB・AX' if ax else 'ELB'
+    return 'MCB・AX' if ax else ''
+def control_apply(load_rows, legend=None, volt='200V'):
+    """動力制御盤 適用表→分岐回路コード。
+    load_rows: [{'load':負荷名,'pattern':主回路記号,'kw':容量,'breaker':'●/○/MCCB/ELB','ax':bool,'spare':bool}]
+    legend: 図面のパターン凡例 {記号:型}(無ければ既定 _PATTERN_TYPE_DEFAULT)。volt:'200V'/'400V'
+    戻り: [{'load','code','conf','note'}]。◎/○=確定, △=記号不明/kW不明/容量外(→確認ゲート)。"""
+    leg=dict(_PATTERN_TYPE_DEFAULT)
+    for k,v in (legend or {}).items(): leg[str(k).strip().upper()]=_normalize_type(v)
+    out=[]
+    for r in load_rows:
+        load=r.get('load','') or ''
+        if r.get('spare') or str(load).strip() in ('予備','スペース','ｽﾍﾟｰｽ',''):
+            continue
+        sym=str(r.get('pattern','')).strip().upper()
+        try: kw=float(re.sub(r'[^\d.]','',str(r.get('kw','') or 0)) or 0)
+        except: kw=0
+        typ=leg.get(sym)
+        if not typ: out.append({'load':load,'code':'','conf':'△','note':f'記号"{sym}"→回路種別不明(凡例要確認)'}); continue
+        if kw<=0: out.append({'load':load,'code':'','conf':'△','note':'kW不明→確認'}); continue
+        dev=_dev_from_breaker(r.get('breaker'), r.get('ax'))
+        code,conf,pick=_bunki_find(typ,kw,dev,volt)
+        if code: out.append({'load':load,'code':code,'conf':conf,'note':f'{typ}({sym}) {pick}kW {volt}'})
+        else: out.append({'load':load,'code':'','conf':'△','note':f'{typ} {kw}kW 容量外→確認'})
+    return out
+
 def gen_candidates(name, volt='', panel=''):
     name=re.sub(r'(?i)vgb','VCB',str(name))  # VGBはVCBの別表記
     """属性で候補を生成。戻り: (meta, [DB行,...])"""
