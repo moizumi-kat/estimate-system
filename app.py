@@ -652,7 +652,7 @@ def _normalize_type(t):
     """凡例のタイトルを DB表記(L-S(AM付)/スターデルタ/INV/INV(スターデルタ))に正規化。
     直接遮断器のみ(電源/コンセント)は 'MCCB'(=モーター分岐回路でない印)を返す。"""
     u=str(t or '').upper(); s=str(t or '')
-    if re.search(r'スタ[ー\-]?デルタ|ｽﾀ[ｰ\-]?ﾃﾞﾙﾀ|STAR|Y[\-]?Δ',u):
+    if re.search(r'スタ[ー\-]?デルタ|ｽﾀ[ｰ\-]?ﾃﾞﾙﾀ|STAR|[YTΥ][ー\-]?Δ|Δ始動',u+s):
         return 'INV(スターデルタ)' if 'INV' in u else 'スターデルタ'
     if 'INV' in u or 'インバータ' in s: return 'INV'
     if re.search(r'直入|電流計|[0-9０-９]回路|[0-9０-９]台|L[ー\-]?S',s+u): return 'L-S(AM付)'
