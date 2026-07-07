@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ワイヤーハーネス製作支援システム</title>
+<style>
+:root{--ink:#16232e;--paper:#eef2f5;--line:#cfd8dc;--blue:#123b5e;--blue2:#1f5a8a;
+--ok:#e6f0e6;--okbd:#3a7d4f;--warn:#fff4d6;--warnbd:#c79a2e;--chk:#fce4e4;--chkbd:#c0504d;
+--mono:'SFMono-Regular',Consolas,Menlo,monospace;}
+*{box-sizing:border-box}body{margin:0;font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif;background:var(--paper);color:var(--ink);font-size:14px}
+header{background:var(--blue);color:#eef5fb;padding:14px 22px;display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--blue2)}
+header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.03em}header .ver{font-size:11px;opacity:.7;font-family:var(--mono)}
+header .db{margin-left:auto;font-size:11px;opacity:.85;font-family:var(--mono)}
+.container{max-width:1240px;margin:0 auto;padding:22px}
+.steps{display:flex;gap:8px;margin-bottom:18px;font-size:12px}
+.steps .s{flex:1;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:#fff;color:#9aa7ae;text-align:center}
+.steps .s.active{background:var(--blue);color:#fff;border-color:var(--blue);font-weight:700}
+.steps .s.done{background:#e4edf3;color:var(--blue2);border-color:var(--blue2)}
+.drop{border:2px dashed var(--line);border-radius:10px;background:#f8fafb;padding:36px;text-align:center;cursor:pointer;transition:.15s}
+.drop.over{border-color:var(--blue2);background:#eaf1f7}
+.drop .big{font-size:16px;font-weight:700;color:var(--blue2)}.drop .sub{font-size:12px;color:#78868d;margin-top:8px}
+.drop input{display:none}
+.bar{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.fname{font-family:var(--mono);font-size:12px;color:#555}
+.btn{padding:10px 18px;background:var(--blue);color:#eef5fb;border:0;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}
+.btn:hover{background:var(--blue2)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.sec{background:#fff;color:var(--blue);border:1px solid var(--line)}
+.btn.stop{background:#c0504d}.btn.stop:hover{background:#a23f3d}
+.status{margin-top:16px;padding:12px 16px;border-radius:8px;background:#fff;border:1px solid var(--line);font-size:13px;display:none;align-items:center;gap:10px}
+.status.show{display:flex}.status .step{color:var(--blue2);font-weight:700}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--blue2);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.summary{display:none;gap:10px;margin:18px 0;flex-wrap:wrap}.summary.show{display:flex}
+.stat{flex:1;min-width:110px;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}
+.stat .n{font-size:26px;font-weight:800;font-family:var(--mono);line-height:1}.stat .l{font-size:10px;color:#78868d;margin-top:5px;letter-spacing:.05em}
+.stat.chk .n{color:var(--chkbd)}
+.tabs{display:none;gap:4px;margin-top:14px;border-bottom:2px solid var(--line)}.tabs.show{display:flex}
+.tab{padding:9px 16px;border:1px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;background:#e4edf3;color:#5a6b74;cursor:pointer;font-size:13px;font-weight:600}
+.tab.on{background:#fff;color:var(--blue);border-color:var(--line);position:relative;top:2px}
+.panel{display:none;background:#fff;border:1px solid var(--line);border-top:none;padding:14px;border-radius:0 0 8px 8px}
+.panel.on{display:block}
+table{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff}
+th{background:var(--blue);color:#eef5fb;text-align:left;padding:7px 8px;font-size:11px;white-space:nowrap}
+td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr.harn td{background:#dce6f1;font-weight:700;color:var(--blue2)}
+tr.unclear td{background:#fdf1f1}
+td input,td select{width:100%;font-size:12.5px;padding:4px 5px;border:1px solid #c5d0d6;border-radius:5px;font-family:inherit;background:#fff}
+td input.w-s{width:64px}td input.w-m{width:88px}
+.tblwrap{overflow-x:auto}
+.mono{font-family:var(--mono)}
+.err{color:#c0504d;background:#fce4e4;border:1px solid #c0504d;padding:12px;border-radius:8px;margin-top:14px;display:none}
+.err.show{display:block}
+.foot{font-size:11px;color:#9aa7ae;margin-top:14px;line-height:1.7}
+.tbtn{border:1px solid var(--line);background:#fff;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:12px}
+.tbtn.del{color:#c0504d}
+.diagbox{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:#fff;padding:8px;margin-top:10px}
+.hint{font-size:12px;color:#78868d;margin:2px 0 12px}
+</style></head>
+<body>
+<header><h1>ワイヤーハーネス製作支援システム</h1><span class="ver">v0.1</span><span class="db" id="db"></span></header>
+<div class="container">
+  <div class="steps">
+    <div class="s active" id="st1">1. 結線図をアップロード</div>
+    <div class="s" id="st2">2. 結線を抽出</div>
+    <div class="s" id="st3">3. 電線リスト／製作図</div>
+  </div>
+
+  <div class="drop" id="drop">
+    <div class="big">結線図をここにドラッグ＆ドロップ</div>
+    <div class="sub">またはクリックして選択（PDF / PNG / JPG / DXF / ZIP・最大40MB）<br>
+      端子台結線図・展開接続図・実体配線図を投入すると、電線1本ごとの From-To を抽出します。複数図面の一括処理可。</div>
+    <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.dxf,.zip" multiple>
+  </div>
+  <div class="bar">
+    <span class="fname" id="fname"></span>
+    <button class="btn" id="goExtract" disabled>① 結線を抽出</button>
+    <button class="btn stop" id="stopBtn" style="display:none">■ 中止</button>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="err" id="err"></div>
+
+  <div class="summary" id="sum"></div>
+
+  <div class="bar" id="actionbar" style="display:none">
+    <button class="btn" id="rebuild">切断長・端子・製作図を再計算</button>
+    <button class="btn sec" id="addrow">＋ 電線を追加</button>
+    <button class="btn sec" id="xls">Excelで保存</button>
+    <button class="btn sec" id="reset">最初からやり直す</button>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab on" data-t="list">電線リスト</div>
+    <div class="tab" data-t="cut">切断・端末加工表</div>
+    <div class="tab" data-t="diag">結束・製作図</div>
+    <div class="tab" data-t="agg">部材集計</div>
+  </div>
+  <div class="panel on" id="p-list"></div>
+  <div class="panel" id="p-cut"></div>
+  <div class="panel" id="p-diag"></div>
+  <div class="panel" id="p-agg"></div>
+
+  <div class="foot">
+    抽出した結線は編集できます（機器・端子・電線種・サイズ・色・長さ）。編集後は「再計算」で切断長・端子・製作図・集計が更新されます。<br>
+    切断長 = 電線長 + 端末代（両端 各50mm）。端子（圧着）はサイズからの推定候補です。AIは図面にある結線のみを読み取り、配線を創作しません。
+  </div>
+</div>
+<script>
+let curFiles=null, state=null, controller=null, curTab='list';
+const $=id=>document.getElementById(id);
+fetch('/api/health').then(r=>r.json()).then(d=>{$('db').textContent=(d.key?'API接続可':'APIキー未設定')+' / '+d.model;});
+
+const drop=$('drop'),file=$('file');
+drop.onclick=()=>file.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')};
+drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer.files.length)setFiles(e.dataTransfer.files)};
+file.onchange=()=>{if(file.files.length)setFiles(file.files)};
+function setFiles(fl){
+  curFiles=Array.from(fl);
+  $('fname').textContent=curFiles.length===1?curFiles[0].name:curFiles.length+'件: '+curFiles.map(f=>f.name).join(', ');
+  $('goExtract').disabled=false;$('err').classList.remove('show');
+}
+function setStep(n){[1,2,3].forEach(i=>{const el=$('st'+i);el.className='s'+(i<n?' done':i===n?' active':'');});}
+function busy(m){$('status').className='status show';$('status').innerHTML='<span class="spinner"></span><span class="step">'+m+'</span>';}
+function idle(){$('status').className='status';}
+function showStop(s){$('stopBtn').style.display=s?'inline-block':'none';}
+function fail(m){idle();showStop(false);$('err').textContent='エラー: '+m;$('err').classList.add('show');}
+function esc(s){return(s==null?'':s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+$('stopBtn').onclick=()=>{if(controller)controller.abort();idle();showStop(false);
+  $('err').textContent='処理を中止しました。';$('err').classList.add('show');};
+
+// ① 抽出
+$('goExtract').onclick=async()=>{
+  if(!curFiles||!curFiles.length)return;
+  $('err').classList.remove('show');$('goExtract').disabled=true;setStep(2);
+  busy('[1/1] 結線図から配線（From-To）を抽出しています…（'+curFiles.length+'件・30秒〜数分）');showStop(true);
+  controller=new AbortController();
+  const fd=new FormData();curFiles.forEach(f=>fd.append('file',f));
+  try{
+    const r=await fetch('/api/extract',{method:'POST',body:fd,signal:controller.signal});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'抽出に失敗しました');
+    state=d;idle();showStop(false);setStep(3);renderAll();
+  }catch(e){if(e.name==='AbortError')return;fail(e.message);}
+  finally{$('goExtract').disabled=false;}
+};
+
+$('reset').onclick=()=>{curFiles=null;state=null;$('fname').textContent='';$('goExtract').disabled=true;
+  $('sum').className='summary';$('tabs').className='tabs';$('actionbar').style.display='none';
+  ['list','cut','diag','agg'].forEach(t=>$('p-'+t).innerHTML='');setStep(1);};
+
+// タブ切替
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  curTab=t.dataset.t;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
+  ['list','cut','diag','agg'].forEach(k=>$('p-'+k).classList.toggle('on',k===curTab));
+});
+
+function renderAll(){
+  const s=state.summary;
+  $('sum').className='summary show';
+  $('sum').innerHTML=stat('',s.harnesses,'ハーネス/盤')+stat('',s.wires,'電線 本数')+
+    stat(s.unclear?'chk':'',s.unclear,'要確認')+stat('',state.aggregate.terminals.reduce((a,t)=>a+t.count,0),'端子 総数');
+  $('tabs').className='tabs show';$('actionbar').style.display='flex';
+  renderList();renderCut();renderDiag();renderAgg();
+}
+function stat(c,n,l){return '<div class="stat '+c+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>';}
+
+// 電線リスト（編集可）
+const COLORS=['','赤','白','黒','青','黄','緑','茶','橙','灰','桃','紫'];
+const TYPES=['','KIV','IV','HIV','CVV','VCTF','AWG'];
+function renderList(){
+  let h='<div class="hint">機器記号・端子・電線種・サイズ・色・長さを直接編集できます。編集後は上の「再計算」を押してください。</div>';
+  h+='<div class="tblwrap"><table><thead><tr>'+
+     '<th>号線</th><th>接続元 機器</th><th>端子</th><th>接続先 機器</th><th>端子</th>'+
+     '<th>電線種</th><th>ｻｲｽﾞsq</th><th>色</th><th>長さmm</th><th>備考</th><th></th></tr></thead><tbody>';
+  state.harnesses.forEach((hn,hi)=>{
+    h+='<tr class="harn"><td colspan="11">'+esc(hn.name)+'</td></tr>';
+    hn.wires.forEach((w,wi)=>{
+      h+='<tr'+(w.unclear?' class="unclear"':'')+' data-h="'+hi+'" data-w="'+wi+'">'+
+        cellI(w.mark,'mark','w-s')+cellI(w.from_dev,'from_dev')+cellI(w.from_term,'from_term','w-s')+
+        cellI(w.to_dev,'to_dev')+cellI(w.to_term,'to_term','w-s')+
+        cellSel(w.type,'type',TYPES)+cellI(w.size,'size','w-s')+cellSel(w.color,'color',COLORS)+
+        cellI(w.length,'length','w-s')+cellI(w.note,'note')+
+        '<td><button class="tbtn del" onclick="delRow('+hi+','+wi+')">削除</button></td></tr>';
+    });
+  });
+  h+='</tbody></table></div>';
+  $('p-list').innerHTML=h;
+}
+function cellI(v,k,cls){return '<td><input class="'+(cls||'')+'" value="'+esc(v)+'" data-k="'+k+'" oninput="edit(this)"></td>';}
+function cellSel(v,k,arr){
+  let o=arr.map(x=>'<option'+(x===v?' selected':'')+'>'+esc(x)+'</option>').join('');
+  if(v&&!arr.includes(v))o='<option selected>'+esc(v)+'</option>'+o;
+  return '<td><select data-k="'+k+'" onchange="edit(this)">'+o+'</select></td>';
+}
+function edit(el){
+  const tr=el.closest('tr');const hi=+tr.dataset.h,wi=+tr.dataset.w;
+  state.harnesses[hi].wires[wi][el.dataset.k]=el.value;
+}
+function delRow(hi,wi){state.harnesses[hi].wires.splice(wi,1);renderList();}
+$('addrow').onclick=()=>{
+  if(!state.harnesses.length)state.harnesses.push({name:'盤1',wires:[],svg:''});
+  state.harnesses[0].wires.push({mark:'',from_dev:'',from_term:'',to_dev:'',to_term:'',
+    type:'',size:'',color:'',length:'',note:'',unclear:false,from_end:'',to_end:'',cut:''});
+  renderList();
+};
+
+// 再計算（サーバで切断長・端子・SVG・集計を作り直す）
+$('rebuild').onclick=async()=>{
+  busy('再計算しています…');
+  try{
+    const r=await fetch('/api/rebuild',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({harnesses:state.harnesses})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||'再計算に失敗');
+    state=d;idle();renderAll();
+  }catch(e){fail(e.message);}
+};
+
+// 切断・端末加工表
+function renderCut(){
+  let h='<div class="hint">切断長 = 電線長 + 端末代（両端 各50mm）。長さ未入力の行は空欄です。端子（圧着）はサイズからの推定候補。</div>';
+  h+='<div class="tblwrap"><table><thead><tr><th>号線</th><th>電線種</th><th>ｻｲｽﾞ</th><th>色</th>'+
+     '<th>切断長mm</th><th>接続元 端子(圧着)</th><th>接続先 端子(圧着)</th><th>マーク</th><th>備考</th></tr></thead><tbody>';
+  state.harnesses.forEach(hn=>{
+    h+='<tr class="harn"><td colspan="9">'+esc(hn.name)+'</td></tr>';
+    hn.wires.forEach(w=>{
+      h+='<tr'+(w.unclear?' class="unclear"':'')+'><td class="mono">'+esc(w.mark)+'</td><td>'+esc(w.type)+'</td>'+
+        '<td class="mono">'+esc(w.size)+'</td><td>'+esc(w.color)+'</td>'+
+        '<td class="mono">'+esc(w.cut)+'</td><td class="mono">'+esc(w.from_end)+'</td>'+
+        '<td class="mono">'+esc(w.to_end)+'</td><td class="mono">'+esc(w.mark)+'</td><td>'+esc(w.note)+'</td></tr>';
+    });
+  });
+  h+='</tbody></table></div>';
+  $('p-cut').innerHTML=h;
+}
+
+// 結束・製作図
+function renderDiag(){
+  let h='<div class="hint">機器を幹線に並べ、各機器への分岐と区間ごとの結束本数を表示します。寸法は電線リストの長さに準拠。</div>';
+  state.harnesses.forEach(hn=>{h+='<div class="diagbox">'+(hn.svg||'')+'</div>';});
+  $('p-diag').innerHTML=h;
+}
+
+// 部材集計
+function renderAgg(){
+  const a=state.aggregate;
+  let h='<h3 style="color:var(--blue);margin:4px 0 6px;font-size:14px">◆ 電線（種類・サイズ・色 別）</h3>';
+  h+='<div class="tblwrap"><table><thead><tr><th>電線種</th><th>サイズsq</th><th>色</th><th>本数</th><th>総長m</th></tr></thead><tbody>';
+  a.wires.forEach(w=>{h+='<tr><td>'+esc(w.type)+'</td><td class="mono">'+esc(w.size)+'</td><td>'+esc(w.color)+
+    '</td><td class="mono">'+w.count+'</td><td class="mono">'+esc(w.length_m)+'</td></tr>';});
+  h+='</tbody></table></div>';
+  h+='<h3 style="color:var(--blue);margin:16px 0 6px;font-size:14px">◆ 端子（圧着）</h3>';
+  h+='<div class="tblwrap"><table><thead><tr><th>端子呼び</th><th>本数</th></tr></thead><tbody>';
+  a.terminals.forEach(t=>{h+='<tr><td class="mono">'+esc(t.terminal)+'</td><td class="mono">'+t.count+'</td></tr>';});
+  h+='</tbody></table></div>';
+  $('p-agg').innerHTML=h;
+}
+
+$('xls').onclick=()=>{window.location.href='/api/excel/download';};
+</script></body></html>
