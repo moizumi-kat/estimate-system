@@ -48,6 +48,18 @@ tr.pnl td{background:#eef2ee;font-weight:700;color:var(--green2)}
 .hl{color:var(--green2);font-weight:700}
 select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;max-width:240px;font-family:inherit;background:#fff}
 .manual{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px}
+/* 検図（図面チェック）結果 */
+.check{display:none;margin:16px 0;border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden}
+.check.show{display:block}
+.check .chd{padding:12px 16px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.check .chd.clean{border-bottom:0;color:var(--okbd)}
+.cnt{font-size:12px;font-family:var(--mono);padding:2px 9px;border-radius:20px;font-weight:700}
+.cnt.e{background:#fce4e4;color:#c0504d}.cnt.w{background:#fff4d6;color:#a5791d}.cnt.i{background:#eef2f7;color:#5a6b82}
+.check table{margin:0}.check td{vertical-align:top}
+.lvpill{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;white-space:nowrap}
+.lvpill.e{background:#fce4e4;color:#c0504d;border:1px solid #c0504d}
+.lvpill.w{background:#fff4d6;color:#a5791d;border:1px solid #c79a2e}
+.lvpill.i{background:#eef2f7;color:#5a6b82;border:1px solid #9fb0c4}
 </style></head>
 <body>
 <header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span></header>
@@ -55,7 +67,7 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
   <div class="steps">
     <div class="s active" id="st1">1. 図面アップロード</div>
     <div class="s" id="st2">2. 部品を抽出</div>
-    <div class="s" id="st3">3. コード選定</div>
+    <div class="s" id="st3">3. コード選定・検図</div>
   </div>
 
   <div class="drop" id="drop">
@@ -81,13 +93,15 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
   </div>
 
   <div class="summary" id="sum"></div>
+  <div class="check" id="check"></div>
   <div class="fbar" id="fbar"><span style="font-size:12px;align-self:center">表示：</span>
     <button data-f="all" class="on">すべて</button><button data-f="◎">◎</button><button data-f="○">○</button><button data-f="△">△</button></div>
   <div class="bar" id="xlsbar" style="display:none">
     <button class="btn sec" id="xls">Excelで保存</button>
   </div>
   <div id="out"></div>
-  <div class="foot">◎=確定（DB実在コード）／○=ほぼ確定／△=要確認（人の判断対象）。AIはコードを生成しません。コードはv9.2 DBと確定ルールからのみ選定します。</div>
+  <div class="foot">◎=確定（DB実在コード）／○=ほぼ確定／△=要確認（人の判断対象）。AIはコードを生成しません。コードはv9.2 DBと確定ルールからのみ選定します。<br>
+  検図（図面チェック）：<b>要修正</b>=矛盾の可能性が高い／<b>要確認</b>=記載漏れ・読取不明瞭など人の確認対象／<b>参考</b>=念のための指摘。自動チェックは補助であり、最終判断は設計者が行ってください。</div>
 </div>
 <script>
 let curFiles=null, extracted=null, lastData=null, controller=null;
@@ -109,6 +123,7 @@ function setFiles(fl){
 function resetResults(){
   extracted=null;lastData=null;
   $('confirm').classList.remove('show');$('sum').className='summary';$('fbar').className='fbar';
+  $('check').className='check';$('check').innerHTML='';
   $('xlsbar').style.display='none';$('out').innerHTML='';
   setStep(1);
 }
@@ -184,8 +199,34 @@ $('xls').onclick=()=>{
   window.location.href='/api/excel/download';
 };
 
+// 検図（図面チェック）結果パネル
+function renderCheck(d){
+  const box=$('check');const fs=d.findings||[];const c=d.check||{error:0,warn:0,info:0};
+  if(!fs.length){
+    box.className='check show';
+    box.innerHTML='<div class="chd clean">✓ 検図：矛盾・記載漏れは検出されませんでした（自動チェック範囲内）</div>';
+    return;
+  }
+  const lv={error:['e','要修正'],warn:['w','要確認'],info:['i','参考']};
+  let h='<div class="chd">🔍 図面チェック（検図）'+
+    '<span class="cnt e">要修正 '+c.error+'</span>'+
+    '<span class="cnt w">要確認 '+c.warn+'</span>'+
+    '<span class="cnt i">参考 '+c.info+'</span></div>';
+  h+='<table><thead><tr><th style="width:64px">レベル</th><th style="width:110px">盤</th><th>図面表記</th><th style="width:66px">区分</th><th>指摘内容・確認事項</th></tr></thead><tbody>';
+  for(const f of fs){
+    const L=lv[f.level]||['i',f.level];
+    h+='<tr><td><span class="lvpill '+L[0]+'">'+L[1]+'</span></td>'+
+       '<td>'+esc(f.panel)+'</td><td>'+esc(f.target)+'</td>'+
+       '<td class="note">'+esc(f.category)+'</td>'+
+       '<td><div>'+esc(f.message)+'</div>'+
+       (f.hint?'<div class="note" style="margin-top:3px">'+esc(f.hint)+'</div>':'')+'</td></tr>';
+  }
+  h+='</tbody></table>';
+  box.className='check show';box.innerHTML=h;
+}
 function render(d,filter){
   const s=d.summary;
+  renderCheck(d);
   $('sum').className='summary show';
   $('sum').innerHTML=stat('',s.total,'抽出機器')+stat('ok',s.ok,'◎ 確定')+stat('warn',s.warn,'○ ほぼ確定')+stat('chk',s.chk,'△ 要確認')+stat('',s.rate+'%','自動確定率');
   $('fbar').className='fbar show';

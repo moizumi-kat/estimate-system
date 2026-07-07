@@ -1355,7 +1355,204 @@ def select_from_extracted(data):
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
 
-def make_excel(panels):
+# ===== フェーズ3: 検図（図面の矛盾・記載漏れ検知） =====
+# 抽出済みの盤・機器(items)と選定結果(rows)をもとに、図面の
+#   ・記載漏れ（その機器に必須の定格・仕様が図面表記から読み取れない）
+#   ・数値の矛盾（SC/SRの比率、TR容量と主幹ブレーカ 等）
+#   ・数量/極数の疑い（×3=三相を台数と誤記 等）
+#   ・要確認（コード選定不可・読取不明瞭）
+# を洗い出す。選定エンジンと同じ思想で、推測で断定せず確信の持てるものだけを指摘する。
+# レベル: error(要修正の可能性が高い) / warn(要確認) / info(参考・念のため)
+_LV_ORDER={'error':0,'warn':1,'info':2}
+_LV_LABEL={'error':'要修正','warn':'要確認','info':'参考'}
+
+# 部品名 → 属性表キー の判定。短い記号(ct/vt/ds/sr)は前後が英字でないことを要求し誤検出を防ぐ。
+# 具体的な記号を先に置く(mctt→mccb→mcb, zct→ct 等)。VCT/VTT等は前後英字条件で誤判定しない。
+_VAL_PART_PATTERNS=[
+    ('VCB', r'(?<![a-z])vcb(?![a-z])'),
+    ('VCS', r'(?<![a-z])vcs(?![a-z])'),
+    ('LBS', r'(?<![a-z])lbs(?![a-z])'),
+    ('PAS', r'(?<![a-z])pas(?![a-z])'),
+    ('MCTT', r'(?<![a-z])mctt(?![a-z])'),
+    ('MCCB', r'(?<![a-z])mccb(?![a-z])'),
+    ('ACB', r'(?<![a-z])acb(?![a-z])'),
+    ('ELB', r'(?<![a-z])elb(?![a-z])'),
+    ('MCB', r'(?<![a-z])mcb(?![a-z])'),
+    ('WHM', r'(?<![a-z])whm(?![a-z])'),
+    ('ZCT', r'(?<![a-z])zct{1,2}(?![a-z])'),
+    ('DS',  r'(?<![a-z])ds(?![a-z])'),
+    ('SPD', r'(?<![a-z])spd(?![a-z])'),
+    ('INV', r'(?<![a-z])inv(?![a-z])|インバータ'),
+    ('MGS', r'(?<![a-z])mgs(?![a-z])'),
+    ('PF',  r'(?<![a-z])pf(?![a-z])'),
+    ('CT',  r'(?<![a-z])ct(?![a-z])'),
+    ('VT',  r'(?<![a-z])vt(?![a-z])'),
+    ('TR',  r'(?<![a-z])tr(?![a-z])|変圧器|(?<![a-z])t:'),
+    ('SC',  r'(?<![a-z])sc(?![a-z])'),
+    ('SR',  r'(?<![a-z])sr(?![a-z])'),
+    ('SM',  r'(?<![a-z])sm(?![a-z])'),
+    ('コンセント', r'コンセント'),
+    ('端子盤', r'端子盤'),
+    ('TB',  r'(?<![a-z])tb(?![a-z])|端子台'),
+]
+
+def val_part_key(name):
+    """機器名から属性表(ATTR_TABLE)のキーを判定。該当なしはNone。"""
+    n=norm(name)
+    for key,pat in _VAL_PART_PATTERNS:
+        if re.search(pat,n): return key
+    return None
+
+# ブレーカ系の電流表記(AF/AT/A/『分数』)。極数以外の定格は、これがあれば「記載あり」とみなす。
+_AMP_TOKEN=re.compile(r'\d+\s*(AF|AT|A)(?![A-Za-z])|\d+\s*/\s*\d+')
+
+def _attr_present(nfkc, key, attr, pat):
+    if re.search(pat, nfkc): return True
+    # ブレーカ系のAF/AT/定格電流は、AF/AT/A/分数のいずれかがあれば記載ありと解釈(AF/AT表記ゆれ吸収)
+    if key in ('MCB','ELB','ACB','MCCB','MCTT') and attr in ('AF','AT','定格電流'):
+        if _AMP_TOKEN.search(nfkc): return True
+    return False
+
+# 記載漏れを warn に格上げする重要属性(保護・安全に直結)。それ以外は info(参考)。
+_CRITICAL_ATTR={('VCB','遮断容量'),('VCB','定格電流'),('DS','極数'),('DS','定格電流'),
+    ('LBS','定格電流'),('PAS','定格電流'),('CT','変流比'),('TR','容量'),('TR','相数'),
+    ('SC','容量'),('SR','容量'),('MCB','極数'),('ELB','極数'),('ACB','極数'),('MCCB','極数')}
+
+def _finding(level,panel,target,category,message,hint=''):
+    return dict(level=level,panel=panel or '',target=target or '',
+                category=category,message=message,hint=hint)
+
+def _qty_int(q):
+    m=re.match(r'\s*(\d+)', str(q or ''))
+    return int(m.group(1)) if m else 1
+
+def _cap_kvar(name):
+    """SC/SRの容量(kvar優先、無ければkVA数値)を返す。"""
+    nf=unicodedata.normalize('NFKC',str(name))
+    m=re.search(r'(\d+\.?\d*)\s*kvar', nf, re.I)
+    if m: return float(m.group(1))
+    m=re.search(r'(\d+\.?\d*)\s*kVA', nf)
+    return float(m.group(1)) if m else None
+
+def _tr_secondary_current(name):
+    """TR名から二次定格電流(A)を概算。容量kVAと二次電圧Sが読めた時のみ。読めなければNone。"""
+    nf=unicodedata.normalize('NFKC',str(name))
+    mk=re.search(r'(\d+\.?\d*)\s*kVA', nf)
+    if not mk: return None
+    kva=float(mk.group(1))
+    ms=re.search(r'S[:：]\s*(\d{3,4})\s*/?\d*\s*V', nf) or re.search(r'(\d{3})\s*/\s*\d{3}\s*V', nf)
+    if not ms: return None
+    v=int(ms.group(1))
+    if v<=0: return None
+    three=('3φ' in nf or '3Φ' in nf or '三相' in nf)
+    return kva*1000.0/((1.7320508 if three else 1.0)*v)
+
+def validate_drawing(extracted_panels, selected_panels=None):
+    """抽出panels(+選定panels)から検図所見リストを返す。"""
+    findings=[]
+    for p in (extracted_panels or []):
+        pname=p.get('panel','')
+        items=[it for it in p.get('items',[])
+               if not it.get('load_detail') and not it.get('cable')]
+        sc_caps=[]; sr_caps=[]; tr_items=[]; main_rated=None
+        for it in items:
+            name=it.get('name','') or ''
+            nfkc=unicodedata.normalize('NFKC',name)
+            key=val_part_key(name)
+            # --- R1: 記載漏れ（必須属性が図面表記に無い） ---
+            if key and key in ATTR_TABLE and not it.get('unclear'):
+                spec=ATTR_TABLE[key]; pats=spec.get('patterns',{})
+                for attr in spec.get('required',[]):
+                    pat=pats.get(attr)
+                    if not pat: continue
+                    if not _attr_present(nfkc,key,attr,pat):
+                        lv='warn' if (key,attr) in _CRITICAL_ATTR else 'info'
+                        findings.append(_finding(lv,pname,name,'記載漏れ',
+                            f'{key}に必須項目「{attr}」の記載が読み取れません',
+                            'この機器には通常この仕様が必要です。図面への記載漏れ、または読取不明瞭でないか確認してください。'))
+            # --- R1b: 読取不明瞭 ---
+            if it.get('unclear'):
+                findings.append(_finding('warn',pname,name,'要確認',
+                    'この機器は図面から読み取れませんでした（unclear）',
+                    '記載が不鮮明か情報不足です。原図で該当箇所を確認してください。'))
+            # --- R4: 数量・極数の疑い ---
+            q=_qty_int(it.get('qty'))
+            if key in ('VCB','DS','LBS','PAS','VCS') and q>=2:
+                findings.append(_finding('warn',pname,name,'数量・極数',
+                    f'高圧主回路機器の数量が{q}になっています',
+                    '「×3」は三相(3極)を表し台数ではありません。1系統に1台(×3=3P 1台)か、本当に複数台かを確認してください。'))
+            # 単一機器内での相数と極数の食い違い
+            if ('1φ' in nfkc and '3P' in nfkc) or ('3φ' in nfkc and '1P' in nfkc):
+                findings.append(_finding('warn',pname,name,'数量・極数',
+                    '相数と極数の表記が食い違っています（1φ↔3P / 3φ↔1P）',
+                    '相数(φ)と極数(P)のどちらが正しいか確認してください。'))
+            # --- 盤内集計（R2/R3用） ---
+            if key=='SC':
+                c=_cap_kvar(name)
+                if c: sc_caps.append((name,c))
+            if key=='SR':
+                c=_cap_kvar(name)
+                if c: sr_caps.append((name,c))
+            if key=='TR':
+                tr_items.append(name)
+            nlow=norm(name)
+            is_main_brk=re.search(r'(mcb|elb|lug|acb|mccb)',nlow) and \
+                (re.match(r'm[)\s]?(mcb|elb|lug|acb|mccb)',nlow) or '主幹' in name)
+            if is_main_brk:
+                af,at=_amp_af(nlow)
+                r=at or af or _get_amp(nlow)  # AF/AT無しの「400A」表記もフレーム定格として拾う
+                if r: main_rated=(name,int(r))
+        # --- R2: SC/SR 比率（直列リアクトルはSCの約6%が標準、6/13%が一般的） ---
+        for i in range(min(len(sc_caps),len(sr_caps))):
+            sc_nm,sc=sc_caps[i]; sr_nm,sr=sr_caps[i]
+            if sc<=0: continue
+            ratio=sr/sc
+            if ratio>=0.5:
+                findings.append(_finding('error',pname,f'{sc_nm} / {sr_nm}','整合性',
+                    f'直列リアクトル(SR {sr}kvar)がコンデンサ(SC {sc}kvar)に対し過大です（比率{round(ratio*100)}%）',
+                    'SRはSC容量の6%(または13%)が標準です。SC/SRの容量取り違えの可能性があります。'))
+            elif not (0.045<=ratio<=0.16):
+                findings.append(_finding('warn',pname,f'{sc_nm} / {sr_nm}','整合性',
+                    f'SR/SC比率が標準(6%または13%)から外れています（{round(ratio*100)}%）',
+                    'SR容量またはSC容量の値を確認してください。'))
+        # --- R3: TR容量 と 主幹ブレーカ（同一盤内で両方読めた時のみ・参考計算） ---
+        if main_rated:
+            for tnm in tr_items:
+                isec=_tr_secondary_current(tnm)
+                if not isec: continue
+                mnm,rated=main_rated
+                if rated < isec*0.95:
+                    findings.append(_finding('warn',pname,f'{tnm} / {mnm}','整合性',
+                        f'主幹ブレーカ({rated}A)がTR二次定格電流(≈{round(isec)}A)を下回っています',
+                        '参考計算です。主幹の定格が変圧器容量に対し不足していないか確認してください。'))
+                elif rated > isec*2.6:
+                    findings.append(_finding('info',pname,f'{tnm} / {mnm}','整合性',
+                        f'主幹ブレーカ({rated}A)がTR二次定格電流(≈{round(isec)}A)に対し過大です',
+                        '参考計算です。ブレーカ定格の妥当性を確認してください。'))
+    # --- R5: 要確認（選定結果から。コード選定不可・△） ---
+    seen=set()
+    for p in (selected_panels or []):
+        pn=p.get('panel','')
+        for r in p.get('rows',[]):
+            if r.get('load_detail') or r.get('absorbed'): continue
+            if r.get('conf')=='△' or not r.get('code'):
+                tgt=r.get('display') or r.get('raw','')
+                k=(pn,tgt)
+                if k in seen: continue
+                seen.add(k)
+                findings.append(_finding('info',pn,tgt,'要確認',
+                    'この機器は積算コードを一意に確定できませんでした（要確認）',
+                    (r.get('note') or '') + ' 型式・仕様を確認してください。'))
+    findings.sort(key=lambda f:(_LV_ORDER.get(f['level'],9), f['panel']))
+    return findings
+
+def validate_summary(findings):
+    c={'error':0,'warn':0,'info':0}
+    for f in findings:
+        if f['level'] in c: c[f['level']]+=1
+    return dict(error=c['error'],warn=c['warn'],info=c['info'],total=len(findings))
+
+def make_excel(panels, findings=None):
     FONT='Meiryo'; thin=Side(style='thin',color='BBBBBB'); bd=Border(left=thin,right=thin,top=thin,bottom=thin)
     hf=PatternFill('solid',start_color='1E3A28')
     cf={'◎':PatternFill('solid',start_color='E8F0E8'),'○':PatternFill('solid',start_color='FFF8E0'),'△':PatternFill('solid',start_color='FCE4E4')}
@@ -1389,6 +1586,28 @@ def make_excel(panels):
     for lab,val in [('抽出機器数',tot),('◎ 確定',nok),('○ ほぼ確定',nw),('△ 要確認',nc),('自動確定率',f'{round((nok+nw)/tot*100)}%'),('負荷明細(計上対象外)',ndetail)]:
         ws2.append([lab,val])
     ws2.column_dimensions['A'].width=20; ws2.column_dimensions['B'].width=12
+    # ===== 検図結果シート =====
+    if findings:
+        wsv=wb.create_sheet('検図結果',1)
+        vlab={'error':'要修正','warn':'要確認','info':'参考'}
+        vfill={'error':PatternFill('solid',start_color='FCE4E4'),
+               'warn':PatternFill('solid',start_color='FFF8E0'),
+               'info':PatternFill('solid',start_color='EEF2F7')}
+        s=validate_summary(findings)
+        wsv.append([f'検図結果（要修正 {s["error"]} / 要確認 {s["warn"]} / 参考 {s["info"]}）'])
+        wsv['A1'].font=Font(name=FONT,bold=True,size=12); wsv.append([])
+        wsv.append(['レベル','盤','図面表記','区分','指摘内容','確認事項'])
+        for c in wsv[3]:
+            c.font=Font(name=FONT,bold=True,color='FFFFFF'); c.fill=hf; c.border=bd
+            c.alignment=Alignment(horizontal='center',wrap_text=True)
+        for f in findings:
+            wsv.append([vlab.get(f['level'],f['level']),f['panel'],f['target'],
+                        f['category'],f['message'],f.get('hint','')])
+            row=wsv[wsv.max_row]
+            for c in row: c.font=Font(name=FONT,size=9); c.border=bd; c.alignment=Alignment(vertical='center',wrap_text=True)
+            row[0].fill=vfill.get(f['level'],PatternFill()); row[0].alignment=Alignment(horizontal='center')
+        for col,w in zip('ABCDEF',[8,16,30,10,44,44]): wsv.column_dimensions[col].width=w
+        wsv.freeze_panes='A4'
     buf=io.BytesIO(); wb.save(buf); buf.seek(0); return buf
 
 # ===== ルート =====
@@ -1442,6 +1661,11 @@ def api_select():
         panels=select_from_extracted({'panels':data['panels']})
     except Exception as e:
         return jsonify(error=str(e)),500
+    # 検図: 抽出panels(items)＋選定panels(rows)から矛盾・記載漏れ・要確認を洗い出す
+    try:
+        findings=validate_drawing(data['panels'], panels)
+    except Exception:
+        findings=[]
     c={'◎':0,'○':0,'△':0}
     ndetail=0
     for p in panels:
@@ -1465,10 +1689,11 @@ def api_select():
         sid=session.get('sid')
         if not sid:
             sid=secrets.token_hex(8); session['sid']=sid
-        _LAST_RESULT[sid]=panels
+        _LAST_RESULT[sid]={'panels':panels,'findings':findings}
     except Exception:
         pass
-    return jsonify(panels=panels, summary=dict(total=sum(c.values()),ok=c['◎'],warn=c['○'],chk=c['△'],
+    return jsonify(panels=panels, findings=findings, check=validate_summary(findings),
+        summary=dict(total=sum(c.values()),ok=c['◎'],warn=c['○'],chk=c['△'],
         detail=ndetail, rate=round((c['◎']+c['○'])/tot*100)))
 
 # 直近の選定結果(セッションID→panels)。プロセス内メモリ。再起動で消えるが実用上十分。
@@ -1477,8 +1702,10 @@ _LAST_RESULT={}
 @app.route('/api/excel', methods=['POST'])
 @login_required
 def api_excel():
-    panels=request.get_json().get('panels',[])
-    buf=make_excel(panels)
+    body=request.get_json() or {}
+    panels=body.get('panels',[])
+    findings=body.get('findings',[])
+    buf=make_excel(panels, findings)
     ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
     return send_file(buf,as_attachment=True,download_name=f'積算コード選定_{ts}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -1488,11 +1715,16 @@ def api_excel():
 @login_required
 def api_excel_download():
     sid=session.get('sid')
-    panels=_LAST_RESULT.get(sid)
-    if not panels:
+    stored=_LAST_RESULT.get(sid)
+    if not stored:
         return Response('選定結果がありません。先に図面を読み込み、コード選定を実行してください。',
                         status=404, mimetype='text/plain; charset=utf-8')
-    buf=make_excel(panels)
+    # 旧形式(panelsのみ)と新形式({panels,findings})の両対応
+    if isinstance(stored,dict):
+        panels=stored.get('panels',[]); findings=stored.get('findings',[])
+    else:
+        panels=stored; findings=[]
+    buf=make_excel(panels, findings)
     ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
     return send_file(buf,as_attachment=True,download_name=f'積算コード選定_{ts}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
