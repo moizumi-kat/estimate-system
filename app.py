@@ -577,7 +577,8 @@ def _detect_main(main_str):
     # 遮断器キーワードが無くても「NP + NNNAF(/MMAT)」形式は成形遮断器(MCCB)分岐とみなす。
     # 動力盤/コンセント盤の分岐(例「フォーク用コンセント 3P 100AF/60AT」「ACP 3P 225AF/125AT」)。
     # AF(フレーム定格)は成形遮断器固有の表記なので、負荷名が先頭でも遮断器分岐と確定できる。
-    m3=_re.search(r'[1-4]\s*p.{0,5}\d+\s*af', n)
+    # 「NP+NNNAF」または「NP+NNN/MMM」(枠/トリップ対、AF表記なし。例「分岐 3P225/225」)を分岐遮断器とみなす。
+    m3=_re.search(r'[1-4]\s*p.{0,5}\d+\s*af', n) or _re.search(r'[1-4]\s*p\s*\d{2,4}\s*/\s*\d{2,4}(?![\d.]|v)', n)
     if m3:
         kind='elb' if _re.search(r'(elb|elcb|漏電|漏保|el)(?![a-z])', n) else 'mcb'
         return kind, {'mcb':'MCB','elb':'ELB'}[kind], True
@@ -1059,11 +1060,49 @@ def _reactor_code(name):
     exact=abs(v0-want)<1e-6
     return c0,('◎' if exact else '○'),'%sリアクトル %sV %gKW%s'%(kind,volt,v0,'' if exact else '(仕様%g→%gKW繰上)'%(want,v0))
 
+# スコットトランス(45050系・支給品): 3φ→1φ変換TR。kVA最近傍上位。高圧TR同様に購入品コードなし=支給品。
+def _scott_code(name):
+    s=unicodedata.normalize('NFKC',str(name))
+    if not re.search(r'スコット', s): return None
+    mk=re.search(r'(\d+\.?\d*)\s*KVA', s, re.I)
+    if not mk: return None
+    want=float(mk.group(1))
+    pool=[(float(mm.group(1)), d['code']) for d in DB
+          if (mm:=re.match(r'スコットTR\(支給品\)\s*(\d+\.?\d*)KVA', d['name']))]
+    ge=sorted([(v,c) for v,c in pool if v>=want-1e-6])
+    if not ge: return None
+    v0,c0=ge[0]; ex=abs(v0-want)<1e-6
+    return c0,('◎' if ex else '○'),'スコットTR(支給品) %gKVA%s'%(v0,'' if ex else '(仕様%g→%gKVA繰上)'%(want,v0))
+
+# 限流ヒューズPF単体(43622-43631): G定格(G40A等)またはPF NNN A→最近傍上位。
+# (LBS内蔵PFは_lbs_codeで処理済。ここは単体PF行。力率PF/PFM計器と誤検出しないよう接頭PFに限定)
+def _pf_code(name):
+    s=unicodedata.normalize('NFKC',str(name)).upper()
+    if not (re.match(r'\s*PF(\s|G|\d|$)', s) or 'パワーヒューズ' in s or '限流ヒューズ' in s): return None
+    if re.search(r'PFM|力率', s): return None
+    m=re.search(r'G?\s*(\d+)\s*A(?![A-Za-z])', s)
+    if not m: return None
+    want=int(m.group(1))
+    pool=[(int(mm.group(1)), d['code']) for d in DB if (mm:=re.match(r'PF\s*(\d+)A$', d['name']))]
+    ge=sorted([(v,c) for v,c in pool if v>=want])
+    if not ge: return None
+    v0,c0=ge[0]
+    return c0,('◎' if v0==want else '○'),'限流ヒューズPF %dA%s'%(v0,'' if v0==want else '(仕様%d→%dA繰上)'%(want,v0))
+
 # 統合: 1機器を選定
 def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', group=''):
     # リモコン設備(65系)は名称直引き(数値属性が無く候補生成に乗らないため)
     _rc=_remocon_code(name)
     if _rc: return R(_rc[0],_rc[1],_rc[2])
+    # スコットトランス(支給品45050系)
+    _sk=_scott_code(name)
+    if _sk: return R(_sk[0],_sk[1],_sk[2])
+    # 限流ヒューズPF単体(43622-43631)
+    _pf=_pf_code(name)
+    if _pf: return R(_pf[0],_pf[1],_pf[2])
+    # 警報盤の函体(56000 BOX)。警報点(◯◯異常/接点)は別処理で除外するのでここは盤本体のみ。
+    if re.fullmatch(r'\s*警報盤\s*', str(name)) and '56000' in byCode:
+        return R('56000','◎','警報盤 函体(BOX)')
     # AC/DCリアクトル(52系): INV分岐の付随品。容量kW→最近傍上位(電圧既定200V)
     _rk=_reactor_code(name)
     if _rk: return R(_rk[0],_rk[1],_rk[2])
@@ -1631,6 +1670,20 @@ def select_from_extracted(data):
             # ただし計器切換スイッチ(VS/AS)は計器側で扱うため除外しない。
             if re.search(r'操作\s*(SW|スイッチ)|運転\s*(SW|スイッチ)|(押釦|押ボタン|ﾎﾞﾀﾝ)', nm) \
                and not re.search(r'切換|VS|AS|計器', nm):
+                continue
+            # 表示灯PL/ブザーBZ/CP(サーキットプロテクタ)等の盤内小物は回路/盤製作に内包→個別計上対象外。
+            if re.search(r'^\s*(PL|BZ|CP)\s*(\s|$)|^\s*CP\b|表示灯|ﾊﾟｲﾛｯﾄ|パイロット|ブザ|ﾌﾞｻﾞ|サーキットプロテクタ|ｻｰｷｯﾄﾌﾟﾛﾃｸﾀ', nm):
+                continue
+            # 警報点・監視信号(◯◯異常/故障/満水/減水/外部接点)は警報盤の内部入力点であり
+            # 個別計上対象外(警報盤の函体56000で計上)。盤名でなく信号ラベル(括弧付き含む)。
+            if re.search(r'外部接点', nm):
+                continue
+            if re.search(r'異常|故障|満水|減水', nm) and re.search(r'警報|発電機|ポンプ|受水槽|ボイラー|受変電|外部', nm) \
+               and not re.search(r'盤$|BOX|函|継電器|ﾘﾚｰ|リレー|RY', nm):
+                continue
+            # 柱上装柱材・外構(玉碍子/腕金/支線/根かせ/引込柱/装柱/マスト)・照明器具/灯具は
+            # 盤でなく別業者スコープ(柱上・外構・照明設備)→計上対象外。
+            if re.search(r'碍子|腕金|アームタイ|ｱｰﾑﾀｲ|支線|根かせ|根枷|引込柱|装柱|管端|止水|(^|\s)マスト|照明器具|灯具|ダウンライト|ﾀﾞｳﾝﾗｲﾄ', nm):
                 continue
             # 対象外の弱電機器: 本システムの弱電スコープは端子盤(端子/MDF/保安器)のみ。
             # TVアンテナ設備(アンテナ/マスト/増幅器/分配器/混合器/ブースター)・LAN機器(HUB)は
