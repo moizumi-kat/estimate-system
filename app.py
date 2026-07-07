@@ -1093,11 +1093,29 @@ def _pf_code(name):
     v0,c0=ge[0]
     return c0,('◎' if v0==want else '○'),'限流ヒューズPF %dA%s'%(v0,'' if v0==want else '(仕様%d→%dA繰上)'%(want,v0))
 
+# 受変電の保護継電器(名称で一意に決まるもの)の直引き。候補多で△に落ちるのを救済。
+# 容量変種があるもの(EL-RY等)は名称だけで断定しないので対象にしない(generic選定へ委ねる)。
+def _relay_code(name):
+    n=unicodedata.normalize('NFKC',str(name)).upper(); s=str(name)
+    # DGR 地絡方向継電器
+    if re.search(r'(?<![A-Z])DGR(?![A-Z])', n) or '地絡方向' in s:
+        if '引出' in s and '46040' in byCode: return '46040','○','DGR(引出型)'
+        if '46041' in byCode: return '46041','○','DGR(方向性)'
+    # LGR/LG-RY 地絡継電器(ZCT付)。ZCT併記かつ低圧アンペア指定が無いものだけ(46401=汎用)。
+    if (re.search(r'(?<![A-Z])LGR(?![A-Z])|LG-?RY', n) and re.search(r'ZCT', n)) \
+       or (re.search(r'地絡継電', s) and '方向' not in s and 'ZCT' in n):
+        if not re.search(r'\d{2,4}\s*A(?![A-Za-z])', n) and '46401' in byCode:
+            return '46401','○','LG-RY(ZCT付)'
+    return None
+
 # 統合: 1機器を選定
 def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', group='', legend=None, breaker=''):
     # リモコン設備(65系)は名称直引き(数値属性が無く候補生成に乗らないため)
     _rc=_remocon_code(name)
     if _rc: return R(_rc[0],_rc[1],_rc[2])
+    # 受変電の保護継電器(DGR方向性/LG-RY ZCT付)の直引き
+    _ry=_relay_code(name)
+    if _ry: return R(_ry[0],_ry[1],_ry[2])
     # スコットトランス(支給品45050系)
     _sk=_scott_code(name)
     if _sk: return R(_sk[0],_sk[1],_sk[2])
@@ -1543,13 +1561,15 @@ SC_ALWAYS_CONFIRM={'meter'}   # 計器種別は単線図で確定しづらく誤
 # 計器用変成器(VT/CT/ZCT)をセット内に含む→積算ソフトがセットコードから展開するので個別計上しない。
 # 個別に別計上する品(主変圧器TR・LBS・PF・分岐MCB・函体・SPD等)は抑制しない(TR/LBS/PFは別コード)。
 _SET_METER_RE=re.compile(
-    r'電圧計|電流計|電力計|電力量計|力率計|指示計|マルチ(指示計|メ[ータ]|)|'
+    r'電圧計|電流計|電力計|電力量計|力率計|指示計|計器盤|指示計器盤|マルチ(指示計|メ[ータ]|)|'
     r'計器用変[成流圧]|変流器|'
     r'(?<![a-z0-9])(vm|am|vs|as|wh|whm|pfm|cos|vt|ct|zct)(?![a-z])', re.I)
 
 def _is_set_internal_meter(name):
     """セット内包の計器/変成器か。主変圧器(変圧器/TR/kVA)や開閉器(LBS/PF/VCB)は除外。"""
     n=norm(name)
+    # 計器盤(複合計器盤 V/A/DA/KW/KWh/Pf/var)はセット内包メータの集合→抑制(Pf=力率でPF除外に誤当たりするため先に判定)
+    if re.search(r'計器盤|指示計器盤', n): return True
     if re.search(r'変圧器|(?<![a-z])tr(?![a-z])|kva|lbs|pas|vcb|vcs|(?<![a-z])pf(?![a-z])|mccb|mcb|elb|elcb|端子|函|盤$', n):
         return False
     return bool(_SET_METER_RE.search(n))
