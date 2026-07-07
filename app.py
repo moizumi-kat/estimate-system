@@ -649,12 +649,14 @@ _PATTERN_TYPE_DEFAULT={
     'D':'スターデルタ','F':'スターデルタ','G':'スターデルタ','H':'スターデルタ',
     'I':'INV','J':'INV','L':'INV','K':'INV(スターデルタ)'}
 def _normalize_type(t):
-    """凡例側の型表記を DB表記(L-S(AM付)/スターデルタ/INV/INV(スターデルタ))に正規化。"""
-    u=str(t or '').upper()
+    """凡例のタイトルを DB表記(L-S(AM付)/スターデルタ/INV/INV(スターデルタ))に正規化。
+    直接遮断器のみ(電源/コンセント)は 'MCCB'(=モーター分岐回路でない印)を返す。"""
+    u=str(t or '').upper(); s=str(t or '')
     if re.search(r'スタ[ー\-]?デルタ|ｽﾀ[ｰ\-]?ﾃﾞﾙﾀ|STAR|Y[\-]?Δ',u):
         return 'INV(スターデルタ)' if 'INV' in u else 'スターデルタ'
-    if 'INV' in u or 'インバータ' in str(t): return 'INV'
-    if re.search(r'L[ー\-]?S|直入',u): return 'L-S(AM付)'
+    if 'INV' in u or 'インバータ' in s: return 'INV'
+    if re.search(r'直入|電流計|[0-9０-９]回路|[0-9０-９]台|L[ー\-]?S',s+u): return 'L-S(AM付)'
+    if re.search(r'MCCB|ELB|遮断器',u) and 'のみ' in s: return 'MCCB'   # 直接遮断器=電源/コンセント回路
     return str(t or '').strip()
 def _dev_from_breaker(brk, ax=False):
     b=str(brk or ''); U=b.upper()
@@ -678,6 +680,14 @@ def control_apply(load_rows, legend=None, volt='200V'):
         except: kw=0
         typ=leg.get(sym)
         if not typ: out.append({'load':load,'code':'','conf':'△','note':f'記号"{sym}"→回路種別不明(凡例要確認)'}); continue
+        if typ=='MCCB':   # 電源/コンセント等 直接遮断器 → 遮断器サイズで個別選定(分岐回路でない)
+            brk=str(r.get('breaker') or '').strip()
+            if brk:
+                sel=select_one('MCB '+brk,'動力制御盤')
+                out.append({'load':load,'code':sel.get('code',''),'conf':sel.get('conf','△'),'note':f'直接遮断器 {brk}'})
+            else:
+                out.append({'load':load,'code':'','conf':'△','note':'直接遮断器 容量要確認'})
+            continue
         if kw<=0: out.append({'load':load,'code':'','conf':'△','note':'kW不明→確認'}); continue
         dev=_dev_from_breaker(r.get('breaker'), r.get('ax'))
         code,conf,pick=_bunki_find(typ,kw,dev,volt)
