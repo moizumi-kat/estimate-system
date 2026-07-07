@@ -1,0 +1,4682 @@
+[
+ {
+  "code": "17002",
+  "name": "低圧セット 広角 1φ3W 30KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "1φ3W",
+  "cap": "30KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/1φ3W/30KVA",
+  "furukawa": "351",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45002",
+    "name": "TR(支給品) 1φ3W 30KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17003",
+  "name": "低圧セット 広角 1φ3W 50KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "1φ3W",
+  "cap": "50KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/1φ3W/50KVA",
+  "furukawa": "371",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45003",
+    "name": "TR(支給品) 1φ3W 50KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17004",
+  "name": "低圧セット 広角 1φ3W 75KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "1φ3W",
+  "cap": "75KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/1φ3W/75KVA",
+  "furukawa": "395",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45004",
+    "name": "TR(支給品) 1φ3W 75KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17005",
+  "name": "低圧セット 広角 1φ3W 100KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "1φ3W",
+  "cap": "100KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/1φ3W/100KVA",
+  "furukawa": "423",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45005",
+    "name": "TR(支給品) 1φ3W 100KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17006",
+  "name": "低圧セット 広角 1φ3W 150KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "1φ3W",
+  "cap": "150KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/1φ3W/150KVA",
+  "furukawa": "445",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45006",
+    "name": "TR(支給品) 1φ3W 150KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17007",
+  "name": "低圧セット 広角 1φ3W 200KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "1φ3W",
+  "cap": "200KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/1φ3W/200KVA",
+  "furukawa": "516",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45007",
+    "name": "TR(支給品) 1φ3W 200KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17008",
+  "name": "低圧セット 広角 1φ3W 300KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "1φ3W",
+  "cap": "300KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/1φ3W/300KVA",
+  "furukawa": "614",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45008",
+    "name": "TR(支給品) 1φ3W 300KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17009",
+  "name": "低圧セット 広角 1φ3W 500KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "1φ3W",
+  "cap": "500KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/1φ3W/500KVA",
+  "furukawa": "908",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45009",
+    "name": "TR(支給品) 1φ3W 500KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17032",
+  "name": "低圧セット 広角 3φ3W 30KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "3φ3W",
+  "cap": "30KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/3φ3W/30KVA",
+  "furukawa": "357",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45032",
+    "name": "TR(支給品) 3φ3W 30KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17033",
+  "name": "低圧セット 広角 3φ3W 50KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "3φ3W",
+  "cap": "50KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/3φ3W/50KVA",
+  "furukawa": "377",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45033",
+    "name": "TR(支給品) 3φ3W 50KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17034",
+  "name": "低圧セット 広角 3φ3W 75KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "3φ3W",
+  "cap": "75KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/3φ3W/75KVA",
+  "furukawa": "411",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45034",
+    "name": "TR(支給品) 3φ3W 75KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17035",
+  "name": "低圧セット 広角 3φ3W 100KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "3φ3W",
+  "cap": "100KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/3φ3W/100KVA",
+  "furukawa": "439",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45035",
+    "name": "TR(支給品) 3φ3W 100KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17036",
+  "name": "低圧セット 広角 3φ3W 150KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "3φ3W",
+  "cap": "150KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/3φ3W/150KVA",
+  "furukawa": "457",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45036",
+    "name": "TR(支給品) 3φ3W 150KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17037",
+  "name": "低圧セット 広角 3φ3W 200KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "3φ3W",
+  "cap": "200KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/3φ3W/200KVA",
+  "furukawa": "521",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45037",
+    "name": "TR(支給品) 3φ3W 200KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17038",
+  "name": "低圧セット 広角 3φ3W 300KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "3φ3W",
+  "cap": "300KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/3φ3W/300KVA",
+  "furukawa": "620",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45038",
+    "name": "TR(支給品) 3φ3W 300KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17039",
+  "name": "低圧セット 広角 3φ3W 500KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "3φ3W",
+  "cap": "500KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/3φ3W/500KVA",
+  "furukawa": "796",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45039",
+    "name": "TR(支給品) 3φ3W 500KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17040",
+  "name": "低圧セット 広角 3φ3W 750KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "3φ3W",
+  "cap": "750KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/3φ3W/750KVA",
+  "furukawa": "1120",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45040",
+    "name": "TR(支給品) 3φ3W 750KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17052",
+  "name": "低圧セット 広角 スコット 30KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "スコット",
+  "cap": "30KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/スコット/30KVA",
+  "furukawa": "447",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45054",
+    "name": "TR(支給品) スコット 30KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17053",
+  "name": "低圧セット 広角 スコット 50KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "スコット",
+  "cap": "50KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/スコット/50KVA",
+  "furukawa": "469",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45056",
+    "name": "TR(支給品) スコット 50KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17054",
+  "name": "低圧セット 広角 スコット 75KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "スコット",
+  "cap": "75KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/スコット/75KVA",
+  "furukawa": "509",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45057",
+    "name": "TR(支給品) スコット 75KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17055",
+  "name": "低圧セット 広角 スコット 100KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "スコット",
+  "cap": "100KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/スコット/100KVA",
+  "furukawa": "537",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45058",
+    "name": "TR(支給品) スコット 100KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17056",
+  "name": "低圧セット 広角 スコット 150KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "スコット",
+  "cap": "150KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/スコット/150KVA",
+  "furukawa": "557",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45059",
+    "name": "TR(支給品) スコット 150KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17057",
+  "name": "低圧セット 広角 スコット 200KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "スコット",
+  "cap": "200KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/スコット/200KVA",
+  "furukawa": "625",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45060",
+    "name": "TR(支給品) スコット 200KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17058",
+  "name": "低圧セット 広角 スコット 300KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "広角",
+  "phase": "スコット",
+  "cap": "300KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "広角/スコット/300KVA",
+  "furukawa": "713",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45061",
+    "name": "TR(支給品) スコット 300KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17102",
+  "name": "低圧セット 普通角 1φ3W 30KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "1φ3W",
+  "cap": "30KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/1φ3W/30KVA",
+  "furukawa": "339",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45002",
+    "name": "TR(支給品) 1φ3W 30KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17103",
+  "name": "低圧セット 普通角 1φ3W 50KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "1φ3W",
+  "cap": "50KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/1φ3W/50KVA",
+  "furukawa": "359",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45003",
+    "name": "TR(支給品) 1φ3W 50KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17104",
+  "name": "低圧セット 普通角 1φ3W 75KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "1φ3W",
+  "cap": "75KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/1φ3W/75KVA",
+  "furukawa": "383",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45004",
+    "name": "TR(支給品) 1φ3W 75KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17105",
+  "name": "低圧セット 普通角 1φ3W 100KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "1φ3W",
+  "cap": "100KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/1φ3W/100KVA",
+  "furukawa": "411",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45005",
+    "name": "TR(支給品) 1φ3W 100KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17106",
+  "name": "低圧セット 普通角 1φ3W 150KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "1φ3W",
+  "cap": "150KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/1φ3W/150KVA",
+  "furukawa": "433",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45006",
+    "name": "TR(支給品) 1φ3W 150KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17107",
+  "name": "低圧セット 普通角 1φ3W 200KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "1φ3W",
+  "cap": "200KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/1φ3W/200KVA",
+  "furukawa": "504",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45007",
+    "name": "TR(支給品) 1φ3W 200KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17108",
+  "name": "低圧セット 普通角 1φ3W 300KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "1φ3W",
+  "cap": "300KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/1φ3W/300KVA",
+  "furukawa": "602",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45008",
+    "name": "TR(支給品) 1φ3W 300KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17109",
+  "name": "低圧セット 普通角 1φ3W 500KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "1φ3W",
+  "cap": "500KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/1φ3W/500KVA",
+  "furukawa": "896",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45009",
+    "name": "TR(支給品) 1φ3W 500KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17132",
+  "name": "低圧セット 普通角 3φ3W 30KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "3φ3W",
+  "cap": "30KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/3φ3W/30KVA",
+  "furukawa": "345",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45032",
+    "name": "TR(支給品) 3φ3W 30KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17133",
+  "name": "低圧セット 普通角 3φ3W 50KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "3φ3W",
+  "cap": "50KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/3φ3W/50KVA",
+  "furukawa": "365",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45033",
+    "name": "TR(支給品) 3φ3W 50KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17134",
+  "name": "低圧セット 普通角 3φ3W 75KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "3φ3W",
+  "cap": "75KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/3φ3W/75KVA",
+  "furukawa": "399",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45034",
+    "name": "TR(支給品) 3φ3W 75KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17135",
+  "name": "低圧セット 普通角 3φ3W 100KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "3φ3W",
+  "cap": "100KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/3φ3W/100KVA",
+  "furukawa": "427",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45035",
+    "name": "TR(支給品) 3φ3W 100KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17136",
+  "name": "低圧セット 普通角 3φ3W 150KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "3φ3W",
+  "cap": "150KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/3φ3W/150KVA",
+  "furukawa": "445",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45036",
+    "name": "TR(支給品) 3φ3W 150KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17137",
+  "name": "低圧セット 普通角 3φ3W 200KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "3φ3W",
+  "cap": "200KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/3φ3W/200KVA",
+  "furukawa": "509",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45037",
+    "name": "TR(支給品) 3φ3W 200KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17138",
+  "name": "低圧セット 普通角 3φ3W 300KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "3φ3W",
+  "cap": "300KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/3φ3W/300KVA",
+  "furukawa": "608",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45038",
+    "name": "TR(支給品) 3φ3W 300KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17139",
+  "name": "低圧セット 普通角 3φ3W 500KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "3φ3W",
+  "cap": "500KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/3φ3W/500KVA",
+  "furukawa": "784",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45039",
+    "name": "TR(支給品) 3φ3W 500KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17140",
+  "name": "低圧セット 普通角 3φ3W 750KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "3φ3W",
+  "cap": "750KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/3φ3W/750KVA",
+  "furukawa": "1108",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45040",
+    "name": "TR(支給品) 3φ3W 750KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17152",
+  "name": "低圧セット 普通角 スコット 30KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "スコット",
+  "cap": "30KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/スコット/30KVA",
+  "furukawa": "423",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45054",
+    "name": "TR(支給品) スコット 30KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17153",
+  "name": "低圧セット 普通角 スコット 50KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "スコット",
+  "cap": "50KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/スコット/50KVA",
+  "furukawa": "445",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45056",
+    "name": "TR(支給品) スコット 50KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17154",
+  "name": "低圧セット 普通角 スコット 75KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "スコット",
+  "cap": "75KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/スコット/75KVA",
+  "furukawa": "485",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45057",
+    "name": "TR(支給品) スコット 75KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17155",
+  "name": "低圧セット 普通角 スコット 100KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "スコット",
+  "cap": "100KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/スコット/100KVA",
+  "furukawa": "513",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45058",
+    "name": "TR(支給品) スコット 100KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17156",
+  "name": "低圧セット 普通角 スコット 150KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "スコット",
+  "cap": "150KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/スコット/150KVA",
+  "furukawa": "533",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45059",
+    "name": "TR(支給品) スコット 150KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17157",
+  "name": "低圧セット 普通角 スコット 200KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "スコット",
+  "cap": "200KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/スコット/200KVA",
+  "furukawa": "601",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45060",
+    "name": "TR(支給品) スコット 200KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17158",
+  "name": "低圧セット 普通角 スコット 300KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "普通角",
+  "phase": "スコット",
+  "cap": "300KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "普通角/スコット/300KVA",
+  "furukawa": "689",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45061",
+    "name": "TR(支給品) スコット 300KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17202",
+  "name": "低圧セット マルチ 1φ3W 30KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "1φ3W",
+  "cap": "30KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/1φ3W/30KVA",
+  "furukawa": "387",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45002",
+    "name": "TR(支給品) 1φ3W 30KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17203",
+  "name": "低圧セット マルチ 1φ3W 50KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "1φ3W",
+  "cap": "50KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/1φ3W/50KVA",
+  "furukawa": "407",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45003",
+    "name": "TR(支給品) 1φ3W 50KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17204",
+  "name": "低圧セット マルチ 1φ3W 75KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "1φ3W",
+  "cap": "75KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/1φ3W/75KVA",
+  "furukawa": "431",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45004",
+    "name": "TR(支給品) 1φ3W 75KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17205",
+  "name": "低圧セット マルチ 1φ3W 100KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "1φ3W",
+  "cap": "100KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/1φ3W/100KVA",
+  "furukawa": "459",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45005",
+    "name": "TR(支給品) 1φ3W 100KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17206",
+  "name": "低圧セット マルチ 1φ3W 150KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "1φ3W",
+  "cap": "150KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/1φ3W/150KVA",
+  "furukawa": "481",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45006",
+    "name": "TR(支給品) 1φ3W 150KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17207",
+  "name": "低圧セット マルチ 1φ3W 200KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "1φ3W",
+  "cap": "200KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/1φ3W/200KVA",
+  "furukawa": "552",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45007",
+    "name": "TR(支給品) 1φ3W 200KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17208",
+  "name": "低圧セット マルチ 1φ3W 300KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "1φ3W",
+  "cap": "300KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/1φ3W/300KVA",
+  "furukawa": "650",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45008",
+    "name": "TR(支給品) 1φ3W 300KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17209",
+  "name": "低圧セット マルチ 1φ3W 500KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "1φ3W",
+  "cap": "500KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/1φ3W/500KVA",
+  "furukawa": "944",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45009",
+    "name": "TR(支給品) 1φ3W 500KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17232",
+  "name": "低圧セット マルチ 3φ3W 30KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "3φ3W",
+  "cap": "30KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/3φ3W/30KVA",
+  "furukawa": "393",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45032",
+    "name": "TR(支給品) 3φ3W 30KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17233",
+  "name": "低圧セット マルチ 3φ3W 50KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "3φ3W",
+  "cap": "50KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/3φ3W/50KVA",
+  "furukawa": "413",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45033",
+    "name": "TR(支給品) 3φ3W 50KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17234",
+  "name": "低圧セット マルチ 3φ3W 75KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "3φ3W",
+  "cap": "75KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/3φ3W/75KVA",
+  "furukawa": "447",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45034",
+    "name": "TR(支給品) 3φ3W 75KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17235",
+  "name": "低圧セット マルチ 3φ3W 100KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "3φ3W",
+  "cap": "100KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/3φ3W/100KVA",
+  "furukawa": "475",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45035",
+    "name": "TR(支給品) 3φ3W 100KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17236",
+  "name": "低圧セット マルチ 3φ3W 150KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "3φ3W",
+  "cap": "150KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/3φ3W/150KVA",
+  "furukawa": "493",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45036",
+    "name": "TR(支給品) 3φ3W 150KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17237",
+  "name": "低圧セット マルチ 3φ3W 200KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "3φ3W",
+  "cap": "200KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/3φ3W/200KVA",
+  "furukawa": "557",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45037",
+    "name": "TR(支給品) 3φ3W 200KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17238",
+  "name": "低圧セット マルチ 3φ3W 300KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "3φ3W",
+  "cap": "300KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/3φ3W/300KVA",
+  "furukawa": "656",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45038",
+    "name": "TR(支給品) 3φ3W 300KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17239",
+  "name": "低圧セット マルチ 3φ3W 500KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "3φ3W",
+  "cap": "500KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/3φ3W/500KVA",
+  "furukawa": "832",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45039",
+    "name": "TR(支給品) 3φ3W 500KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17240",
+  "name": "低圧セット マルチ 3φ3W 750KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "3φ3W",
+  "cap": "750KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/3φ3W/750KVA",
+  "furukawa": "1156",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45040",
+    "name": "TR(支給品) 3φ3W 750KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 1
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17252",
+  "name": "低圧セット マルチ スコット 30KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "スコット",
+  "cap": "30KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/スコット/30KVA",
+  "furukawa": "519",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45054",
+    "name": "TR(支給品) スコット 30KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17253",
+  "name": "低圧セット マルチ スコット 50KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "スコット",
+  "cap": "50KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/スコット/50KVA",
+  "furukawa": "541",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45056",
+    "name": "TR(支給品) スコット 50KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17254",
+  "name": "低圧セット マルチ スコット 75KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "スコット",
+  "cap": "75KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/スコット/75KVA",
+  "furukawa": "581",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45057",
+    "name": "TR(支給品) スコット 75KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17255",
+  "name": "低圧セット マルチ スコット 100KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "スコット",
+  "cap": "100KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/スコット/100KVA",
+  "furukawa": "609",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45058",
+    "name": "TR(支給品) スコット 100KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17256",
+  "name": "低圧セット マルチ スコット 150KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "スコット",
+  "cap": "150KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/スコット/150KVA",
+  "furukawa": "629",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45059",
+    "name": "TR(支給品) スコット 150KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17257",
+  "name": "低圧セット マルチ スコット 200KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "スコット",
+  "cap": "200KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/スコット/200KVA",
+  "furukawa": "697",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45060",
+    "name": "TR(支給品) スコット 200KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ },
+ {
+  "code": "17258",
+  "name": "低圧セット マルチ スコット 300KVA",
+  "kind": "配電盤",
+  "cat": "低圧セット",
+  "settype": "低圧",
+  "meter": "マルチ",
+  "phase": "スコット",
+  "cap": "300KVA",
+  "ax": "",
+  "volt": "低圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "spec": "マルチ/スコット/300KVA",
+  "furukawa": "785",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   },
+   {
+    "code": "45061",
+    "name": "TR(支給品) スコット 300KVA",
+    "qty": 1
+   },
+   {
+    "code": "46401",
+    "name": "LG-RY(ZCT付)",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "CT?",
+    "name": "CT 変流比=TR二次電流連動(要サイジング確認)",
+    "qty": 4
+   },
+   {
+    "code": "LUG?",
+    "name": "M)LUG 3P 容量=TR二次電流連動(要サイジング確認)",
+    "qty": 2
+   }
+  ],
+  "_tr_resolved": true
+ }
+]

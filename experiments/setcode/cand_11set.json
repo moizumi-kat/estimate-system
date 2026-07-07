@@ -1,0 +1,2140 @@
+[
+ {
+  "code": "11031",
+  "name": "高圧セット 受電盤 普通 8KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "普通",
+  "vcb": "8KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/普通/8KA/手動",
+  "furukawa": "615",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42020",
+    "name": "IWM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42022",
+    "name": "PFM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43001",
+    "name": "VCB 7.2kV 8KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11032",
+  "name": "高圧セット 受電盤 普通 8KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "普通",
+  "vcb": "8KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/普通/8KA/電動",
+  "furukawa": "743",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42020",
+    "name": "IWM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42022",
+    "name": "PFM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43003",
+    "name": "VCB 7.2kV 8KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11041",
+  "name": "高圧セット 受電盤 普通 12.5KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/普通/12.5KA/手動",
+  "furukawa": "682",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42020",
+    "name": "IWM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42022",
+    "name": "PFM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43011",
+    "name": "VCB 7.2kV 12.5KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11042",
+  "name": "高圧セット 受電盤 普通 12.5KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/普通/12.5KA/電動",
+  "furukawa": "842",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42020",
+    "name": "IWM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42022",
+    "name": "PFM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43013",
+    "name": "VCB 7.2kV 12.5KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11071",
+  "name": "高圧セット 饋電盤 普通 8KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "普通",
+  "vcb": "8KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/普通/8KA/手動",
+  "furukawa": "489",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43001",
+    "name": "VCB 7.2kV 8KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11072",
+  "name": "高圧セット 饋電盤 普通 8KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "普通",
+  "vcb": "8KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/普通/8KA/電動",
+  "furukawa": "617",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43003",
+    "name": "VCB 7.2kV 8KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11081",
+  "name": "高圧セット 饋電盤 普通 12.5KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/普通/12.5KA/手動",
+  "furukawa": "556",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43011",
+    "name": "VCB 7.2kV 12.5KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11082",
+  "name": "高圧セット 饋電盤 普通 12.5KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/普通/12.5KA/電動",
+  "furukawa": "716",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43013",
+    "name": "VCB 7.2kV 12.5KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11331",
+  "name": "高圧セット 受電盤 広角 8KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "広角",
+  "vcb": "8KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/広角/8KA/手動",
+  "furukawa": "655",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42030",
+    "name": "IWM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42032",
+    "name": "PFM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43001",
+    "name": "VCB 7.2kV 8KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11332",
+  "name": "高圧セット 受電盤 広角 8KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "広角",
+  "vcb": "8KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/広角/8KA/電動",
+  "furukawa": "783",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42030",
+    "name": "IWM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42032",
+    "name": "PFM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43003",
+    "name": "VCB 7.2kV 8KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11341",
+  "name": "高圧セット 受電盤 広角 12.5KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/広角/12.5KA/手動",
+  "furukawa": "722",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42030",
+    "name": "IWM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42032",
+    "name": "PFM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43011",
+    "name": "VCB 7.2kV 12.5KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11342",
+  "name": "高圧セット 受電盤 広角 12.5KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/広角/12.5KA/電動",
+  "furukawa": "882",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42030",
+    "name": "IWM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42032",
+    "name": "PFM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43013",
+    "name": "VCB 7.2kV 12.5KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11371",
+  "name": "高圧セット 饋電盤 広角 8KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "広角",
+  "vcb": "8KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/広角/8KA/手動",
+  "furukawa": "495",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43001",
+    "name": "VCB 7.2kV 8KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11372",
+  "name": "高圧セット 饋電盤 広角 8KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "広角",
+  "vcb": "8KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/広角/8KA/電動",
+  "furukawa": "623",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43003",
+    "name": "VCB 7.2kV 8KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11381",
+  "name": "高圧セット 饋電盤 広角 12.5KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/広角/12.5KA/手動",
+  "furukawa": "562",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43011",
+    "name": "VCB 7.2kV 12.5KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11382",
+  "name": "高圧セット 饋電盤 広角 12.5KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/広角/12.5KA/電動",
+  "furukawa": "722",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43013",
+    "name": "VCB 7.2kV 12.5KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11631",
+  "name": "高圧セット 受電盤 マルチ 8KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "マルチ",
+  "vcb": "8KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/マルチ/8KA/手動",
+  "furukawa": "637",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43001",
+    "name": "VCB 7.2kV 8KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11632",
+  "name": "高圧セット 受電盤 マルチ 8KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "マルチ",
+  "vcb": "8KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/マルチ/8KA/電動",
+  "furukawa": "765",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43003",
+    "name": "VCB 7.2kV 8KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11641",
+  "name": "高圧セット 受電盤 マルチ 12.5KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/マルチ/12.5KA/手動",
+  "furukawa": "704",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43011",
+    "name": "VCB 7.2kV 12.5KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11642",
+  "name": "高圧セット 受電盤 マルチ 12.5KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "受電盤",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電/マルチ/12.5KA/電動",
+  "furukawa": "864",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43013",
+    "name": "VCB 7.2kV 12.5KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT(VT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV ×2(VA要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11671",
+  "name": "高圧セット 饋電盤 マルチ 8KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "マルチ",
+  "vcb": "8KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/マルチ/8KA/手動",
+  "furukawa": "553",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43001",
+    "name": "VCB 7.2kV 8KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11672",
+  "name": "高圧セット 饋電盤 マルチ 8KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "マルチ",
+  "vcb": "8KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/マルチ/8KA/電動",
+  "furukawa": "681",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43003",
+    "name": "VCB 7.2kV 8KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11681",
+  "name": "高圧セット 饋電盤 マルチ 12.5KA 手動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "手動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/マルチ/12.5KA/手動",
+  "furukawa": "620",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43011",
+    "name": "VCB 7.2kV 12.5KA 手動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11682",
+  "name": "高圧セット 饋電盤 マルチ 12.5KA 電動",
+  "kind": "配電盤",
+  "cat": "高圧セット",
+  "settype": "高圧",
+  "role": "饋電盤",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "饋電/マルチ/12.5KA/電動",
+  "furukawa": "780",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W(ドアSW付)",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "43013",
+    "name": "VCB 7.2kV 12.5KA 電動",
+    "qty": 1
+   },
+   {
+    "code": "46001",
+    "name": "OCR(静止型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT(CT試験端子)",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV ×2(変流比=受電容量連動・要確認)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   }
+  ],
+  "_flag_dendou": true
+ },
+ {
+  "code": "11001",
+  "name": "高圧LBSセット 普通 受電タイプ",
+  "kind": "配電盤",
+  "cat": "高圧LBSセット",
+  "settype": "高圧LBS",
+  "role": "受電",
+  "meter": "",
+  "vcb": "",
+  "op": "",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "高圧LBSセット 普通 受電タイプ",
+  "furukawa": "368",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11002",
+  "name": "高圧LBSセット 普通 饋電タイプ",
+  "kind": "配電盤",
+  "cat": "高圧LBSセット",
+  "settype": "高圧LBS",
+  "role": "饋電",
+  "meter": "",
+  "vcb": "",
+  "op": "",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "高圧LBSセット 普通 饋電タイプ",
+  "furukawa": "286",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11005",
+  "name": "高圧LBSセット 広角 受電タイプ",
+  "kind": "配電盤",
+  "cat": "高圧LBSセット",
+  "settype": "高圧LBS",
+  "role": "受電",
+  "meter": "",
+  "vcb": "",
+  "op": "",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "高圧LBSセット 広角 受電タイプ",
+  "furukawa": "380",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11006",
+  "name": "高圧LBSセット 広角 饋電タイプ",
+  "kind": "配電盤",
+  "cat": "高圧LBSセット",
+  "settype": "高圧LBS",
+  "role": "饋電",
+  "meter": "",
+  "vcb": "",
+  "op": "",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "高圧LBSセット 広角 饋電タイプ",
+  "furukawa": "292",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43321",
+    "name": "LBS 3P200A(PF・AL)",
+    "qty": 1
+   }
+  ],
+  "_flag_dendou": false
+ },
+ {
+  "code": "11009",
+  "name": "高圧LBSセット エネセーバ",
+  "kind": "配電盤",
+  "cat": "高圧LBSセット",
+  "settype": "高圧LBS",
+  "role": "エネセーバ",
+  "meter": "",
+  "vcb": "",
+  "op": "",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "高圧LBSセット エネセーバ",
+  "furukawa": "903",
+  "expand": [
+   {
+    "code": "?",
+    "name": "SC-TRIP",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "CS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 2
+   }
+  ],
+  "_flag_dendou": false
+ }
+]

@@ -1,0 +1,3484 @@
+[
+ {
+  "code": "16013",
+  "name": "段積セット 受電盤 広角 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "受電盤",
+  "meter": "広角",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電盤/広角/8KA",
+  "furukawa": "913",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42030",
+    "name": "IWM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42032",
+    "name": "PFM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16113",
+  "name": "段積セット 受電盤 普通 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "受電盤",
+  "meter": "普通",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電盤/普通/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42020",
+    "name": "IWM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42022",
+    "name": "PFM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16213",
+  "name": "段積セット 受電盤 マルチ VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "受電盤",
+  "meter": "マルチ",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電盤/マルチ/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16014",
+  "name": "段積セット 受電盤 広角 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "受電盤",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電盤/広角/12.5KA",
+  "furukawa": "1005",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42002",
+    "name": "VM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42030",
+    "name": "IWM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "42032",
+    "name": "PFM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16114",
+  "name": "段積セット 受電盤 普通 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "受電盤",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電盤/普通/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42001",
+    "name": "VM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42020",
+    "name": "IWM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "42022",
+    "name": "PFM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71001",
+    "name": "VS",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16214",
+  "name": "段積セット 受電盤 マルチ VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "受電盤",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "受電盤/マルチ/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "43424",
+    "name": "DS 7.2kV 3P400A",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44030",
+    "name": "VTT",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44011?",
+    "name": "VT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16023",
+  "name": "段積セット 二段積 広角 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積",
+  "meter": "広角",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積/広角/8KA",
+  "furukawa": "1310",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   }
+  ]
+ },
+ {
+  "code": "16123",
+  "name": "段積セット 二段積 普通 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積",
+  "meter": "普通",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積/普通/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   }
+  ]
+ },
+ {
+  "code": "16223",
+  "name": "段積セット 二段積 マルチ VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積",
+  "meter": "マルチ",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積/マルチ/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   }
+  ]
+ },
+ {
+  "code": "16024",
+  "name": "段積セット 二段積 広角 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積/広角/12.5KA",
+  "furukawa": "1494",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   }
+  ]
+ },
+ {
+  "code": "16124",
+  "name": "段積セット 二段積 普通 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積/普通/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   }
+  ]
+ },
+ {
+  "code": "16224",
+  "name": "段積セット 二段積 マルチ VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積/マルチ/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   }
+  ]
+ },
+ {
+  "code": "16033",
+  "name": "段積セット 二段積(1SP) 広角 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積(1SP)",
+  "meter": "広角",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積(1SP)/広角/8KA",
+  "furukawa": "789",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16133",
+  "name": "段積セット 二段積(1SP) 普通 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積(1SP)",
+  "meter": "普通",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積(1SP)/普通/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16233",
+  "name": "段積セット 二段積(1SP) マルチ VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積(1SP)",
+  "meter": "マルチ",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積(1SP)/マルチ/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16034",
+  "name": "段積セット 二段積(1SP) 広角 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積(1SP)",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積(1SP)/広角/12.5KA",
+  "furukawa": "881",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16134",
+  "name": "段積セット 二段積(1SP) 普通 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積(1SP)",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積(1SP)/普通/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16234",
+  "name": "段積セット 二段積(1SP) マルチ VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "二段積(1SP)",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積(1SP)/マルチ/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16043",
+  "name": "段積セット 三段積 広角 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積",
+  "meter": "広角",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積/広角/8KA",
+  "furukawa": "1965",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 3
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 3
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 3
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 3
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 3
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 18
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 3
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 3
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 3
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 6
+   }
+  ]
+ },
+ {
+  "code": "16143",
+  "name": "段積セット 三段積 普通 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積",
+  "meter": "普通",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積/普通/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 3
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 3
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 3
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 3
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 3
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 18
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 3
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 3
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 3
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 6
+   }
+  ]
+ },
+ {
+  "code": "16243",
+  "name": "段積セット 三段積 マルチ VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積",
+  "meter": "マルチ",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積/マルチ/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 3
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 3
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 3
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 3
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 18
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 3
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 3
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 3
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 6
+   }
+  ]
+ },
+ {
+  "code": "16044",
+  "name": "段積セット 三段積 広角 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積/広角/12.5KA",
+  "furukawa": "2241",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 3
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 3
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 3
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 3
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 3
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 18
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 3
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 3
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 3
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 6
+   }
+  ]
+ },
+ {
+  "code": "16144",
+  "name": "段積セット 三段積 普通 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積/普通/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 3
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 3
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 3
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 3
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 3
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 18
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 3
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 3
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 3
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 6
+   }
+  ]
+ },
+ {
+  "code": "16244",
+  "name": "段積セット 三段積 マルチ VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積/マルチ/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 3
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 3
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 3
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 3
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 18
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 3
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 3
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 3
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 6
+   }
+  ]
+ },
+ {
+  "code": "16053",
+  "name": "段積セット 三段積(1SP) 広角 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積(1SP)",
+  "meter": "広角",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積(1SP)/広角/8KA",
+  "furukawa": "1444",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16153",
+  "name": "段積セット 三段積(1SP) 普通 VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積(1SP)",
+  "meter": "普通",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積(1SP)/普通/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16253",
+  "name": "段積セット 三段積(1SP) マルチ VCB8KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積(1SP)",
+  "meter": "マルチ",
+  "vcb": "8KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積(1SP)/マルチ/8KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43004",
+    "name": "VCB 7.2kV 8KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16054",
+  "name": "段積セット 三段積(1SP) 広角 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積(1SP)",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積(1SP)/広角/12.5KA",
+  "furukawa": "1628",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16154",
+  "name": "段積セット 三段積(1SP) 普通 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積(1SP)",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積(1SP)/普通/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 2
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16254",
+  "name": "段積セット 三段積(1SP) マルチ VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "三段積(1SP)",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積(1SP)/マルチ/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 2
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 2
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 4
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16064",
+  "name": "段積セット 一段積 広角 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "一段積",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "一段積/広角/12.5KA",
+  "furukawa": "747",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16164",
+  "name": "段積セット 一段積 普通 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "一段積",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "一段積/普通/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16264",
+  "name": "段積セット 一段積 マルチ VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "一段積",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "一段積/マルチ/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 6
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16074",
+  "name": "段積セット 母線連絡 広角 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "母線連絡",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "母線連絡/広角/12.5KA",
+  "furukawa": "658",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   }
+  ]
+ },
+ {
+  "code": "16174",
+  "name": "段積セット 母線連絡 普通 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "母線連絡",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "母線連絡/普通/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   }
+  ]
+ },
+ {
+  "code": "16274",
+  "name": "段積セット 母線連絡 マルチ VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "母線連絡",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "母線連絡/マルチ/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 1
+   }
+  ]
+ },
+ {
+  "code": "16084",
+  "name": "段積セット 母線連絡+一段積 広角 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "母線連絡+一段積",
+  "meter": "広角",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "母線連絡+一段積/広角/12.5KA",
+  "furukawa": "1390",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 4
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 18
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "42012",
+    "name": "AM(広角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16184",
+  "name": "段積セット 母線連絡+一段積 普通 VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "母線連絡+一段積",
+  "meter": "普通",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "母線連絡+一段積/普通/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 4
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 18
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "42010",
+    "name": "AM(普通角)",
+    "qty": 1
+   },
+   {
+    "code": "71002",
+    "name": "AS",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16284",
+  "name": "段積セット 母線連絡+一段積 マルチ VCB12.5KA 電動引出",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積",
+  "role": "母線連絡+一段積",
+  "meter": "マルチ",
+  "vcb": "12.5KA",
+  "op": "電動引出",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "母線連絡+一段積/マルチ/12.5KA",
+  "furukawa": "要算定",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 4
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 18
+   },
+   {
+    "code": "43014",
+    "name": "VCB 7.2kV 12.5KA 電動引出",
+    "qty": 2
+   },
+   {
+    "code": "42082",
+    "name": "マルチ指示計",
+    "qty": 1
+   },
+   {
+    "code": "46000",
+    "name": "OCR(引出型)",
+    "qty": 1
+   },
+   {
+    "code": "44130",
+    "name": "CTT",
+    "qty": 1
+   },
+   {
+    "code": "44104?",
+    "name": "CT 6kV(要確認)",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16025",
+  "name": "段積セット 二段積 VCS 電磁",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積VCS",
+  "role": "二段積",
+  "meter": "",
+  "vcb": "",
+  "op": "電磁",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積/VCS/電磁",
+  "furukawa": "628",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 8
+   },
+   {
+    "code": "43101",
+    "name": "VCS 7.2kV 200A 電磁",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16026",
+  "name": "段積セット 二段積 VCS 電磁引出PF",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積VCS",
+  "role": "二段積",
+  "meter": "",
+  "vcb": "",
+  "op": "電磁引出PF",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積/VCS/電磁引出PF",
+  "furukawa": "1046",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 8
+   },
+   {
+    "code": "43103",
+    "name": "VCS 7.2kV 200A 電磁引出PF",
+    "qty": 2
+   }
+  ]
+ },
+ {
+  "code": "16035",
+  "name": "段積セット 二段積(1SP) VCS 電磁",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積VCS",
+  "role": "二段積(1SP)",
+  "meter": "",
+  "vcb": "",
+  "op": "電磁",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積(1SP)/VCS/電磁",
+  "furukawa": "400",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   },
+   {
+    "code": "43101",
+    "name": "VCS 7.2kV 200A 電磁",
+    "qty": 1
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16036",
+  "name": "段積セット 二段積(1SP) VCS 電磁引出PF",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積VCS",
+  "role": "二段積(1SP)",
+  "meter": "",
+  "vcb": "",
+  "op": "電磁引出PF",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "二段積(1SP)/VCS/電磁引出PF",
+  "furukawa": "609",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   },
+   {
+    "code": "43103",
+    "name": "VCS 7.2kV 200A 電磁引出PF",
+    "qty": 1
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16046",
+  "name": "段積セット 三段積 VCS 電磁引出PF",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積VCS",
+  "role": "三段積",
+  "meter": "",
+  "vcb": "",
+  "op": "電磁引出PF",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積/VCS/電磁引出PF",
+  "furukawa": "1569",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 3
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 3
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 3
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 3
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 12
+   },
+   {
+    "code": "43103",
+    "name": "VCS 7.2kV 200A 電磁引出PF",
+    "qty": 3
+   }
+  ]
+ },
+ {
+  "code": "16056",
+  "name": "段積セット 三段積(1SP) VCS 電磁引出PF",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積VCS",
+  "role": "三段積(1SP)",
+  "meter": "",
+  "vcb": "",
+  "op": "電磁引出PF",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "三段積(1SP)/VCS/電磁引出PF",
+  "furukawa": "1132",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 2
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 2
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 2
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 2
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 8
+   },
+   {
+    "code": "43103",
+    "name": "VCS 7.2kV 200A 電磁引出PF",
+    "qty": 2
+   },
+   {
+    "code": "—",
+    "name": "スペース1段(機器なし)",
+    "qty": 0
+   }
+  ]
+ },
+ {
+  "code": "16065",
+  "name": "段積セット 一段積 VCS 電磁",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積VCS",
+  "role": "一段積",
+  "meter": "",
+  "vcb": "",
+  "op": "電磁",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "一段積/VCS/電磁",
+  "furukawa": "314",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   },
+   {
+    "code": "43101",
+    "name": "VCS 7.2kV 200A 電磁",
+    "qty": 1
+   }
+  ]
+ },
+ {
+  "code": "16066",
+  "name": "段積セット 一段積 VCS 電磁引出PF",
+  "kind": "配電盤",
+  "cat": "段積セット",
+  "settype": "段積VCS",
+  "role": "一段積",
+  "meter": "",
+  "vcb": "",
+  "op": "電磁引出PF",
+  "ax": "",
+  "volt": "高圧",
+  "shikyu": "",
+  "sp": "",
+  "af": "",
+  "cap": "",
+  "spec": "一段積/VCS/電磁引出PF",
+  "furukawa": "523",
+  "expand": [
+   {
+    "code": "71091",
+    "name": "FL-10W",
+    "qty": 1
+   },
+   {
+    "code": "71056",
+    "name": "PL(R,G)",
+    "qty": 1
+   },
+   {
+    "code": "71021",
+    "name": "COS",
+    "qty": 1
+   },
+   {
+    "code": "73220",
+    "name": "T-RY",
+    "qty": 1
+   },
+   {
+    "code": "73000",
+    "name": "AUX-RY",
+    "qty": 4
+   },
+   {
+    "code": "43103",
+    "name": "VCS 7.2kV 200A 電磁引出PF",
+    "qty": 1
+   }
+  ]
+ }
+]
