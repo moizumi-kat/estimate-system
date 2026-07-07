@@ -1955,7 +1955,7 @@ def api_excel():
     panels=request.get_json().get('panels',[])
     buf=make_excel(panels)
     ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
-    return send_file(buf,as_attachment=True,download_name=f'積算コード選定_{ts}.xlsx',
+    return send_file(buf,as_attachment=True,download_name=f'estimate_code_{ts}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 # 確実ダウンロード(GET): ブラウザでURLを開くだけで保存できる。iOS/PC問わず動作。
@@ -1969,7 +1969,7 @@ def api_excel_download():
                         status=404, mimetype='text/plain; charset=utf-8')
     buf=make_excel(panels)
     ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
-    return send_file(buf,as_attachment=True,download_name=f'積算コード選定_{ts}.xlsx',
+    return send_file(buf,as_attachment=True,download_name=f'estimate_code_{ts}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 INDEX_HTML=open(os.path.join(HERE,'index.html'),encoding='utf-8').read() if os.path.exists(os.path.join(HERE,'index.html')) else '<h1>index.html がありません</h1>'
