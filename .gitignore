@@ -2,3 +2,5 @@ __pycache__/
 *.bak_*
 *.rpm
 app.py.new
+library.json
+library.json.tmp

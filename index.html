@@ -48,10 +48,46 @@ tr.pnl td{background:#eef2ee;font-weight:700;color:var(--green2)}
 .hl{color:var(--green2);font-weight:700}
 select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;max-width:240px;font-family:inherit;background:#fff}
 .manual{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px}
+/* --- タブ / ライブラリ / 類似検索 --- */
+.tabs{display:flex;gap:6px;margin-bottom:16px}
+.tab{padding:9px 18px;border:1px solid var(--line);background:#fff;color:#7a7568;border-radius:8px 8px 0 0;font-size:13px;font-weight:700;cursor:pointer}
+.tab.on{background:var(--green);color:#fff;border-color:var(--green)}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+.card h2{font-size:14px;margin:0 0 12px;color:var(--green2);font-weight:700}
+.fld{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.fld label{font-size:12px;color:#7a7568;min-width:74px}
+.fld input,.fld textarea{flex:1;min-width:160px;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit}
+.msg{font-size:12px;margin-top:8px}.msg.ok{color:var(--okbd)}.msg.ng{color:var(--chkbd)}
+.reslist{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.res{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff}
+.res .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.res .ttl{font-weight:700;font-size:14px;color:var(--ink)}
+.res .meta{font-size:11px;color:#9a9488;font-family:var(--mono)}
+.score{margin-left:auto;text-align:center;min-width:78px}
+.score .n{font-size:26px;font-weight:800;font-family:var(--mono);line-height:1}
+.score .l{font-size:9px;color:#9a9488;letter-spacing:.08em}
+.sc-hi{color:var(--okbd)}.sc-mid{color:var(--warnbd)}.sc-lo{color:#9a9488}
+.axes{display:flex;gap:14px;margin:10px 0 4px;flex-wrap:wrap}
+.axis{font-size:11px;color:#7a7568;min-width:120px;flex:1}
+.axis .bar{height:7px;background:#eee;border-radius:4px;margin-top:3px;overflow:hidden}
+.axis .bar i{display:block;height:100%;background:var(--green2);border-radius:4px}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.chip{font-size:11px;padding:2px 8px;border-radius:11px;background:#eef2ee;color:var(--green2);border:1px solid #cfe0cf}
+.chip.add{background:#eef3fb;color:#305496;border-color:#cfe0f5}
+.chip.miss{background:#faf0f0;color:var(--chkbd);border-color:#eccaca}
+.libtbl td .k{font-size:11px;color:#7a7568}
+.savebar{display:none;margin-top:16px;padding:14px;border:1px dashed var(--green2);border-radius:10px;background:#f4f8f4}
+.savebar.show{display:block}
 </style></head>
 <body>
 <header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span></header>
 <div class="container">
+  <div class="tabs">
+    <button class="tab on" id="tabMain">① コード選定</button>
+    <button class="tab" id="tabLib">② 過去図面ライブラリ / 類似検索</button>
+  </div>
+
+  <div id="viewMain">
   <div class="steps">
     <div class="s active" id="st1">1. 図面アップロード</div>
     <div class="s" id="st2">2. 部品を抽出</div>
@@ -87,7 +123,56 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
     <button class="btn sec" id="xls">Excelで保存</button>
   </div>
   <div id="out"></div>
+
+  <!-- この図面をライブラリに保存 / 類似検索へ -->
+  <div class="savebar" id="savebar">
+    <div style="font-size:13px;margin-bottom:8px"><span class="hl">この図面を過去図面ライブラリに保存</span>（次回以降の類似検索の対象になります）</div>
+    <div class="fld"><label>案件名</label><input id="svTitle" placeholder="例）○○ビル 受変電設備"></div>
+    <div class="fld"><label>メモ</label><input id="svNote" placeholder="任意（受電容量・特記など）"></div>
+    <div class="bar" style="margin-top:4px">
+      <button class="btn" id="svBtn">ライブラリに保存</button>
+      <button class="btn sec" id="simBtn">この図面で類似図面を検索 →</button>
+      <span class="msg" id="svMsg"></span>
+    </div>
+  </div>
+
   <div class="foot">◎=確定（DB実在コード）／○=ほぼ確定／△=要確認（人の判断対象）。AIはコードを生成しません。コードはv9.2 DBと確定ルールからのみ選定します。</div>
+  </div><!-- /viewMain -->
+
+  <!-- ===== 過去図面ライブラリ / 類似検索 ===== -->
+  <div id="viewLib" style="display:none">
+    <div class="card">
+      <h2>類似図面の検索</h2>
+      <div style="font-size:13px;color:#555;margin-bottom:10px">
+        見積で選定したコードリスト（「①コード選定」で読み込んだ図面）を元に、内容の近い過去図面を評価点付きで提示します。
+      </div>
+      <div class="bar">
+        <button class="btn" id="simCurBtn" disabled>現在読み込んだ図面で検索</button>
+        <span style="font-size:12px;color:#888" id="simCurHint">※「①コード選定」で図面を抽出/選定すると使えます</span>
+      </div>
+      <div id="simResults" class="reslist"></div>
+    </div>
+
+    <div class="card">
+      <h2>発注資材データ（Excel / CSV）を過去図面として取り込む</h2>
+      <div style="font-size:12px;color:#7a7568;margin-bottom:10px">
+        品名（型式）・数量・（あれば）積算コードの列を自動判定して登録します。基本仕様は任意入力です。
+      </div>
+      <div class="fld"><label>資材ファイル</label><input type="file" id="impFile" accept=".xlsx,.xlsm,.csv,.txt,.tsv"></div>
+      <div class="fld"><label>案件名</label><input id="impTitle" placeholder="例）△△工場 増設盤"></div>
+      <div class="fld"><label>受電電圧</label><input id="impVolt" placeholder="例）6.6kV">
+        <label>受電容量</label><input id="impCap" placeholder="例）500kVA"></div>
+      <div class="fld"><label>盤種別</label><input id="impKind" placeholder="例）キュービクル">
+        <label>形式</label><input id="impForm" placeholder="例）屋外自立"></div>
+      <div class="fld"><label>メモ</label><input id="impNote" placeholder="任意"></div>
+      <div class="bar"><button class="btn" id="impBtn">取り込む</button><span class="msg" id="impMsg"></span></div>
+    </div>
+
+    <div class="card">
+      <h2>登録済みの過去図面 <span id="libCount" style="font-size:12px;color:#9a9488"></span></h2>
+      <div id="libList"></div>
+    </div>
+  </div>
 </div>
 <script>
 let curFiles=null, extracted=null, lastData=null, controller=null;
@@ -110,6 +195,8 @@ function resetResults(){
   extracted=null;lastData=null;
   $('confirm').classList.remove('show');$('sum').className='summary';$('fbar').className='fbar';
   $('xlsbar').style.display='none';$('out').innerHTML='';
+  $('savebar').className='savebar';window._curPanels=null;window._curSource='';
+  if($('simCurBtn')){$('simCurBtn').disabled=true;}
   setStep(1);
 }
 function setStep(n){
@@ -138,6 +225,7 @@ $('goExtract').onclick=async()=>{
     extracted=d.panels;idle();showStop(false);
     renderExtracted(d);
     $('confirm').classList.add('show');
+    setCurrentDrawing(extracted,'extract');
   }catch(e){
     if(e.name==='AbortError')return;
     fail(e.message);
@@ -169,6 +257,7 @@ $('goSelect').onclick=async()=>{
     const d=await r.json();
     if(!r.ok)throw new Error(d.error||'選定に失敗しました');
     lastData=d;idle();showStop(false);render(d,'all');$('xlsbar').style.display='flex';
+    setCurrentDrawing(d.panels,'select');
   }catch(e){
     if(e.name==='AbortError')return;
     fail(e.message);
@@ -280,4 +369,133 @@ document.querySelectorAll('.fbar button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.fbar button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
   if(lastData)render(lastData,b.dataset.f);
 });
+
+/* ===== 過去図面ライブラリ / 類似検索 ===== */
+window._curPanels=null; window._curSource='';
+function setCurrentDrawing(panels,source){
+  window._curPanels=panels; window._curSource=source;
+  $('savebar').className='savebar show';
+  if($('simCurBtn')){$('simCurBtn').disabled=!(panels&&panels.length);
+    $('simCurHint').style.display=(panels&&panels.length)?'none':'inline';}
+}
+// タブ切替
+function switchTab(which){
+  const main=which==='main';
+  $('viewMain').style.display=main?'':'none';
+  $('viewLib').style.display=main?'none':'';
+  $('tabMain').classList.toggle('on',main);
+  $('tabLib').classList.toggle('on',!main);
+  if(!main)loadLib();
+}
+$('tabMain').onclick=()=>switchTab('main');
+$('tabLib').onclick=()=>switchTab('lib');
+
+// この図面をライブラリに保存
+$('svBtn').onclick=async()=>{
+  if(!window._curPanels){$('svMsg').textContent='保存対象の図面がありません';$('svMsg').className='msg ng';return;}
+  $('svBtn').disabled=true;$('svMsg').textContent='保存中…';$('svMsg').className='msg';
+  try{
+    const r=await fetch('/api/library/save',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({panels:window._curPanels,source:window._curSource,
+        title:$('svTitle').value,note:$('svNote').value})});
+    const d=await r.json(); if(!r.ok)throw new Error(d.error||'保存に失敗');
+    $('svMsg').textContent='保存しました：'+d.title+'（機器'+(d.summary.nitems||0)+'点）';$('svMsg').className='msg ok';
+    $('svTitle').value='';$('svNote').value='';
+  }catch(e){$('svMsg').textContent='エラー: '+e.message;$('svMsg').className='msg ng';}
+  finally{$('svBtn').disabled=false;}
+};
+// この図面で類似検索（タブ移動して実行）
+$('simBtn').onclick=()=>{switchTab('lib');runSearch({panels:window._curPanels});};
+$('simCurBtn').onclick=()=>{runSearch({panels:window._curPanels});};
+
+// 発注資材データ取込
+$('impBtn').onclick=async()=>{
+  const f=$('impFile').files[0];
+  if(!f){$('impMsg').textContent='ファイルを選択してください';$('impMsg').className='msg ng';return;}
+  $('impBtn').disabled=true;$('impMsg').textContent='取込中…';$('impMsg').className='msg';
+  const fd=new FormData();fd.append('file',f);
+  fd.append('title',$('impTitle').value);fd.append('note',$('impNote').value);
+  fd.append('volt',$('impVolt').value);fd.append('capacity',$('impCap').value);
+  fd.append('kind',$('impKind').value);fd.append('form',$('impForm').value);
+  try{
+    const r=await fetch('/api/library/import',{method:'POST',body:fd});
+    const d=await r.json(); if(!r.ok)throw new Error(d.error||'取込に失敗');
+    const cols=Object.keys(d.colmap||{}).map(k=>({name:'品名',qty:'数量',code:'コード'}[k]||k)).join('・');
+    $('impMsg').textContent='取込完了：'+d.title+'（機器'+d.nitems+'点／判定列: '+(cols||'品名')+'）';
+    $('impMsg').className='msg ok';
+    ['impFile','impTitle','impNote','impVolt','impCap','impKind','impForm'].forEach(id=>{if($(id))$(id).value='';});
+    loadLib();
+  }catch(e){$('impMsg').textContent='エラー: '+e.message;$('impMsg').className='msg ng';}
+  finally{$('impBtn').disabled=false;}
+};
+
+// 類似検索の実行
+async function runSearch(payload){
+  const box=$('simResults');
+  box.innerHTML='<div style="font-size:13px;color:#555">検索中…</div>';
+  try{
+    const r=await fetch('/api/library/search',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign({top:10},payload))});
+    const d=await r.json(); if(!r.ok)throw new Error(d.error||'検索に失敗');
+    renderResults(d.results);
+  }catch(e){box.innerHTML='<div class="msg ng">エラー: '+esc(e.message)+'</div>';}
+}
+function scoreCls(n){return n>=70?'sc-hi':n>=45?'sc-mid':'sc-lo';}
+function axisBar(label,val){
+  if(val===null||val===undefined)return '<div class="axis">'+label+'<div style="color:#bbb;font-size:10px">—（コード無し）</div></div>';
+  return '<div class="axis">'+label+' <b>'+val+'</b><div class="bar"><i style="width:'+val+'%"></i></div></div>';
+}
+function renderResults(res){
+  const box=$('simResults');
+  if(!res||!res.length){box.innerHTML='<div style="font-size:13px;color:#888">該当する過去図面がありません。まず発注資材データを取り込むか、図面をライブラリに保存してください。</div>';return;}
+  let h='';
+  for(const r of res){
+    const kinds=(r.summary&&r.summary.kinds||[]).slice(0,8).map(k=>k.kind+(k.qty>1?'×'+k.qty:'')).join(' / ');
+    h+='<div class="res"><div class="top">'+
+      '<div><div class="ttl">'+esc(r.title||'無題')+'</div>'+
+      '<div class="meta">'+esc(r.date||'')+' ・ '+({material:'発注資材',select:'選定コード',extract:'抽出'}[r.source]||r.source)+
+      ' ・ 機器'+((r.summary&&r.summary.nitems)||0)+'点</div></div>'+
+      '<div class="score"><div class="n '+scoreCls(r.score)+'">'+r.score+'</div><div class="l">総合評価点</div></div>'+
+      '</div>';
+    h+='<div class="axes">'+
+      axisBar('主要機器構成(金額重み)',r.axes.major)+
+      axisBar('電圧・容量クラス',r.axes.class)+
+      axisBar('コード流用率',r.axes.reuse)+'</div>';
+    if(kinds)h+='<div style="font-size:12px;color:#555;margin-top:4px">構成: '+esc(kinds)+'</div>';
+    let chips='';
+    (r.matched_kinds||[]).forEach(k=>chips+='<span class="chip">✓ '+esc(k)+'</span>');
+    (r.query_only_kinds||[]).slice(0,6).forEach(k=>chips+='<span class="chip miss">今回のみ '+esc(k)+'</span>');
+    (r.lib_only_kinds||[]).slice(0,6).forEach(k=>chips+='<span class="chip add">過去のみ '+esc(k)+'</span>');
+    if(chips)h+='<div class="chips">'+chips+'</div>';
+    h+='</div>';
+  }
+  box.innerHTML=h;
+}
+
+// 登録済みライブラリ一覧
+async function loadLib(){
+  try{
+    const r=await fetch('/api/library/list');const d=await r.json();
+    const items=d.items||[];
+    $('libCount').textContent='（'+items.length+'件）';
+    if(!items.length){$('libList').innerHTML='<div style="font-size:13px;color:#888">まだ登録がありません。上のフォームから発注資材データを取り込むか、「①コード選定」で読み込んだ図面を保存してください。</div>';return;}
+    let h='<table class="libtbl"><thead><tr><th>案件名</th><th>種別</th><th>主な機器構成</th><th></th></tr></thead><tbody>';
+    for(const e of items){
+      const kinds=(e.summary&&e.summary.kinds||[]).slice(0,6).map(k=>k.kind+(k.qty>1?'×'+k.qty:'')).join(' / ');
+      h+='<tr><td><b>'+esc(e.title||'無題')+'</b><div class="k">'+esc(e.date||'')+(e.note?' ・ '+esc(e.note):'')+'</div></td>'+
+        '<td class="k">'+({material:'発注資材',select:'選定コード',extract:'抽出'}[e.source]||e.source)+'</td>'+
+        '<td style="font-size:12px;color:#555">'+esc(kinds)+' <span class="k">（'+((e.summary&&e.summary.nitems)||0)+'点）</span></td>'+
+        '<td style="white-space:nowrap"><button class="btn sec" style="padding:5px 10px;font-size:12px" onclick="searchByItem(\''+e.id+'\')">類似検索</button> '+
+        '<button class="btn sec" style="padding:5px 10px;font-size:12px" onclick="delItem(\''+e.id+'\')">削除</button></td></tr>';
+    }
+    h+='</tbody></table>';
+    $('libList').innerHTML=h;
+  }catch(e){$('libList').innerHTML='<div class="msg ng">一覧取得エラー: '+esc(e.message)+'</div>';}
+}
+function searchByItem(id){runSearch({query_id:id});window.scrollTo({top:0,behavior:'smooth'});}
+async function delItem(id){
+  if(!confirm('この過去図面をライブラリから削除しますか？'))return;
+  await fetch('/api/library/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})});
+  loadLib();
+}
 </script></body></html>

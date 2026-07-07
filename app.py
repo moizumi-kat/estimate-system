@@ -14,6 +14,7 @@
 import os, re, io, json, base64, unicodedata, datetime, zipfile, tempfile, hmac, secrets, functools
 from flask import Flask, request, jsonify, send_file, Response
 from anthropic import Anthropic
+import library  # 過去図面ライブラリ / 類似図面検索エンジン
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
@@ -1496,6 +1497,69 @@ def api_excel_download():
     ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
     return send_file(buf,as_attachment=True,download_name=f'積算コード選定_{ts}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+# ===== 過去図面ライブラリ / 類似図面検索 =====
+@app.route('/api/library/list', methods=['GET'])
+@login_required
+def api_lib_list():
+    return jsonify(items=library.list_drawings())
+
+@app.route('/api/library/save', methods=['POST'])
+@login_required
+def api_lib_save():
+    d=request.get_json() or {}
+    panels=d.get('panels')
+    if not panels:
+        return jsonify(error='保存する図面データ(panels)がありません'),400
+    e=library.add_drawing(d.get('title',''), d.get('note',''), panels,
+                          source=d.get('source','extract'), spec=d.get('spec'))
+    return jsonify(id=e['id'], title=e['title'], summary=e['summary'])
+
+@app.route('/api/library/import', methods=['POST'])
+@login_required
+def api_lib_import():
+    # 発注資材データ(Excel/CSV)を取り込んで過去図面として登録
+    f=request.files.get('file')
+    if not f or not f.filename:
+        return jsonify(error='ファイルがありません'),400
+    spec={k:request.form.get(k,'') for k in ('volt','capacity','kind','form') if request.form.get(k)}
+    try:
+        e=library.import_material_file(f.filename, f.read(),
+            title=request.form.get('title',''), note=request.form.get('note',''),
+            spec=spec or None)
+    except Exception as ex:
+        return jsonify(error=str(ex)),400
+    return jsonify(id=e['id'], title=e['title'], nitems=e['nitems'],
+                   colmap=e['colmap'], summary=e['summary'])
+
+@app.route('/api/library/search', methods=['POST'])
+@login_required
+def api_lib_search():
+    d=request.get_json() or {}
+    panels=d.get('panels')
+    if not panels and d.get('query_id'):
+        e=library.get_drawing(d['query_id'])
+        panels=e.get('panels') if e else None
+    if not panels:
+        return jsonify(error='検索クエリ(panels または query_id)がありません'),400
+    res=library.search_similar(panels, top=int(d.get('top',10)),
+                               exclude_id=d.get('query_id'))
+    return jsonify(results=res)
+
+@app.route('/api/library/item/<did>', methods=['GET'])
+@login_required
+def api_lib_item(did):
+    e=library.get_drawing(did)
+    if not e:
+        return jsonify(error='該当図面がありません'),404
+    return jsonify(item=e)
+
+@app.route('/api/library/delete', methods=['POST'])
+@login_required
+def api_lib_delete():
+    d=request.get_json() or {}
+    ok=library.delete_drawing(d.get('id',''))
+    return jsonify(ok=ok)
 
 INDEX_HTML=open(os.path.join(HERE,'index.html'),encoding='utf-8').read() if os.path.exists(os.path.join(HERE,'index.html')) else '<h1>index.html がありません</h1>'
 
