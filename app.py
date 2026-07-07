@@ -1569,9 +1569,13 @@ def sc_classify(panel_name):
     n=str(panel_name or '')
     if re.search(r'受電',n): return {'settype':'高圧','role':'受電盤'}
     if re.search(r'饋電|き電',n): return {'settype':'高圧','role':'饋電盤'}
+    # 分電盤(電灯分電盤/動力分電盤/1L-1等)は60系個別選定=配電盤セット対象外。制御盤も対象外。
+    if re.search(r'分電|制御|操作',n): return {'settype':None}
     if re.search(r'スコット|ｽｺｯﾄ',n): return {'settype':'低圧','phase':'スコット'}
-    if re.search(r'電灯',n): return {'settype':'低圧','phase':'1φ3W'}
-    if re.search(r'動力',n) and re.search(r'低圧',n): return {'settype':'低圧','phase':'3φ3W'}
+    # 17系低圧セットは受変電のTR二次側(低圧電灯盤/低圧動力盤/変圧器盤・TR盤)。'低圧'または変圧器盤の明示が要る。
+    if re.search(r'低圧',n) and re.search(r'電灯',n): return {'settype':'低圧','phase':'1φ3W'}
+    if re.search(r'低圧',n) and re.search(r'動力',n): return {'settype':'低圧','phase':'3φ3W'}
+    if re.search(r'変圧器盤|ﾄﾗﾝｽ盤|TR盤',n): return {'settype':'低圧'}
     if re.search(r'コンデンサ|ｺﾝﾃﾞﾝｻ',n): return {'settype':None}
     return {'settype':None}
 
@@ -1666,15 +1670,26 @@ def select_from_extracted(data):
         is_jushaden = ('受電' in panel_nm or '受変電' in panel_nm or '高圧' in panel_nm)
         # --- 配電盤セット判定(後方互換: set_attrs が無ければ従来通り全item個別選定) ---
         # set_attrs があればセットコードを1行出力。セット内包品(計器/TR/LBS等)は個別計上せず抑制。
+        # セットが確定した(code有)場合のみ内包品を抑制。未確定(vcb/op等が未確認)でも確認ゲート行は出す。
         _set_expand=set()
         if p.get('set_attrs') and p['set_attrs'].get('settype'):
             _sc=sc_resolve(panel_nm, p['set_attrs'])
-            if _sc and _sc.get('code'):
-                _srow=byCode.get(_sc['code'],{})
-                _set_expand={x.split('x')[0] for x in (_srow.get('expand','') or '').split(';') if x}
-                rows.append(dict(code=_sc['code'],name=_srow.get('name',''),conf=_sc['conf'],
-                                 note=_sc['note'],raw=panel_nm,qty='1',is_setcode=True,
-                                 set_confirm=_sc['confirm'],load_detail=False,feed=''))
+            if _sc:
+                if _sc.get('code'):
+                    _srow=byCode.get(_sc['code'],{})
+                    _set_expand={x.split('x')[0] for x in (_srow.get('expand','') or '').split(';') if x}
+                    rows.append(dict(code=_sc['code'],name=_srow.get('name',''),conf=_sc['conf'],
+                                     note=_sc['note'],raw=panel_nm,qty='1',is_setcode=True,
+                                     set_confirm=_sc['confirm'],set_attrs=dict(_sc.get('attrs') or {}),
+                                     load_detail=False,feed=''))
+                elif _sc.get('confirm') and sc_classify(panel_nm).get('settype'):
+                    # 未確定セット: 確認ゲート行を出す(コード空・△)。ユーザがコンボボックスで確定→再選定で発火。
+                    # ただし盤名が配電盤セット(受電/饋電/低圧電灯・動力/スコット/変圧器盤)と分かる場合のみ。
+                    # (分電盤/制御盤/端子盤が抽出時に誤って settype 付与されても、余計なゲート行を出さない)
+                    rows.append(dict(code='',name='(セット未確定:計器種別/VCB等を確認)',conf='△',
+                                     note=_sc.get('note','セット属性の確認が必要'),raw=panel_nm,qty='1',
+                                     is_setcode=True,set_confirm=_sc['confirm'],set_attrs=dict(_sc.get('attrs') or {}),
+                                     load_detail=False,feed=''))
         for it in p.get('items',[]):
             nm=it.get('name','')
             # 負荷明細行(親分岐MCBの負荷内訳)は、直前の機器行(親)に集約してリストから外す。
