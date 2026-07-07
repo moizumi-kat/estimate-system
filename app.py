@@ -827,7 +827,9 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
             # TRの一次が高圧(6.6kV/6600V/3.3kV/7.2kV等)なら高圧トランスとして確定。
             # 二次側の低圧電圧(210V/105V等)に惑わされない(is_lvの打消しより優先)。
             # ※norm後は小数点が消えるため "66kv"(6.6kV)/"72kv"(7.2kV)/"33kv"(3.3kV)で照合。
-            if grp_name=='TR' and re.search(r'(6600v|66kv|3300v|33kv|72kv|702kv|\dkv/)', nn_in):
+            # 一次/二次比の表記(例 6600/210V)は二次の低圧Vだけ拾って低圧誤判定しやすい。
+            # 4桁一次(3300/6600/6900等)＋"/"＋二次 の比表記があれば高圧一次と確定。
+            if grp_name=='TR' and re.search(r'(6600v|66kv|3300v|33kv|72kv|702kv|\dkv/|\d{4}\s*/\s*\d)', nn_in):
                 is_hv=True; is_lv=False
             # 系統(ライン)の電圧文脈で判定: 高圧コンデンサ盤のSR/SCは、
             # 前後の接続機器(SC本体・VMC)が高圧7.02kVなので、機器に234V等の
@@ -994,11 +996,48 @@ def _remocon_code(name):
             return code,'○','リモコン設備(65系)'
     return None
 
+# 高圧LBS(43320系): 3P200A枠のみDB実在。PFヒューズ定格→G感度バンド(75A以下/100A/200A)＋
+# オプション(PF無/AL/TC/電動/エネセーバ)でコード確定。バンドが読めればPF=30/50/75Aは同一(75以下)で◎。
+# 「励磁突入電流抑制機能」=エネセーバ(省エネ)機能→エネセーバ系。定格が読めなければ安全側△(呼出側の従来処理へ)。
+_LBS_MAP={
+ ('75','PF'):'43320',('75','PFなし'):'43324',('75','AL'):'43321',('75','TC'):'43325',('75','電動'):'43326',('75','エネセーバ'):'43327',
+ ('100','PF'):'43330',('100','PFなし'):'43334',('100','AL'):'43331',('100','エネセーバ'):'43337',
+ ('200','エネセーバ'):'43347',
+}
+def _lbs_code(name):
+    n=unicodedata.normalize('NFKC',str(name))
+    if not re.search(r'(?<![A-Za-z])LBS(?![A-Za-z])', n, re.I): return None
+    # 3P200A枠以外(例:400A)はDBに無い→従来処理へ委ねる
+    if re.search(r'(\d{3,4})\s*A', n) and not re.search(r'200\s*A', n): return None
+    mpf=re.search(r'PF\s*[=＝]?\s*(\d+)\s*A', n, re.I)
+    pf=int(mpf.group(1)) if mpf else None
+    if pf is None: band=None
+    elif pf<=75: band='75'
+    elif pf<=100: band='100'
+    else: band='200'
+    # オプション(優先度高い順)
+    if re.search(r'エネセ[ー-]?バ|エネルギ[ー-]?セ[ー-]?バ|励磁突入|突入電流抑制|インラッシュ', n): variant,vnote='エネセーバ','エネセーバ(励磁突入抑制)'
+    elif re.search(r'電動', n): variant,vnote='電動','電動操作'
+    elif re.search(r'(?<![A-Za-z])TC(?![A-Za-z])|トリップコイル', n, re.I): variant,vnote='TC','トリップコイル'
+    elif re.search(r'(?<![A-Za-z])AL(?![A-Za-z])|アラ[ー-]?ム', n, re.I): variant,vnote='AL','アラーム接点'
+    elif re.search(r'PF\s*無|ヒュ[ー-]?ズ\s*無|無ヒュ|ﾋｭ-ｽﾞ無', n): variant,vnote='PFなし','PF無し'
+    else: variant,vnote='PF','PF付'
+    if band is None:
+        return None   # PF定格が読めない→従来処理(安全側△)
+    code=_LBS_MAP.get((band,variant)) or _LBS_MAP.get((band,'PF'))
+    if not code or code not in byCode: return None
+    # 定格バンドとオプションが確定→◎。ただしエネセーバは名称解釈が入るので○(安全側)。
+    conf='○' if variant=='エネセーバ' else '◎'
+    return code,conf,'高圧LBS 3P200A G%s %s'%('75A以下' if band=='75' else band+'A', vnote)
+
 # 統合: 1機器を選定
 def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', group=''):
     # リモコン設備(65系)は名称直引き(数値属性が無く候補生成に乗らないため)
     _rc=_remocon_code(name)
     if _rc: return R(_rc[0],_rc[1],_rc[2])
+    # 高圧LBS(43320系): PFヒューズ定格→G感度バンドで確定(PF=30/50/75Aは同一枠)
+    _lb=_lbs_code(name)
+    if _lb: return R(_lb[0],_lb[1],_lb[2])
     # 動力盤: 主回路記号があれば記号方式を最優先
     if symbol:
         shikyu=('支給' in str(name))
