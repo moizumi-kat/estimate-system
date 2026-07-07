@@ -35,7 +35,9 @@ def select_terminal(name, byCode):
     if p is None:
         return None
     # 端子盤らしさ: 端子の"積極的指標"がある時のみ(極数Pだけでは判定しない=コンセント/遮断器の誤認防止)
-    if not re.search(r'端子|MDF|主配線|保安器|安定器|E1|E2|E3|ﾄｸE|トクE|接地|T付|(^|\s)TB(\s|$)', n):
+    # 図面表記(露出盤 電話20P / 放送30P 等)にも対応。
+    if not re.search(r'端子|MDF|主配線|保安器|安定器|E1|E2|E3|ﾄｸE|トクE|接地|T付|(^|\s)TB(\s|$)'
+                     r'|電話|放送|情報|通信|LAN|露出盤', n):
         return None
     # 種別判定
     fam = next(f for f, test in FAMILY if test(n))
