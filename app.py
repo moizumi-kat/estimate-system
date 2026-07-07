@@ -1030,11 +1030,36 @@ def _lbs_code(name):
     conf='○' if variant=='エネセーバ' else '◎'
     return code,conf,'高圧LBS 3P200A G%s %s'%('75A以下' if band=='75' else band+'A', vnote)
 
+# AC/DCリアクトル(52系): INV(インバータ)分岐の付随品(支給品が多い)。容量kW→最近傍上位。
+# 電圧は明記が無ければ既定200V(小容量INVは200Vが通例)。半角カナ(ﾘｱｸﾄﾙ)はNFKC正規化で吸収。
+def _reactor_code(name):
+    s=unicodedata.normalize('NFKC',str(name))
+    m=re.search(r'(AC|DC)\s*リアクトル', s, re.I)
+    if not m: return None
+    kind=m.group(1).upper()
+    volt='400' if re.search(r'400\s*V|3[φΦ]?\s*400', s) else '200'
+    mk=re.search(r'(\d+\.?\d*)\s*KW', s, re.I)
+    if not mk: return None
+    want=float(mk.group(1))
+    pool=[]
+    for d in DB:
+        mm=re.match(r'(AC|DC)リアクトル\s*(\d+)V\s*(\d+\.?\d*)KW', d['name'])
+        if not mm or mm.group(1)!=kind or mm.group(2)!=volt: continue
+        pool.append((float(mm.group(3)), d['code']))
+    ge=sorted([(v,c) for v,c in pool if v>=want-1e-6])
+    if not ge: return None
+    v0,c0=ge[0]
+    exact=abs(v0-want)<1e-6
+    return c0,('◎' if exact else '○'),'%sリアクトル %sV %gKW%s'%(kind,volt,v0,'' if exact else '(仕様%g→%gKW繰上)'%(want,v0))
+
 # 統合: 1機器を選定
 def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', group=''):
     # リモコン設備(65系)は名称直引き(数値属性が無く候補生成に乗らないため)
     _rc=_remocon_code(name)
     if _rc: return R(_rc[0],_rc[1],_rc[2])
+    # AC/DCリアクトル(52系): INV分岐の付随品。容量kW→最近傍上位(電圧既定200V)
+    _rk=_reactor_code(name)
+    if _rk: return R(_rk[0],_rk[1],_rk[2])
     # 高圧LBS(43320系): PFヒューズ定格→G感度バンドで確定(PF=30/50/75Aは同一枠)
     _lb=_lbs_code(name)
     if _lb: return R(_lb[0],_lb[1],_lb[2])
