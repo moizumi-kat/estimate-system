@@ -1792,6 +1792,18 @@ def select_from_extracted(data):
                 if _tr and _tr[0]:
                     nmp=byCode.get(_tr[0],{}).get('name','')
                     sel=dict(code=_tr[0],name=nmp,conf=_tr[1],note='端子盤 極数選定'+(('・'+_tr[2]) if _tr[2] else ''))
+            # 動力制御盤のモータ負荷救済: 主回路パターンが図面に無く未選定でも、
+            # 3φ＋kWの明確なモータ負荷は「直入L-S(標準)」を仮定して分岐回路コードを△で提示。
+            # (小容量モータは直入がほぼ標準。回路種別は要確認なので△のまま。空△より実用的)
+            if (not sel.get('code')) and re.search(r'制御|動力', str(p.get('panel',''))) and not it.get('symbol'):
+                _mm=re.search(r'([\d.]+)\s*KW', str(nm), re.I)
+                if _mm and re.search(r'3\s*[φΦ]', str(nm)):
+                    try: _kwf=float(_mm.group(1))
+                    except: _kwf=0
+                    if _kwf>0:
+                        _cc,_cf,_pk=_bunki_find('L-S(AM付)',_kwf,'', (it.get('volt') if it.get('volt') in ('200V','400V') else '200V'))
+                        if _cc:
+                            sel=dict(code=_cc,conf='△',note=f'回路種別=直入L-S(標準)と仮定・要確認({_pk}kW枠)',candidates=[])
             # セット内包品(計器/TR/LBS/LG-RY等)はセットコードから積算ソフトが展開→個別計上しない
             if _set_expand and sel.get('code') in _set_expand:
                 continue
