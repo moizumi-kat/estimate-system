@@ -568,6 +568,12 @@ def _detect_main(main_str):
         label={'mccb':'MCB','mcb':'MCB','elcb':'ELB','elb':'ELB','lug':'LUG'}[kind]
         pre=(m.group(1) or '')
         return kind, (pre.upper()+label if pre else label), True
+    # 分電盤分岐: 負荷名が先頭に付く形(例「電灯 ELCB2P 50/20AT」「予備 MCCB2P 50/20AT」)。
+    # 遮断器+極数(2P/3P/4P)が名称途中にあれば分岐遮断器として拾う(負荷名で埋もれるのを救済)。
+    m2=_re.search(r'(mccb|elcb|mcb|elb)[^a-z]{0,2}[1-4]\s*p', n)
+    if m2:
+        kind=m2.group(1)
+        return kind, {'mccb':'MCB','mcb':'MCB','elcb':'ELB','elb':'ELB'}[kind], True
     # 変圧器(TR): 「T:」始まり、または 相数φ+KVA を持つものはTRとして最優先判定。
     # (二次電圧の "S:210V" が "6600vs210" のように VS と誤マッチするのを防ぐ)
     if _re.match(r't\s*[:：]', n) or (_re.search(r'[13]φ', n) and _re.search(r'\d+\s*kva', n) and 'kvar' not in n):
