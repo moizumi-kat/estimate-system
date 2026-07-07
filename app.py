@@ -589,28 +589,57 @@ def _detect_main(main_str):
                     return part['name'], part['name'], part['prefix']
     return None,None,False
 
+# ===== 制御盤 分岐回路(22-29系)選定: 回路種別＋kW(切上)＋●○/AX で1コード =====
+# (poc_control_v2 由来。小数kWを正しく扱う=旧_set_codeの「2.2→22」バグを解消。スターデルタ対応)
+def _parse_bunki(name):
+    m=re.match(r'分岐回路\s*(\([^)]*\))?\s*(.+?)\s*([\d.]+)\s*(?:KW|kW)?\s*$', name)
+    if not m: return None
+    return (m.group(1) or '').strip('()'), m.group(2).strip(), float(m.group(3))
+_BUNKI_INDEX={}   # (dev, typ, kw, volt) -> code。200V=22-25系 / 400V=26-29系。
+for _d in DB:
+    if '分岐回路' in _d.get('name',''):
+        _p=_parse_bunki(_d['name'])
+        if _p:
+            _volt='400V' if _d['code'][:2] in ('26','27','28','29') else '200V'
+            _BUNKI_INDEX[_p+(_volt,)]=_d['code']
+def _bunki_steps(dev,typ,volt): return sorted(k for (dv,ty,k,vo) in _BUNKI_INDEX if dv==dev and ty==typ and vo==volt)
+def _bunki_find(typ,kw,dev,volt):
+    for cd in ([dev,''] if dev else ['']):   # AX/変種無しへフォールバック
+        steps=_bunki_steps(cd,typ,volt)
+        if not steps: continue
+        pick=next((s for s in steps if kw<=s+1e-9), steps[-1])
+        c=_BUNKI_INDEX.get((cd,typ,pick,volt))
+        if c: return c,('◎' if cd==dev else '○'),pick
+    return '','△',None
+
 def _set_code(name, vb):
-    """L-S/INVのセットコード(電圧別 200V=22系/400V=26系)を返す"""
-    n=norm(name)
-    is400=(vb=='400V'); pfx='26' if is400 else '22'; vl='400V' if is400 else '200V'
-    sk=('支給' in str(name))
-    if ('l-s' in n) or ('ls' in n and 'kw' in n):
-        kw=_get_kw(n)
-        suf={'2.2':'000','3.7':'001','5.5':'011','7.5':'021','11':'031','15':'041','18.5':'061','22':'071','30':'081','37':'091','45':'111','55':'121','75':'131'}
-        if kw in suf:
-            code=pfx+suf[kw]
-            if code in byCode: return code,f'L-Sセット{kw} {vl}(構成品内包)'
-            return '',f'L-S {kw} {vl}・該当コード要確認'
-    if ('インバータ' in str(name)) or ('inv' in n and 'mcb' not in n and '盤' not in str(name)):
-        kw=_get_kw(n)
-        suf={'0.75':'993','1.5':'983','2.2':'053','3.7':'003','5.5':'013','7.5':'023','11':'033','15':'043','18.5':'063','22':'073','30':'083','37':'093','45':'113','55':'123','75':'133','90':'143'}
-        if kw in suf:
-            s=suf[kw]
-            if sk: s=s[:-1]+'5'
-            code=pfx+s
-            if code in byCode: return code,f'INVセット{kw} {vl}{"(支給)" if sk else ""}(構成品内包)'
-            return '',f'INV {kw} {vl}・該当コード要確認'
-    return None,None
+    """制御盤の負荷名(例「2.2KW (L-S)」「INV 3.7kW」「スターデルタ 15kW」)→分岐回路コード。
+    回路種別＋kW(型ごとステップで切上)＋●○(MCCB/ELB)/AX。小数kWを正確に扱う。"""
+    s=str(name); U=s.upper()
+    # kW: 小数を保持して抽出(normは小数点を削るため使わない)
+    km=re.search(r'([\d.]+)\s*KW', U)
+    if not km: km=re.search(r'(?<![\d.])([\d]+\.[\d]+|[\d]+)(?![\d.])\s*$', s.strip())
+    if not km: return None,None
+    try: kw=float(km.group(1))
+    except: return None,None
+    if kw<=0: return None,None
+    # 回路種別(DB表記に合わせる)。長音ー(U+30FC)とハイフン両対応。
+    if re.search(r'スタ[ー\-]?デルタ|ｽﾀ[ｰ\-]?ﾃﾞﾙﾀ|STAR[\- ]?DELTA|Y[\-]?Δ', U) and 'INV' not in U: typ='スターデルタ'
+    elif 'INV' in U or 'インバータ' in s:
+        typ='INV(スターデルタ)' if re.search(r'スタ|ｽﾀ|Δ|STAR', U) else 'INV'
+    elif re.search(r'L[ー\-]?S', U): typ='L-S(AM付)'
+    else: return None,None
+    volt='400V' if vb=='400V' else '200V'
+    if '支給' in s:  # INV支給品等
+        for cand in (typ+'(支給品)', typ):
+            if any(ty==cand for (_dv,ty,_k,_v) in _BUNKI_INDEX): typ=cand; break
+    # ●=MCCB基本('') / ○=ELB / 遠方操作=AX
+    dev=''
+    if 'ELB' in U or '○' in s: dev='ELB'
+    if 'AX' in U or '遠方' in s: dev=('ELB・AX' if dev=='ELB' else 'MCB・AX')
+    code,conf,pick=_bunki_find(typ,kw,dev,volt)
+    if code: return code,f'分岐回路 {typ} {pick}kW {volt}'
+    return '',f'分岐回路 {typ} {kw}kW {volt}・容量外/該当なし要確認'
 
 def gen_candidates(name, volt='', panel=''):
     name=re.sub(r'(?i)vgb','VCB',str(name))  # VGBはVCBの別表記
@@ -687,9 +716,10 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
         code=_mcb_code(name, panel, meta)
         if code: return R(code,'◎' if code in byCode else '△', _mcb_note(name,panel))
         return R('','△','MCB/ELB 容量・盤種別要確認')
-    # --- セット系(L-S/INV) 最優先 ---
+    # --- 制御盤 分岐回路(L-S/スターデルタ/INV) 最優先 ---
+    # 回路種別＋kW＋●○が読めれば決定的にコード確定→○(回路種別の推定余地を残し安全側)。容量外は△。
     sc_code,sc_note=_set_code(name,vb)
-    if sc_code: return R(sc_code,'△',sc_note)
+    if sc_code: return R(sc_code,'○',sc_note)
     if sc_code=='' and sc_note: return R('','△',sc_note)
 
     # --- 高圧/低圧CT 変流比判定 ---
