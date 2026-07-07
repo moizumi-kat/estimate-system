@@ -574,6 +574,13 @@ def _detect_main(main_str):
     if m2:
         kind=m2.group(1)
         return kind, {'mccb':'MCB','mcb':'MCB','elcb':'ELB','elb':'ELB'}[kind], True
+    # 遮断器キーワードが無くても「NP + NNNAF(/MMAT)」形式は成形遮断器(MCCB)分岐とみなす。
+    # 動力盤/コンセント盤の分岐(例「フォーク用コンセント 3P 100AF/60AT」「ACP 3P 225AF/125AT」)。
+    # AF(フレーム定格)は成形遮断器固有の表記なので、負荷名が先頭でも遮断器分岐と確定できる。
+    m3=_re.search(r'[1-4]\s*p.{0,5}\d+\s*af', n)
+    if m3:
+        kind='elb' if _re.search(r'(elb|elcb|漏電|漏保|el)(?![a-z])', n) else 'mcb'
+        return kind, {'mcb':'MCB','elb':'ELB'}[kind], True
     # 変圧器(TR): 「T:」始まり、または 相数φ+KVA を持つものはTRとして最優先判定。
     # (二次電圧の "S:210V" が "6600vs210" のように VS と誤マッチするのを防ぐ)
     if _re.match(r't\s*[:：]', n) or (_re.search(r'[13]φ', n) and _re.search(r'\d+\s*kva', n) and 'kvar' not in n):
@@ -1063,19 +1070,23 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     # 高圧LBS(43320系): PFヒューズ定格→G感度バンドで確定(PF=30/50/75Aは同一枠)
     _lb=_lbs_code(name)
     if _lb: return R(_lb[0],_lb[1],_lb[2])
-    # 動力盤: 主回路記号があれば記号方式を最優先
-    if symbol:
+    # 動力盤: 主回路記号があれば記号方式を最優先。
+    # ただし名称に明示のMCCB分岐仕様(NP＋NNNAF/MMAT)があれば、記号方式より分岐遮断器選定を優先
+    # (記号A/Cが主回路パターンでなく負荷分類タグの図面があり、記号方式では解けないため)。
+    _has_afat=bool(re.search(r'[1-4]\s*[pP].{0,5}\d+\s*AF', str(name)))
+    if symbol and not _has_afat:
         shikyu=('支給' in str(name))
         kwv = kw or (_get_kw(norm(name)) or '')
         parts=select_power_symbol(symbol, kwv, volt or '200V', shikyu)
         # 主部品(1つ目)を主選定とし、残りは候補/内訳として保持
         first=parts[0]
         code=first[0]; note=first[2]; qty=first[1]
-        conf = '◎' if (code and len(parts)==1) else ('○' if code else '△')
-        sel=R(code,conf,f'[動力記号{symbol}] '+note)
-        sel['parts']=[{'code':c,'qty':q,'note':nt,'name':byCode.get(c,{}).get('name','') if c else ''} for c,q,nt in parts]
-        sel['set_qty']=qty
-        return sel
+        if code:   # 記号方式で解けた場合のみ確定。空なら通常選定へフォールバック
+            conf = '◎' if len(parts)==1 else '○'
+            sel=R(code,conf,f'[動力記号{symbol}] '+note)
+            sel['parts']=[{'code':c,'qty':q,'note':nt,'name':byCode.get(c,{}).get('name','') if c else ''} for c,q,nt in parts]
+            sel['set_qty']=qty
+            return sel
     meta,cands=gen_candidates(name,volt,panel)
     sel=refine(meta,cands,name,panel,prev_is_main,volt)
     sel['candidates']=[{'code':c['code'],'name':c['name'],'volt':c['volt']} for c in cands[:5]]
@@ -1614,6 +1625,22 @@ def select_from_extracted(data):
                 load_nm=re.split(r'\s', nm.strip())[0] if nm.strip() else ''
                 if rows:
                     rows[-1].setdefault('loads',[]).append(load_nm or nm.strip())
+                continue
+            # 制御盤の操作スイッチ・押ボタン(運転/停止SW等)は回路コード/盤製作に内包→個別計上対象外。
+            # (CLAUDE.md制御盤原則: 接触器・サーマル・操作SWは分岐回路コードに内包・DBに個別コード無し)
+            # ただし計器切換スイッチ(VS/AS)は計器側で扱うため除外しない。
+            if re.search(r'操作\s*(SW|スイッチ)|運転\s*(SW|スイッチ)|(押釦|押ボタン|ﾎﾞﾀﾝ)', nm) \
+               and not re.search(r'切換|VS|AS|計器', nm):
+                continue
+            # 対象外の弱電機器: 本システムの弱電スコープは端子盤(端子/MDF/保安器)のみ。
+            # TVアンテナ設備(アンテナ/マスト/増幅器/分配器/混合器/ブースター)・LAN機器(HUB)は
+            # 別スコープ(弱電業者)→計上対象外(ユーザ方針: 弱電は端子のみ)。
+            if re.search(r'アンテナ|ｱﾝﾃﾅ|マスト|ﾏｽﾄ|増幅器|ﾌﾞｰｽﾀ|ブースタ|分配器|分岐器|混合器|(?<![A-Za-z])HUB|ハブ|ﾊﾌﾞ', nm) \
+               and not re.search(r'端子|MDF|保安器', nm):
+                continue
+            # 弱電/一般コンセント(遮断器仕様なし)は配線器具→対象外。
+            # ただし動力コンセント分岐(例「フォーク用コンセント 3P 100AF/60AT」=遮断器付)は残す。
+            if re.search(r'コンセント|ｺﾝｾﾝﾄ', nm) and not re.search(r'\d+\s*A[FT]|MCCB|MCB|ELB|ELCB', nm, re.I):
                 continue
             # ケーブル・電線類は機器でないので計上対象外(リストから除外)
             # FP/FPT/CVT/CV/VVF/KIV/HIV等の電線。EV(エレベータ負荷)等と誤判定しないよう限定。
