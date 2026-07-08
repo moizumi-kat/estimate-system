@@ -62,7 +62,7 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
 .lvpill.i{background:#eef2f7;color:#5a6b82;border:1px solid #9fb0c4}
 </style></head>
 <body>
-<header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span></header>
+<header><h1>積算コード選定システム</h1><span class="ver">v1.9 / engine v9.3 ＋検図</span><span class="db" id="db"></span></header>
 <div class="container">
   <div class="steps">
     <div class="s active" id="st1">1. 図面アップロード</div>
@@ -102,6 +102,27 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
   <div id="out"></div>
   <div class="foot">◎=確定（DB実在コード）／○=ほぼ確定／△=要確認（人の判断対象）。AIはコードを生成しません。コードはv9.2 DBと確定ルールからのみ選定します。<br>
   検図（図面チェック）：<b>要修正</b>=矛盾の可能性が高い／<b>要確認</b>=記載漏れ・読取不明瞭など人の確認対象／<b>参考</b>=念のための指摘。自動チェックは補助であり、最終判断は設計者が行ってください。</div>
+
+  <!-- ===== 配置図・製作図の検図（新機能・試験運用） ===== -->
+  <div style="margin-top:36px;border-top:2px solid var(--line);padding-top:20px">
+    <h2 style="font-size:15px;color:var(--green);margin:0 0 4px">配置図・製作図の検図　<span style="font-size:11px;color:#a5791d;background:#fff4d6;padding:2px 8px;border-radius:12px">新機能・試験運用</span></h2>
+    <div style="font-size:12px;color:#7a7568;margin-bottom:12px;line-height:1.7">
+      内部機器配置図・製作図をアップすると、<b>複数視点間の矛盾</b>（正面図と側面図で金具位置が違う 等）・<b>寸法の誤り</b>（分割寸法が不均等 等）・<b>記載漏れ</b>を、仕上がり時点でチェックします。<br>
+      ※ 単線結線図の積算コード選定は上のツールをご利用ください。事例を蓄積するほど検知精度が上がります。</div>
+    <div class="drop" id="rvdrop">
+      <div class="big">配置図・製作図をここにドラッグ＆ドロップ</div>
+      <div class="sub">または クリックして選択（PDF / PNG / JPG）。複数図面をまとめて選択できます。</div>
+      <input type="file" id="rvfile" accept=".pdf,.png,.jpg,.jpeg" multiple>
+    </div>
+    <div class="bar">
+      <span class="fname" id="rvfname"></span>
+      <button class="btn" id="rvGo" disabled>検図を実行</button>
+    </div>
+    <div class="status" id="rvstatus"></div>
+    <div class="err" id="rverr"></div>
+    <div class="check" id="rvcheck"></div>
+    <div class="foot">この検図はAIによる図面の読み取り・照合に基づく補助機能です。すべての誤りを検出できるわけではなく、また指摘が誤っている場合もあります。最終判断は必ず設計者・検図者が行ってください。</div>
+  </div>
 </div>
 <script>
 let curFiles=null, extracted=null, lastData=null, controller=null;
@@ -201,10 +222,14 @@ $('xls').onclick=()=>{
 
 // 検図（図面チェック）結果パネル
 function renderCheck(d){
-  const box=$('check');const fs=d.findings||[];const c=d.check||{error:0,warn:0,info:0};
+  renderCheckInto('check', d.findings||[], d.check,
+    '✓ 検図：矛盾・記載漏れは検出されませんでした（自動チェック範囲内）');
+}
+function renderCheckInto(boxId, fs, c, cleanMsg){
+  const box=$(boxId); fs=fs||[]; c=c||{error:0,warn:0,info:0};
   if(!fs.length){
     box.className='check show';
-    box.innerHTML='<div class="chd clean">✓ 検図：矛盾・記載漏れは検出されませんでした（自動チェック範囲内）</div>';
+    box.innerHTML='<div class="chd clean">'+cleanMsg+'</div>';
     return;
   }
   const lv={error:['e','要修正'],warn:['w','要確認'],info:['i','参考']};
@@ -321,4 +346,38 @@ document.querySelectorAll('.fbar button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.fbar button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
   if(lastData)render(lastData,b.dataset.f);
 });
+
+// ===== 配置図・製作図の検図 =====
+let rvFiles=null;
+const rvdrop=$('rvdrop'),rvfile=$('rvfile');
+rvdrop.onclick=()=>rvfile.click();
+rvdrop.ondragover=e=>{e.preventDefault();rvdrop.classList.add('over')};
+rvdrop.ondragleave=()=>rvdrop.classList.remove('over');
+rvdrop.ondrop=e=>{e.preventDefault();rvdrop.classList.remove('over');if(e.dataTransfer.files.length)rvSet(e.dataTransfer.files)};
+rvfile.onchange=()=>{if(rvfile.files.length)rvSet(rvfile.files)};
+function rvSet(fl){
+  rvFiles=Array.from(fl);
+  $('rvfname').textContent=rvFiles.length===1?rvFiles[0].name:rvFiles.length+'件: '+rvFiles.map(f=>f.name).join(', ');
+  $('rvGo').disabled=false;$('rverr').classList.remove('show');
+  $('rvcheck').className='check';$('rvcheck').innerHTML='';
+}
+$('rvGo').onclick=async()=>{
+  if(!rvFiles||!rvFiles.length)return;
+  $('rverr').classList.remove('show');$('rvGo').disabled=true;
+  $('rvcheck').className='check';$('rvcheck').innerHTML='';
+  $('rvstatus').className='status show';
+  $('rvstatus').innerHTML='<span class="spinner"></span><span class="step">図面を検図しています…（'+rvFiles.length+'件・30秒〜数分）</span>';
+  const fd=new FormData();rvFiles.forEach(f=>fd.append('file',f));
+  try{
+    const r=await fetch('/api/review',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'検図に失敗しました');
+    renderCheckInto('rvcheck',d.findings,d.check,'✓ 検図：矛盾・寸法誤り・記載漏れは検出されませんでした（自動チェック範囲内）');
+    if(d.warnings&&d.warnings.length){$('rverr').textContent='注意: '+d.warnings.join(' / ');$('rverr').classList.add('show');}
+  }catch(e){
+    $('rverr').textContent='エラー: '+e.message;$('rverr').classList.add('show');
+  }finally{
+    $('rvstatus').className='status';$('rvGo').disabled=false;
+  }
+};
 </script></body></html>

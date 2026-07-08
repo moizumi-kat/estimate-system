@@ -25,6 +25,11 @@ try:
     ATTR_TABLE=json.load(open(os.path.join(HERE,'attr_table.json'),encoding='utf-8'))
 except Exception:
     ATTR_TABLE={}
+# 配置図・製作図の検図チェックリスト(事例を貯めて検図プロンプトに反映する)
+try:
+    REVIEW_CHECKLIST=json.load(open(os.path.join(HERE,'review_checklist.json'),encoding='utf-8'))
+except Exception:
+    REVIEW_CHECKLIST={'categories':[]}
 MODEL=os.environ.get('SELECT_MODEL','claude-opus-4-8')
 app=Flask(__name__)
 app.config['MAX_CONTENT_LENGTH']=40*1024*1024  # 40MB
@@ -378,6 +383,128 @@ def extract(cli, data_bytes, media):
         if getattr(msg,'stop_reason',None)=='max_tokens':
             raise RuntimeError('図面の機器数が多く抽出結果が出力上限を超えました。盤を分割して投入してください。')
         raise RuntimeError('抽出JSON解析失敗')
+
+# ===== 検図(配置図・製作図): 図面の矛盾・寸法誤りをVisionで検知 =====
+# 単線図(電気仕様)の検図はフェーズ3のvalidate_drawing、こちらは内部機器配置図・
+# 製作図など「多視点・寸法」系の図面が対象。事例(review_checklist.json)を貯めるほど精度が上がる。
+REVIEW_PROMPT_HEAD="""あなたは配電盤・制御盤の製作図(内部機器配置図・組立図・外形図)を検図する熟練の検図担当者です。
+1枚の図面には通常、複数の視点(正面図・側面図・A-A矢視図・平面図・右側面図など)と多数の寸法が描かれます。
+現場に出す前に、図面の「矛盾」「寸法の誤り」「記載漏れ」を検出してください。工場でミスに気付くと
+工程が乱れ手戻りが発生するため、図面の仕上がり時点で潰すことが目的です。
+
+【最重要の姿勢】
+- 推測で断定しない。確信を持てる指摘だけを出す。迷うものは level を "warn" か "info" にする。
+- 必ず「根拠(evidence)」に、どの視点・どの寸法値を突き合わせたかを具体的に書く(例: 正面図=500, 側面図=575)。
+- 同じ内容を重複して指摘しない。
+
+【検図の観点(事例から学習した重点項目)】"""
+
+REVIEW_PROMPT_TAIL="""
+【出力形式】説明文やマークダウンは書かず、次のJSONのみを出力すること:
+{"findings":[
+  {"level":"error|warn|info",
+   "view":"対象の視点や箇所(例: 正面図/側面図, パネル分割部)",
+   "target":"対象の部品・寸法(例: SUS取付金具, 分割寸法850/700)",
+   "category":"多視点整合|寸法整合|記載漏れ|その他",
+   "message":"何がどう矛盾/誤っているかの指摘(一文)",
+   "hint":"設計者が確認・修正すべき内容",
+   "evidence":"突き合わせた視点名と数値などの根拠"}
+]}
+矛盾・誤りが見つからなければ {"findings":[]} を返すこと。level は error=矛盾の可能性が高い / warn=要確認 / info=参考。"""
+
+def build_review_prompt():
+    lines=[REVIEW_PROMPT_HEAD]
+    for cat in REVIEW_CHECKLIST.get('categories',[]):
+        lines.append(f"\n■ {cat.get('title','')}（目安レベル: {cat.get('level','warn')}）")
+        for chk in cat.get('checks',[]):
+            lines.append(f"  ・{chk}")
+        for ex in cat.get('examples',[]):
+            lines.append(f"  《過去の指摘事例》図面「{ex.get('drawing','')}」: {ex.get('error','')}"
+                         f" — 検出方法: {ex.get('how_to_detect','')}")
+    lines.append(REVIEW_PROMPT_TAIL)
+    return "\n".join(lines)
+
+def pdf_pages_to_png(data_bytes, dpi=200):
+    """PDFを1ページ=1PNGに変換。fitz→poppler(pdftoppm)の順で試す。両方不可ならNone。"""
+    # 1) PyMuPDF
+    try:
+        import fitz
+        doc=fitz.open(stream=data_bytes, filetype="pdf")
+        z=dpi/72.0
+        return [pg.get_pixmap(matrix=fitz.Matrix(z,z)).tobytes("png") for pg in doc]
+    except Exception:
+        pass
+    # 2) poppler(pdftoppm)
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            src=os.path.join(td,'in.pdf'); open(src,'wb').write(data_bytes)
+            import subprocess
+            subprocess.run(['pdftoppm','-png','-r',str(dpi),src,os.path.join(td,'pg')],
+                           check=True, capture_output=True)
+            pngs=[]
+            for fn in sorted(os.listdir(td)):
+                if fn.startswith('pg') and fn.endswith('.png'):
+                    pngs.append(open(os.path.join(td,fn),'rb').read())
+            return pngs or None
+    except Exception:
+        return None
+
+def review_vision(cli, blocks):
+    """画像/文書ブロックのリストを1回のVision呼び出しで検図し findings を返す。"""
+    prompt=build_review_prompt()
+    content=list(blocks)+[{"type":"text","text":prompt}]
+    with cli.messages.stream(model=MODEL,max_tokens=16000,
+        messages=[{"role":"user","content":content}]) as stream:
+        msg=stream.get_final_message()
+    txt="".join(b.text for b in msg.content if b.type=="text").strip()
+    txt=re.sub(r'^```(json)?|```$','',txt,flags=re.M).strip()
+    data=None
+    try: data=json.loads(txt)
+    except Exception:
+        m=re.search(r'\{.*\}',txt,re.S)
+        if m:
+            try: data=json.loads(m.group(0))
+            except Exception: data=None
+    if not data: return []
+    out=[]
+    for f in data.get('findings',[]):
+        lv=f.get('level','info')
+        if lv not in ('error','warn','info'): lv='info'
+        out.append(dict(level=lv, panel=f.get('view','') or '',
+            target=f.get('target','') or '', category=f.get('category','その他'),
+            message=f.get('message','') or '',
+            hint=((f.get('hint','') or '')+(('  根拠: '+f['evidence']) if f.get('evidence') else '')).strip()))
+    return out
+
+def _img_block(png_or_bytes, media='image/png'):
+    return {"type":"image","source":{"type":"base64","media_type":media,
+            "data":base64.standard_b64encode(png_or_bytes).decode()}}
+
+def review_one(cli, fname, data_bytes):
+    """1ファイルを検図。PDFはページ(=図面シート)ごとに検図し、視点間の突き合わせを効かせる。"""
+    low=fname.lower(); findings=[]
+    if low.endswith('.pdf'):
+        pages=pdf_pages_to_png(data_bytes)
+        if pages:
+            for i,png in enumerate(pages):
+                fs=review_vision(cli,[_img_block(png)])
+                for f in fs: f['panel']=f'{fname} p{i+1} / {f["panel"]}'.strip(' /')
+                findings+=fs
+        else:
+            # レンダリング不可: PDFをそのままVisionへ(全ページ一括)
+            blk={"type":"document","source":{"type":"base64","media_type":"application/pdf",
+                 "data":base64.standard_b64encode(data_bytes).decode()}}
+            fs=review_vision(cli,[blk])
+            for f in fs: f['panel']=f'{fname} / {f["panel"]}'.strip(' /')
+            findings+=fs
+    elif low.endswith(('.png','.jpg','.jpeg')):
+        media='image/png' if low.endswith('.png') else 'image/jpeg'
+        fs=review_vision(cli,[_img_block(data_bytes,media)])
+        for f in fs: f['panel']=f'{fname} / {f["panel"]}'.strip(' /')
+        findings+=fs
+    else:
+        raise RuntimeError('検図はPDF/PNG/JPGのみ対応です')
+    return findings
 
 # ===== フェーズ2: 属性方式 選定エンジン（候補生成→ルール絞り込み）=====
 def R(code,conf,note): return dict(code=code,name=byCode.get(code,{}).get('name','') if code else '',conf=conf,note=note)
@@ -1649,6 +1776,34 @@ def api_extract():
     nitems=sum(len(p.get('items',[])) for p in all_panels)
     return jsonify(panels=all_panels, count=nitems, npanels=len(all_panels),
                    nfiles=nfiles, warnings=errors)
+
+# 【検図】配置図・製作図の検図：図面画像をVisionで検図し矛盾・寸法誤り・記載漏れを返す
+@app.route('/api/review', methods=['POST'])
+@login_required
+def api_review():
+    files=request.files.getlist('file')
+    if not files:
+        f=request.files.get('file'); files=[f] if f else []
+    files=[f for f in files if f and f.filename]
+    if not files:
+        return jsonify(error='ファイルがありません'),400
+    try:
+        cli=client()
+    except Exception as e:
+        return jsonify(error=str(e)),500
+    findings=[]; errors=[]
+    for f in files:
+        low=f.filename.lower()
+        if not low.endswith(('.pdf','.png','.jpg','.jpeg')):
+            errors.append(f'{f.filename}: 非対応形式(PDF/PNG/JPG)'); continue
+        try:
+            findings+=review_one(cli, f.filename, f.read())
+        except Exception as e:
+            errors.append(f'{f.filename}: {e}')
+    findings.sort(key=lambda x:(_LV_ORDER.get(x['level'],9), x['panel']))
+    if not findings and errors:
+        return jsonify(error=' / '.join(errors)),500
+    return jsonify(findings=findings, check=validate_summary(findings), warnings=errors)
 
 # 【段階2】選定：抽出済みの盤・機器リスト→コード選定（◎○△）
 @app.route('/api/select', methods=['POST'])
