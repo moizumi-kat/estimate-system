@@ -16,6 +16,7 @@ from flask import Flask, request, jsonify, send_file, Response
 from anthropic import Anthropic
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.worksheet.datavalidation import DataValidation
 
 HERE=os.path.dirname(os.path.abspath(__file__))
 DB=json.load(open(os.path.join(HERE,'db.json'),encoding='utf-8'))
@@ -1918,14 +1919,27 @@ def make_excel(panels):
     hf=PatternFill('solid',start_color='1E3A28')
     cf={'◎':PatternFill('solid',start_color='E8F0E8'),'○':PatternFill('solid',start_color='FFF8E0'),'△':PatternFill('solid',start_color='FCE4E4')}
     wb=Workbook(); ws=wb.active; ws.title='選定結果'
-    ws.append(['盤','図面表記','数量','選定コード','正式品名(DB)','判定','根拠・確認事項'])
+    # 社内プロのフィードバック用: 候補コードリスト＋確認ボックス(確認/修正コード/コメント)を追加。
+    ws.append(['盤','抽出部品(図面表記)','数量','選定コード','正式品名(DB)','判定','候補コード(上位)','根拠・確認事項','確認','プロ修正コード','コメント'])
     for c in ws[1]:
         c.font=Font(name=FONT,bold=True,color='FFFFFF'); c.fill=hf; c.border=bd; c.alignment=Alignment(horizontal='center',wrap_text=True)
     nok=nw=nc=ndetail=0; prev=None
+    def _cand_str(r):
+        # 「機器未特定/辞書に無い」等の未同定行は、候補が汎用フォールバックで無関係→表示しない。
+        if re.search(r'機器未特定|辞書に無い|DB該当なし|該当機器', str(r.get('note',''))):
+            return ''
+        cs=r.get('candidates') or []
+        parts=[]
+        for c in cs[:5]:
+            cc=c.get('code','')
+            if cc and cc!=r.get('code'):
+                parts.append('%s(%s)'%(cc, byCode.get(cc,{}).get('name','')[:16]))
+        return ' / '.join(parts)
     for p in panels:
         for r in p['rows']:
             is_detail=r.get('load_detail')
-            ws.append([p['panel'],r['raw'],r['qty'],r['code'] or '—',byCode.get(r['code'],{}).get('name','') if r['code'] else '',r['conf'],r['note']])
+            ws.append([p['panel'],r['raw'],r['qty'],r['code'] or '—',byCode.get(r['code'],{}).get('name','') if r['code'] else '',
+                       r['conf'],_cand_str(r),r['note'],'','',''])
             row=ws[ws.max_row]
             for c in row: c.font=Font(name=FONT,size=9); c.border=bd; c.alignment=Alignment(vertical='center',wrap_text=True)
             if p['panel']!=prev: row[0].font=Font(name=FONT,size=9,bold=True); row[0].fill=PatternFill('solid',start_color='F0F0F0'); prev=p['panel']
@@ -1936,17 +1950,27 @@ def make_excel(panels):
                 ndetail+=1
                 continue
             row[5].fill=cf.get(r['conf'],PatternFill()); row[5].alignment=Alignment(horizontal='center'); row[3].font=Font(name=FONT,size=9,bold=True)
+            row[8].fill=PatternFill('solid',start_color='EAF1FB')  # 確認列を薄青で目立たせる
             if r['conf']=='◎': nok+=1
             elif r['conf']=='○': nw+=1
             else: nc+=1
-    for i,w in enumerate([18,34,7,12,30,8,40],1): ws.column_dimensions[chr(64+i)].width=w
-    ws.freeze_panes='A2'; ws.auto_filter.ref=f'A1:G{ws.max_row}'
+    # 「確認」列(I列)にドロップダウン(未確認/OK/要修正)を設定=チェックボックス代わり
+    dv=DataValidation(type='list', formula1='"未確認,OK,要修正"', allow_blank=True)
+    dv.prompt='この選定でよければOK、違えば要修正を選び、右に正しいコードとコメントを記入'; dv.promptTitle='確認'
+    ws.add_data_validation(dv); dv.add('I2:I%d'%ws.max_row)
+    for i,w in enumerate([18,32,6,12,26,7,26,34,10,14,28],1): ws.column_dimensions[chr(64+i)].width=w
+    ws.freeze_panes='A2'; ws.auto_filter.ref=f'A1:K{ws.max_row}'
     tot=nok+nw+nc or 1
     ws2=wb.create_sheet('集計',0)
-    ws2.append(['積算コード選定システム v1.6 結果']); ws2['A1'].font=Font(name=FONT,bold=True,size=13); ws2.append([])
+    ws2.append(['積算コード選定システム 結果（社内レビュー用）']); ws2['A1'].font=Font(name=FONT,bold=True,size=13); ws2.append([])
     for lab,val in [('抽出機器数',tot),('◎ 確定',nok),('○ ほぼ確定',nw),('△ 要確認',nc),('自動確定率',f'{round((nok+nw)/tot*100)}%'),('負荷明細(計上対象外)',ndetail)]:
         ws2.append([lab,val])
-    ws2.column_dimensions['A'].width=20; ws2.column_dimensions['B'].width=12
+    ws2.append([])
+    ws2.append(['◎=確定 / ○=ほぼ確定 / △=要確認'])
+    ws2.append(['レビュー方法: 「選定結果」シートの各行を確認し、「確認」列で 未確認/OK/要修正 を選択。'])
+    ws2.append(['  違う場合は「候補コード(上位)」を参考に「プロ修正コード」へ正しいコードを記入し「コメント」に理由を。'])
+    ws2.append(['  △(要確認)は図面から確定できなかった箇所です。特にご確認をお願いします。'])
+    ws2.column_dimensions['A'].width=64; ws2.column_dimensions['B'].width=12
     buf=io.BytesIO(); wb.save(buf); buf.seek(0); return buf
 
 # ===== ルート =====
