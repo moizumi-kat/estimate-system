@@ -93,19 +93,27 @@ def _rating_bucket(s):
     return f'{unit}:{num}'
 
 
-# ===== 金額重み（furukawa単価を相対プライスとして利用）=====
-_PRICE_FLOOR = 5.0     # 安価な小物にも最小の重みを与え、完全にゼロにしない
-_KIND_PRICE_DEFAULT = 30.0
+# ===== 金額重み（コード表の金額 furukawa を単価として利用）=====
+# furukawa列 = コード表の金額。「金額調整用(マイナス)」行が負値であることから金額列と確定。
+_PRICE_FLOOR = 1.0     # 安価な小物・金額欠損でも重みを完全にゼロにしないための下限
+_KIND_PRICE_DEFAULT = 20.0
+
+
+def _amount_of(code):
+    """コード → コード表の金額(furukawa)の原値。無効(欠損/非数値)は None。"""
+    d = _byCode.get(code)
+    if not d:
+        return None
+    try:
+        return float(d.get('furukawa', ''))
+    except Exception:
+        return None
 
 
 def _price_of(code):
-    """コード → 相対単価(furukawa)。負(調整項目)や欠損は下限値に丸める。"""
-    d = _byCode.get(code)
-    if not d:
-        return _PRICE_FLOOR
-    try:
-        v = float(d.get('furukawa', ''))
-    except Exception:
+    """類似度の金額重み。コード表の金額を用い、負(調整項目)・欠損は下限に丸める。"""
+    v = _amount_of(code)
+    if v is None:
         return _PRICE_FLOOR
     return max(v, _PRICE_FLOOR)
 
@@ -223,9 +231,11 @@ def drawing_features(panels):
 
 
 def drawing_summary(panels):
-    """人が読める要約(機器種別ごとの数量・盤数・機器点数)。"""
+    """人が読める要約(機器種別ごとの数量・盤数・機器点数・コード表金額合計)。"""
     kinds = {}
     nitems = 0
+    amount = 0.0      # コード付き機器の金額(furukawa×数量)合計
+    coded = 0         # コードが確定している機器点数
     for it in _iter_items(panels):
         if it.get('load_detail'):
             continue
@@ -235,13 +245,21 @@ def drawing_summary(panels):
             continue
         kind = detect_kind(name) or detect_kind(_byCode.get(code, {}).get('name', ''))
         key = kind or (name[:12] if name else str(code))
-        kinds[key] = kinds.get(key, 0) + _item_qty(it)
+        qty = _item_qty(it)
+        kinds[key] = kinds.get(key, 0) + qty
         nitems += 1
+        if code:
+            a = _amount_of(code)
+            if a is not None and a > 0:
+                amount += a * qty
+                coded += 1
     top = sorted(kinds.items(), key=lambda x: -x[1])
     return {
         'nitems': nitems,
         'npanels': len(panels or []),
         'kinds': [{'kind': k, 'qty': v} for k, v in top],
+        'amount': round(amount),   # コード表金額の概算合計
+        'coded': coded,
     }
 
 
@@ -283,15 +301,17 @@ def _cosine(a, b, idf, prefixes=None, money=False):
 
 
 def _code_reuse(q, d):
-    """クエリの確定コードのうち、候補図面にも存在する割合(金額重み)。
-    「この見積の何割(金額ベース)が過去図面で流用できるか」を表す。"""
+    """クエリの確定コードのうち候補図面にも存在する分の金額比率と実額。
+    「この見積の何割(金額ベース)を過去図面から流用できるか」を表す。
+    戻り値: (比率0-1, 流用可能金額, クエリ総額) / コード無しなら (None,0,0)。"""
     qc = {k[2:]: w for k, w in q.items() if k.startswith('c:')}
     if not qc:
-        return None
+        return None, 0.0, 0.0
     dc = {k[2:] for k in d if k.startswith('c:')}
-    num = sum(_price_of(c) * w for c, w in qc.items() if c in dc)
-    den = sum(_price_of(c) * w for c, w in qc.items())
-    return (num / den) if den else 0.0
+    num = sum((_amount_of(c) or 0) * w for c, w in qc.items() if c in dc and (_amount_of(c) or 0) > 0)
+    den = sum((_amount_of(c) or 0) * w for c, w in qc.items() if (_amount_of(c) or 0) > 0)
+    ratio = (num / den) if den else 0.0
+    return ratio, num, den
 
 
 def search_similar(query_panels, top=10, exclude_id=None):
@@ -310,7 +330,7 @@ def search_similar(query_panels, top=10, exclude_id=None):
         # 多軸スコア(0-1)
         major = _cosine(q, f, idf, prefixes={'c:', 'k:'}, money=True)   # 主要機器構成(金額重み)
         cls = _cosine(q, f, idf, prefixes={'v:', 'r:'})                 # 電圧・容量クラス
-        reuse = _code_reuse(q, f)                                       # コード流用率
+        reuse, reuse_amt, q_amt = _code_reuse(q, f)                     # コード流用率・流用金額
         # 総合点: 主要機器構成を主軸に、クラス一致・コード流用を加味
         if reuse is None:
             total = 0.72 * major + 0.28 * cls
@@ -330,6 +350,8 @@ def search_similar(query_panels, top=10, exclude_id=None):
                 'class': round(cls * 100),
                 'reuse': None if reuse is None else round(reuse * 100),
             },
+            'reuse_amount': round(reuse_amt),
+            'query_amount': round(q_amt),
             'summary': e.get('summary', {}),
             'matched_kinds': sorted(qk & ek),
             'lib_only_kinds': sorted(ek - qk),
