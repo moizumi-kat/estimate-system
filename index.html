@@ -60,10 +60,22 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
 .lvpill.e{background:#fce4e4;color:#c0504d;border:1px solid #c0504d}
 .lvpill.w{background:#fff4d6;color:#a5791d;border:1px solid #c79a2e}
 .lvpill.i{background:#eef2f7;color:#5a6b82;border:1px solid #9fb0c4}
+/* モード切替(配線/板金) */
+.modebar{display:flex;gap:8px;margin-bottom:18px}
+.mtab{flex:1;padding:12px 14px;border:1px solid var(--line);background:#fff;color:#7a7568;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;line-height:1.5}
+.mtab .mt-sub{display:block;font-size:11px;font-weight:400;opacity:.8;margin-top:2px}
+.mtab.on{background:var(--green);color:#fff;border-color:var(--green)}
+.mtab.on .mt-sub{opacity:.9}
 </style></head>
 <body>
-<header><h1>積算コード選定システム</h1><span class="ver">v1.9 / engine v9.3 ＋検図</span><span class="db" id="db"></span></header>
+<header><h1>積算・検図システム</h1><span class="ver">v1.11 / 配線＋板金 検図</span><span class="db" id="db"></span></header>
 <div class="container">
+  <div class="modebar">
+    <button class="mtab on" data-m="wire">配線関係の検図<span class="mt-sub">単線図 → 積算コード選定＋電気仕様チェック</span></button>
+    <button class="mtab" data-m="sheet">板金関係の検図<span class="mt-sub">配置図・製作図（DXF）→ 多視点・寸法チェック</span></button>
+  </div>
+
+  <div id="modeWire">
   <div class="steps">
     <div class="s active" id="st1">1. 図面アップロード</div>
     <div class="s" id="st2">2. 部品を抽出</div>
@@ -102,10 +114,12 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
   <div id="out"></div>
   <div class="foot">◎=確定（DB実在コード）／○=ほぼ確定／△=要確認（人の判断対象）。AIはコードを生成しません。コードはv9.2 DBと確定ルールからのみ選定します。<br>
   検図（図面チェック）：<b>要修正</b>=矛盾の可能性が高い／<b>要確認</b>=記載漏れ・読取不明瞭など人の確認対象／<b>参考</b>=念のための指摘。自動チェックは補助であり、最終判断は設計者が行ってください。</div>
+  </div><!-- /modeWire -->
 
-  <!-- ===== 配置図・製作図の検図（新機能・試験運用） ===== -->
-  <div style="margin-top:36px;border-top:2px solid var(--line);padding-top:20px">
-    <h2 style="font-size:15px;color:var(--green);margin:0 0 4px">配置図・製作図の検図　<span style="font-size:11px;color:#a5791d;background:#fff4d6;padding:2px 8px;border-radius:12px">新機能・試験運用</span></h2>
+  <div id="modeSheet" style="display:none">
+  <!-- ===== 板金関係の検図（配置図・製作図） ===== -->
+  <div>
+    <h2 style="font-size:15px;color:var(--green);margin:0 0 4px">板金関係の検図（配置図・製作図）　<span style="font-size:11px;color:#a5791d;background:#fff4d6;padding:2px 8px;border-radius:12px">試験運用</span></h2>
     <div style="font-size:12px;color:#7a7568;margin-bottom:12px;line-height:1.7">
       内部機器配置図・製作図をアップすると、<b>複数視点間の矛盾</b>（正面図と側面図で金具位置が違う 等）・<b>寸法の誤り</b>（分割寸法が不均等 等）・<b>記載漏れ</b>を、仕上がり時点でチェックします。<br>
       <b>DXF（原図）を推奨</b>：CADの座標・寸法を使い、分割寸法の不均等などを<b>推測なしで厳密に検証</b>します。PDFはAIによる読み取り（補助）になります。<br>
@@ -124,6 +138,7 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
     <div class="check" id="rvcheck"></div>
     <div class="foot">この検図はAIによる図面の読み取り・照合に基づく補助機能です。すべての誤りを検出できるわけではなく、また指摘が誤っている場合もあります。最終判断は必ず設計者・検図者が行ってください。</div>
   </div>
+  </div><!-- /modeSheet -->
 </div>
 <script>
 let curFiles=null, extracted=null, lastData=null, controller=null;
@@ -348,7 +363,15 @@ document.querySelectorAll('.fbar button').forEach(b=>b.onclick=()=>{
   if(lastData)render(lastData,b.dataset.f);
 });
 
-// ===== 配置図・製作図の検図 =====
+// ===== モード切替(配線関係 / 板金関係) =====
+document.querySelectorAll('.mtab').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.mtab').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  const m=b.dataset.m;
+  $('modeWire').style.display = (m==='wire')?'':'none';
+  $('modeSheet').style.display = (m==='sheet')?'':'none';
+});
+
+// ===== 板金関係の検図（配置図・製作図） =====
 let rvFiles=null;
 const rvdrop=$('rvdrop'),rvfile=$('rvfile');
 rvdrop.onclick=()=>rvfile.click();
