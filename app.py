@@ -1093,6 +1093,21 @@ def _pf_code(name):
     v0,c0=ge[0]
     return c0,('◎' if v0==want else '○'),'限流ヒューズPF %dA%s'%(v0,'' if v0==want else '(仕様%d→%dA繰上)'%(want,v0))
 
+# 直列リアクトルSRの容量は、同一盤のコンデンサSCとペアで決まる(SR kvar = L% × SC kvar)。
+# SR単独では容量表記が無く△になるため、盤内SCのkvarから算定して45系SRコードを確定する。
+def _sr_from_sc(name, sc_kvar):
+    s=str(name)
+    if not re.search(r'(?<![A-Za-z])SR(?![A-Za-z])|直列ﾘｱｸﾄﾙ|直列リアクトル', s): return None
+    ml=re.search(r'L\s*[=＝]?\s*(\d+)\s*%', s)
+    if not ml or not sc_kvar: return None
+    Lpct=int(ml.group(1)); want=Lpct/100.0*sc_kvar
+    pool=[(float(mm.group(2)), d['code']) for d in DB
+          if (mm:=re.match(r'SR\(支給品\)\s*L=(\d+)%\s*([\d.]+)KVAR', d['name'])) and int(mm.group(1))==Lpct]
+    ge=sorted([(v,c) for v,c in pool if v>=want-1e-6])
+    if not ge: return None
+    v0,c0=ge[0]
+    return c0,'○','SR(支給品) L=%d%% %gkvar(SC %gkvar×%d%%)'%(Lpct,v0,sc_kvar,Lpct)
+
 # 受変電の保護継電器(名称で一意に決まるもの)の直引き。候補多で△に落ちるのを救済。
 # 容量変種があるもの(EL-RY等)は名称だけで断定しないので対象にしない(generic選定へ委ねる)。
 def _relay_code(name):
@@ -1688,6 +1703,13 @@ def select_from_extracted(data):
         prev_is_main=False
         panel_nm=p.get('panel','')
         is_jushaden = ('受電' in panel_nm or '受変電' in panel_nm or '高圧' in panel_nm)
+        # 盤内コンデンサSCのkvarを先に把握(同一盤の直列リアクトルSRの容量算定に使う)
+        _panel_sc_kvar=None
+        for _it in p.get('items',[]):
+            _nm=str(_it.get('name',''))
+            if re.search(r'(?<![A-Za-z])SC(?![A-Za-z])|ｺﾝﾃﾞﾝｻ|コンデンサ', _nm):
+                _mk=re.search(r'(\d+\.?\d*)\s*kvar', _nm, re.I)
+                if _mk: _panel_sc_kvar=float(_mk.group(1))
         # --- 配電盤セット判定(後方互換: set_attrs が無ければ従来通り全item個別選定) ---
         # set_attrs があればセットコードを1行出力。セット内包品(計器/TR/LBS等)は個別計上せず抑制。
         # セットが確定した(code有)場合のみ内包品を抑制。未確定(vcb/op等が未確認)でも確認ゲート行は出す。
@@ -1792,6 +1814,10 @@ def select_from_extracted(data):
                 if _tr and _tr[0]:
                     nmp=byCode.get(_tr[0],{}).get('name','')
                     sel=dict(code=_tr[0],name=nmp,conf=_tr[1],note='端子盤 極数選定'+(('・'+_tr[2]) if _tr[2] else ''))
+            # 直列リアクトルSRの容量継承: SR単独で容量不明(△)なら、同一盤SCのkvarから算定(SR=L%×SC)。
+            if ((not sel.get('code')) or sel.get('conf')=='△') and _panel_sc_kvar:
+                _sr=_sr_from_sc(nm, _panel_sc_kvar)
+                if _sr: sel=dict(code=_sr[0],conf=_sr[1],note=_sr[2],candidates=[])
             # 動力制御盤のモータ負荷救済: 主回路パターンが図面に無く未選定でも、
             # 3φ＋kWの明確なモータ負荷は「直入L-S(標準)」を仮定して分岐回路コードを△で提示。
             # (小容量モータは直入がほぼ標準。回路種別は要確認なので△のまま。空△より実用的)
