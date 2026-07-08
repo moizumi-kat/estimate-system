@@ -449,13 +449,8 @@ def pdf_pages_to_png(data_bytes, dpi=200):
     except Exception:
         return None
 
-def review_vision(cli, blocks):
-    """画像/文書ブロックのリストを1回のVision呼び出しで検図し findings を返す。"""
-    prompt=build_review_prompt()
-    content=list(blocks)+[{"type":"text","text":prompt}]
-    with cli.messages.stream(model=MODEL,max_tokens=16000,
-        messages=[{"role":"user","content":content}]) as stream:
-        msg=stream.get_final_message()
+def _parse_review_findings(msg):
+    """Vision/推論応答のJSONを findings(level/panel/target/category/message/hint) に整形。"""
     txt="".join(b.text for b in msg.content if b.type=="text").strip()
     txt=re.sub(r'^```(json)?|```$','',txt,flags=re.M).strip()
     data=None
@@ -476,6 +471,95 @@ def review_vision(cli, blocks):
             hint=((f.get('hint','') or '')+(('  根拠: '+f['evidence']) if f.get('evidence') else '')).strip()))
     return out
 
+def review_vision(cli, blocks):
+    """画像/文書ブロックのリストを1回のVision呼び出しで検図し findings を返す。"""
+    content=list(blocks)+[{"type":"text","text":build_review_prompt()}]
+    with cli.messages.stream(model=MODEL,max_tokens=16000,
+        messages=[{"role":"user","content":content}]) as stream:
+        msg=stream.get_final_message()
+    return _parse_review_findings(msg)
+
+# ===== DXF検図: 原図(CAD)から座標・寸法を厳密抽出し、寸法整合を推測なしで検証 =====
+def dxf_geometry(data_bytes):
+    """DXFから文字(座標付き)と寸法(測定値・測定2点・向き)を抽出する。"""
+    import ezdxf
+    with tempfile.NamedTemporaryFile(suffix='.dxf', delete=False) as tf:
+        tf.write(data_bytes); path=tf.name
+    try:
+        doc=ezdxf.readfile(path)
+    finally:
+        try: os.unlink(path)
+        except Exception: pass
+    msp=doc.modelspace(); texts=[]; dims=[]
+    for e in msp.query('TEXT MTEXT'):
+        try:
+            ins=e.dxf.insert
+            t=e.dxf.text if e.dxftype()=='TEXT' else e.text
+            s=str(t).strip()
+            if s: texts.append({'x':round(ins.x,1),'y':round(ins.y,1),'text':s})
+        except Exception: continue
+    for e in msp.query('DIMENSION'):
+        try: val=float(e.get_measurement())
+        except Exception: continue
+        try:
+            p2=e.dxf.defpoint2; p3=e.dxf.defpoint3
+            dx=abs(p3.x-p2.x); dy=abs(p3.y-p2.y)
+            axis='h' if dx>=dy else 'v'
+            a1,a2=sorted((p2.x,p3.x)) if axis=='h' else sorted((p2.y,p3.y))
+            tm=e.dxf.get('text_midpoint', p2)
+            dims.append({'value':round(val,1),'a1':round(a1,1),'a2':round(a2,1),
+                         'axis':axis,'x':round(tm.x,1),'y':round(tm.y,1)})
+        except Exception:
+            dims.append({'value':round(val,1),'a1':0.0,'a2':0.0,'axis':'?','x':0.0,'y':0.0})
+    return {'texts':texts,'dims':dims,'nlayers':len(doc.layers)}
+
+def check_dim_chains(dims, tol=1.5):
+    """分割寸法の不均等を厳密検出。全体寸法=内訳の連続和 となる並びで、内訳が不均等なら指摘。"""
+    findings=[]; seen=set()
+    for axis in ('h','v'):
+        ds=[d for d in dims if d.get('axis')==axis]
+        for T in ds:
+            lo,hi=T['a1'],T['a2']; span=hi-lo
+            if span<=1: continue
+            parts=[d for d in ds if d is not T and d['a1']>=lo-2 and d['a2']<=hi+2
+                   and (d['a2']-d['a1'])<span-0.5]
+            parts.sort(key=lambda d:d['a1'])
+            chain=[]; cur=lo
+            for d in parts:
+                if abs(d['a1']-cur)<=2: chain.append(d); cur=d['a2']
+            if len(chain)>=2 and abs(cur-hi)<=2:
+                vals=[c['value'] for c in chain]
+                if max(vals)-min(vals)>tol:
+                    key=(axis,round(T['value'],1),tuple(vals))
+                    if key in seen: continue
+                    seen.add(key)
+                    eq=round(T['value']/len(chain),1)
+                    axn='水平' if axis=='h' else '垂直'
+                    vs='/'.join(str(v) for v in vals)
+                    findings.append(_finding('warn','',f'{axn}分割 {vs}','寸法整合',
+                        f'分割寸法が不均等です（{vs}、合計{T["value"]}）',
+                        f'均等分割なら {"/".join([str(eq)]*len(chain))} です。'
+                        f'意図した分割か、記入ミスでないか確認してください。'))
+    return findings
+
+def review_dxf(cli, geom):
+    """DXF幾何情報(座標・寸法)をClaudeに渡し、多視点整合など補足検図を行う(要APIキー)。"""
+    lines=["【DXF製作図から抽出した正確な座標・寸法データ】",
+           "※画像でなく厳密な数値。寸法の合計・位置の一致を数値で検証できる。",
+           "",'寸法 [測定値 向き(h=水平/v=垂直) 範囲 @文字位置]:']
+    for d in geom['dims'][:400]:
+        lines.append(f"  {d['value']} {d['axis']} [{d['a1']}..{d['a2']}] @({d['x']},{d['y']})")
+    lines.append("文字 (座標) 内容:")
+    for t in geom['texts'][:700]:
+        lines.append(f"  ({t['x']},{t['y']}) {t['text']}")
+    lines.append("\n各視点(正面図/側面図/A-A矢視図/平面図/右側面図)は図中で座標帯が分かれて配置される。"
+                 "同一部品の取付高さ(基準からの寸法)が視点間で食い違っていないか等を、上の数値で検証すること。")
+    prompt="\n".join(lines)+"\n\n"+build_review_prompt()
+    with cli.messages.stream(model=MODEL,max_tokens=16000,
+        messages=[{"role":"user","content":[{"type":"text","text":prompt}]}]) as stream:
+        msg=stream.get_final_message()
+    return _parse_review_findings(msg)
+
 def _img_block(png_or_bytes, media='image/png'):
     return {"type":"image","source":{"type":"base64","media_type":media,
             "data":base64.standard_b64encode(png_or_bytes).decode()}}
@@ -483,6 +567,9 @@ def _img_block(png_or_bytes, media='image/png'):
 def review_one(cli, fname, data_bytes):
     """1ファイルを検図。PDFはページ(=図面シート)ごとに検図し、視点間の突き合わせを効かせる。"""
     low=fname.lower(); findings=[]
+    # DXFの決定的チェックはcli不要。PDF/画像やDXFの補足推論はcliが要る。
+    if not low.endswith('.dxf') and cli is None:
+        raise RuntimeError('PDF/画像の検図にはANTHROPIC_API_KEYが必要です（DXFは寸法チェックのみキー無しで可）')
     if low.endswith('.pdf'):
         pages=pdf_pages_to_png(data_bytes)
         if pages:
@@ -502,8 +589,19 @@ def review_one(cli, fname, data_bytes):
         fs=review_vision(cli,[_img_block(data_bytes,media)])
         for f in fs: f['panel']=f'{fname} / {f["panel"]}'.strip(' /')
         findings+=fs
+    elif low.endswith('.dxf'):
+        # DXF(原図): 寸法整合は座標から厳密に検証。多視点整合等はClaudeで補足。
+        geom=dxf_geometry(data_bytes)
+        fs=check_dim_chains(geom['dims'])       # 決定的(APIキー不要)
+        if cli is not None:
+            try:
+                fs+=review_dxf(cli, geom)       # 補足(要APIキー)。失敗しても決定的分は残す
+            except Exception:
+                pass
+        for f in fs: f['panel']=(f'{fname} / '+f['panel']).strip(' /')
+        findings+=fs
     else:
-        raise RuntimeError('検図はPDF/PNG/JPGのみ対応です')
+        raise RuntimeError('検図はPDF/PNG/JPG/DXFのみ対応です')
     return findings
 
 # ===== フェーズ2: 属性方式 選定エンジン（候補生成→ルール絞り込み）=====
@@ -1787,15 +1885,15 @@ def api_review():
     files=[f for f in files if f and f.filename]
     if not files:
         return jsonify(error='ファイルがありません'),400
-    try:
-        cli=client()
-    except Exception as e:
-        return jsonify(error=str(e)),500
+    # APIキーが無くてもDXFの決定的な寸法チェックは動く。cli=Noneで続行し、
+    # Visionが必要な処理(PDF/画像/DXFの補足推論)だけがcli未取得時にスキップされる。
+    try: cli=client()
+    except Exception: cli=None
     findings=[]; errors=[]
     for f in files:
         low=f.filename.lower()
-        if not low.endswith(('.pdf','.png','.jpg','.jpeg')):
-            errors.append(f'{f.filename}: 非対応形式(PDF/PNG/JPG)'); continue
+        if not low.endswith(('.pdf','.png','.jpg','.jpeg','.dxf')):
+            errors.append(f'{f.filename}: 非対応形式(PDF/PNG/JPG/DXF)'); continue
         try:
             findings+=review_one(cli, f.filename, f.read())
         except Exception as e:
