@@ -1131,6 +1131,21 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     # 受変電の保護継電器(DGR方向性/LG-RY ZCT付)の直引き
     _ry=_relay_code(name)
     if _ry: return R(_ry[0],_ry[1],_ry[2])
+    # 手動電源切替器DT(68系): 極数×容量。極数/容量が読めれば確定、読めなければ△(既定3P60A提示)。
+    _ns=unicodedata.normalize('NFKC',str(name))
+    if re.search(r'手動.{0,2}切替|手動電源切替|切替器.*DT|DT.*切替|(?<![A-Za-z])DT(?![A-Za-z]).{0,6}(\d+\s*P|\d+\s*A)', _ns):
+        mp=re.search(r'([234])\s*P', _ns); ma=re.search(r'(\d+)\s*A(?![A-Za-z])', _ns)
+        pole=mp.group(1) if mp else None; amp=int(ma.group(1)) if ma else None
+        _DT={('2','60'):'68721',('2','100'):'68722',('3','60'):'68731',('3','100'):'68732',('3','200'):'68733',('3','400'):'68734',
+             ('4','60'):'68751',('4','100'):'68752',('4','200'):'68753',('4','400'):'68754'}
+        if pole and amp:
+            steps=[60,100,200,400]; astd=next((str(s) for s in steps if amp<=s), '400')
+            c=_DT.get((pole,astd))
+            if c: return R(c,('◎' if amp in (60,100,200,400) else '○'),'手動電源切替器DT %sP %sA'%(pole,astd))
+        return R('68731','△','手動電源切替器DT・極数/容量要確認(既定3P60A)')
+    # THR: 通常は計器切替スイッチ(COS/VS/AS)。ただしサーマルリレーの場合もあるため要確認(△)。
+    if re.fullmatch(r'\s*THR\s*', str(name), re.I):
+        return R('71021','△','切替スイッチ(COS)と仮定・サーマルリレーの可能性あり要確認')
     # スコットトランス(支給品45050系)
     _sk=_scott_code(name)
     if _sk: return R(_sk[0],_sk[1],_sk[2])
@@ -1765,6 +1780,12 @@ def select_from_extracted(data):
             # 柱上装柱材・外構(玉碍子/腕金/支線/根かせ/引込柱/装柱/マスト)・照明器具/灯具は
             # 盤でなく別業者スコープ(柱上・外構・照明設備)→計上対象外。
             if re.search(r'碍子|腕金|アームタイ|ｱｰﾑﾀｲ|支線|根かせ|根枷|引込柱|装柱|管端|止水|(^|\s)マスト|照明器具|灯具|ダウンライト|ﾀﾞｳﾝﾗｲﾄ', nm):
+                continue
+            # 発電機本体・エンジン・UPS(無停電電源)は支給品(客先支給・別途)でDB購入コードなし→計上対象外。
+            # ただし「発電機充電用/ヒーター MCCB…」等の分岐遮断器や発電機「盤」は計上対象なので除外しない
+            # (遮断器仕様AF/AT/MCCBや盤の語がある行は残す)。
+            if re.search(r'発電機(?!盤)|ﾃﾞｨｰｾﾞﾙ|ディーゼル|(^|\s)D\.?ENG|ｴﾝｼﾞﾝ|(?<![ァ-ヶ])エンジン|(?<![A-Za-z])UPS(?![A-Za-z])|無停電電源', nm) \
+               and not re.search(r'MCCB|MCB|ELB|ELCB|\d\s*AF|\d\s*AT|盤|充電用|ヒータ', nm, re.I):
                 continue
             # 対象外の弱電機器: 本システムの弱電スコープは端子盤(端子/MDF/保安器)のみ。
             # TVアンテナ設備(アンテナ/マスト/増幅器/分配器/混合器/ブースター)・LAN機器(HUB)は
