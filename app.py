@@ -832,7 +832,7 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
             #   低圧: 200V/400V/105V/210V の明示
             is_lv=bool(re.search(r'(^|[^.\d])(100|105|200|210|400|415)v(?![a-z])', nn_in))
             # kV(高圧電圧)判定: kvの直後がa(kva)やr等の英字でないこと。kvar/kvaを除外。
-            is_hv=bool(re.search(r'\d\.?\d*kv(?![a-z])', nn_in)) or bool(re.search(r'6600v|3300v', nn_in))
+            is_hv=bool(re.search(r'\d\.?\d*kv(?![a-z])', nn_in)) or bool(re.search(r'6600v|3300v|6900v|7020v|7200v', nn_in))
             if is_lv: is_hv=False  # 低圧電圧明示が最優先
             if not is_hv and not is_lv:
                 # 電圧表記が無い場合: TR/高圧SCはkVA表記(高圧)、低圧SC/SRはkvar+電圧で既に判定済
@@ -845,9 +845,12 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
             if grp_name=='TR' and re.search(r'(6600v|66kv|3300v|33kv|72kv|702kv|\dkv/|\d{4}\s*/\s*\d)', nn_in):
                 is_hv=True; is_lv=False
             # 系統(ライン)の電圧文脈で判定: 高圧コンデンサ盤のSR/SCは、
-            # 前後の接続機器(SC本体・VMC)が高圧7.02kVなので、機器に234V等の
+            # 前後の接続機器(SC本体・VMC)が高圧7.02kVなので、機器に234V/200V等の
             # 低圧表記があっても系統は高圧。低圧表記に引きずられず高圧(45系)とする。
-            if grp_name in ('SR','SC') and ('高圧' in str(panel) and 'コンデンサ' in str(panel)):
+            # コンデンサ盤(受変電の進相コンデンサ)は既定で高圧45系。低圧進相コンデンサ盤(53系)は
+            # 盤名に「低圧」が明示されるので、それ以外の「コンデンサ盤」は高圧扱い。
+            # ※実見積書照合で東部SCが「50kvar 200V」を低圧53系と誤選択(正解45系)だった反省に基づく緩和。
+            if grp_name in ('SR','SC') and 'コンデンサ' in str(panel) and '低圧' not in str(panel):
                 is_hv=True; is_lv=False
             unit='kVA' if grp_name=='TR' or (grp_name=='SC' and is_hv) else 'kvar'
 
@@ -881,10 +884,11 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
                 if grp_name=='TR':
                     if re.search(r'3φ',nn_in) and '3φ3W' not in n0: return False
                     if re.search(r'1φ',nn_in) and '1φ3W' not in n0: return False
-                # SRのL%
+                # SRのL%(直列リアクトルのリアクタンス%)。「L=6%」「(6%)」「6%」いずれの表記も拾う。
+                # L%が読めたら、その%のコードだけに絞る(6%指定なのにL=13%を選ぶ誤りを防ぐ)。
                 if grp_name=='SR' and is_hv:
-                    lm=re.search(r'l\s*=?\s*(\d+)', nn_in)
-                    if lm and f"L={lm.group(1)}%" not in n0 and f"={lm.group(1)}%" not in n0: return False
+                    lm=re.search(r'l\s*=?\s*(\d+)\s*%', nn_in) or re.search(r'(?<![\d.])(\d+)\s*%', nn_in)
+                    if lm and f"L={lm.group(1)}%" not in n0: return False
                 return True
 
             pool=[]
@@ -1036,7 +1040,11 @@ def _lbs_code(name):
     elif re.search(r'PF\s*無|ヒュ[ー-]?ズ\s*無|無ヒュ|ﾋｭ-ｽﾞ無', n): variant,vnote='PFなし','PF無し'
     else: variant,vnote='PF','PF付'
     if band is None:
-        return None   # PF定格が読めない→従来処理(安全側△)
+        # PF定格(G感度バンド)が読めない。基本PF付なら基本形43320を△で提示(オプション/G感度要確認)。
+        # generic選定に委ねるとエネセーバ等の変種を誤選択するため(実見積書照合の反省)。
+        if variant=='PF' and '43320' in byCode:
+            return '43320','△','高圧LBS 3P200A PF付(G感度/TC/エネセーバ等のオプション要確認)'
+        return None   # 変種明示ありでバンド不明→従来処理
     code=_LBS_MAP.get((band,variant)) or _LBS_MAP.get((band,'PF'))
     if not code or code not in byCode: return None
     # 定格バンドとオプションが確定→◎。ただしエネセーバは名称解釈が入るので○(安全側)。
@@ -1099,7 +1107,7 @@ def _pf_code(name):
 def _sr_from_sc(name, sc_kvar):
     s=str(name)
     if not re.search(r'(?<![A-Za-z])SR(?![A-Za-z])|直列ﾘｱｸﾄﾙ|直列リアクトル', s): return None
-    ml=re.search(r'L\s*[=＝]?\s*(\d+)\s*%', s)
+    ml=re.search(r'L\s*[=＝]?\s*(\d+)\s*%', s) or re.search(r'(?<![\d.])(\d+)\s*%', s)  # 「6%」表記(Lなし)も拾う
     if not ml or not sc_kvar: return None
     Lpct=int(ml.group(1)); want=Lpct/100.0*sc_kvar
     pool=[(float(mm.group(2)), d['code']) for d in DB
