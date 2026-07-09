@@ -218,7 +218,7 @@ function renderGate(d){
 function gateChange(el){const pi=el.getAttribute('data-pi'),spec=el.getAttribute('data-spec');_gate[pi]=_gate[pi]||{};_gate[pi][spec]=el.value;}
 function applyGate(){
   if(!extracted)return;
-  Object.keys(_gate).forEach(pi=>{extracted[pi].set_attrs=extracted[pi].set_attrs||{};Object.assign(extracted[pi].set_attrs,_gate[pi]);});
+  Object.keys(_gate).forEach(pi=>{extracted[pi].set_attrs=extracted[pi].set_attrs||{};Object.assign(extracted[pi].set_attrs,_gate[pi]);extracted[pi].set_attrs._confirmed=true;});
   $('goSelect').onclick();
 }
 function render(d,filter){

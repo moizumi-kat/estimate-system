@@ -1585,7 +1585,9 @@ SC_OPTIONS={'meter':['普通角','広角','マルチ'],'phase':['1φ3W','3φ3W',
             'vcb':['8KA','12.5KA'],'op':['手動','電動','電動引出','電磁','電磁引出PF'],'cap':[]}
 SC_REQ={'低圧':['meter','phase','cap'],'高圧':['role','meter','vcb','op'],
         '段積':['role','meter','vcb'],'段積VCS':['role','op']}
-SC_ALWAYS_CONFIRM={'meter'}   # 計器種別は単線図で確定しづらく誤ると◎誤答→常に人が確認
+SC_ALWAYS_CONFIRM={'meter','op'}   # 計器種別・VCB操作方式(手動/電動/引出)は単線図で誤読しやすく
+                                   # 誤るとセットコードが変わる(◎誤答)→常に人が確認。実見積書照合で
+                                   # 八戸受電盤が op=手動 と誤抽出(正解=電動)だった実例に基づく。
 
 # セットが発火した盤で「セット内包の計器・変成器」を型で抑制する判定。
 # 受電/低圧セット(11/16/17系)は計器一式(VM/AM/VS/AS/W/Wh/力率/マルチ指示計)と
@@ -1677,6 +1679,12 @@ def sc_resolve(panel_name, set_attrs=None):
     if not attrs.get('settype'): return None
     form=sc_confirm_form(attrs)
     code,conf,note=sc_select(sc_apply_defaults(attrs))
+    # 確認ゲート項目(計器種別/操作方式=誤読でコードが変わる)が未確定のうちは◎にしない。
+    # ゲートで人が確定(set_attrs['_confirmed']=True)して初めて◎。既定/抽出値のままは○(要ゲート確定)。
+    # 実見積書照合で八戸受電盤が既定=普通角/抽出=手動で誤◎だった反省に基づく。
+    if code and conf=='◎' and form and not (set_attrs or {}).get('_confirmed'):
+        specs='・'.join({'meter':'計器種別','op':'操作方式','vcb':'VCB容量','role':'役割','cap':'容量'}.get(f['spec'],f['spec']) for f in form)
+        conf='○'; note=('確認ゲートで%sを最終確定してください(既定/抽出値のまま)'%specs)+((' '+note) if note else '')
     return {'settype':attrs['settype'],'attrs':attrs,'code':code,'conf':conf,'note':note,'confirm':form}
 
 # ---- 弱電端子盤(62系)選定: 極数P＋端子指標で最近傍上位。極数が読めなければ確認(呼出側) ----
