@@ -2017,9 +2017,21 @@ def api_extract():
             errors.append(f'{fname}: {e}')
     if not all_panels and errors:
         return jsonify(error=' / '.join(errors)),500
+    # 【抽出後・選定前の仕様確認ゲート】配電盤セット盤には、計器種別・VCB操作方式等の
+    # 「図面に明記されず特記仕様/客先打合せで決まる」仕様の確認フォームを付ける。
+    # 社員はコード選定の前にここを確定してから選定に進む(誤った既定値での◎誤答を防ぐ)。
+    for p in all_panels:
+        attrs=dict(sc_classify(p.get('panel','')))
+        sa=p.get('set_attrs') or {}
+        for k,v in sa.items():
+            if v and k!='settype': attrs[k]=v
+        if sa.get('settype'): attrs['settype']=sa['settype']
+        if attrs.get('settype'):
+            p['sc_gate']=sc_confirm_form(attrs)
     nitems=sum(len(p.get('items',[])) for p in all_panels)
+    nset=sum(1 for p in all_panels if p.get('sc_gate'))
     return jsonify(panels=all_panels, count=nitems, npanels=len(all_panels),
-                   nfiles=nfiles, warnings=errors)
+                   nfiles=nfiles, warnings=errors, nset=nset)
 
 # 【段階2】選定：抽出済みの盤・機器リスト→コード選定（◎○△）
 @app.route('/api/select', methods=['POST'])

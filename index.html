@@ -76,6 +76,8 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
   <div class="confirm" id="confirm">
     <p><span class="hl">部品を抽出しました。</span>下の抽出結果を確認してください。問題なければコード選定に進みます。<br>
        選定するとClaude APIを使用します（課金が発生します）。</p>
+    <!-- 抽出後・選定前の仕様確認ゲート(計器種別/VCB操作方式など。図面に明記されず特記仕様/客先打合せで決まる) -->
+    <div id="scgate"></div>
     <button class="btn" id="goSelect">② この内容でコード選定を実行</button>
     <button class="btn sec" id="reset">最初からやり直す</button>
   </div>
@@ -146,6 +148,7 @@ $('goExtract').onclick=async()=>{
 
 // 抽出結果テーブル（コードなし、品名と数量だけ）
 function renderExtracted(d){
+  renderPreGate(d);   // 抽出後・選定前の仕様確認ゲート
   let h='<table><thead><tr><th>盤</th><th>抽出された部品（図面表記）</th><th>数量</th></tr></thead><tbody>';
   for(const p of d.panels){
     h+='<tr class="pnl"><td colspan="3">'+esc(p.panel)+'</td></tr>';
@@ -155,6 +158,41 @@ function renderExtracted(d){
   }
   h+='</tbody></table>';
   $('out').innerHTML='<div style="margin:10px 0;font-size:13px"><span class="hl">抽出：'+d.npanels+'盤 / '+d.count+'部品</span></div>'+h;
+}
+// 抽出後・選定前の仕様確認ゲート: 配電盤セット盤の計器種別/VCB操作方式など(図面に明記されず
+// 特記仕様・客先打合せで決まる仕様)を、コード選定の前に確定する。既定のまま選定すると誤◎になるため。
+function specLabel(s){return {meter:'計器種別',vcb:'VCB遮断容量',op:'VCB操作方式',role:'盤の役割',phase:'相',cap:'容量KVA'}[s]||s;}
+function renderPreGate(d){
+  let g='',any=false;
+  d.panels.forEach((p,pi)=>{
+    const form=p.sc_gate;
+    if(!form||!form.length)return; any=true;
+    p.set_attrs=p.set_attrs||{};
+    const flds=form.map(f=>{
+      const cur=(p.set_attrs[f.spec]!==undefined&&p.set_attrs[f.spec]!=='')?p.set_attrs[f.spec]:(f.default||'');
+      let o;
+      if(f.options&&f.options.length){
+        o='<select data-pi="'+pi+'" data-spec="'+f.spec+'" onchange="preGateChange(this)"><option value="">—</option>'+
+          f.options.map(v=>'<option'+(v===cur?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select>';
+      }else{
+        o='<input data-pi="'+pi+'" data-spec="'+f.spec+'" value="'+esc(cur)+'" oninput="preGateChange(this)" placeholder="数値" style="width:90px;padding:4px;border:1px solid #bbb;border-radius:5px">';
+      }
+      return '<label style="display:inline-block;margin:0 16px 6px 0;font-size:13px">'+specLabel(f.spec)+'：'+o+'</label>';
+    }).join('');
+    g+='<div style="margin:8px 0;padding:8px;border-top:1px dashed #e0c060"><b>'+esc(p.panel)+'</b><div style="margin-top:6px">'+flds+'</div></div>';
+  });
+  const box=$('scgate');
+  if(!any){box.innerHTML='';return;}
+  box.innerHTML='<div style="margin:10px 0;padding:12px;border:1px solid #e0a800;background:#fff8e1;border-radius:8px">'+
+    '<div style="font-weight:700">■ 仕様確認（配電盤セット）— 選定の前にご確認ください</div>'+
+    '<div style="font-size:12px;color:#7a5;margin:2px 0 6px">計器種別・VCB操作方式は図面に明記されず、特記仕様や客先打合せで決まることがあります。'+
+    '図面で確実に読めない場合は、見積条件としてここで確定してから選定してください（既定のまま選定すると誤りになる恐れ）。</div>'+g+'</div>';
+}
+function preGateChange(el){
+  const pi=el.getAttribute('data-pi'),spec=el.getAttribute('data-spec');
+  extracted[pi].set_attrs=extracted[pi].set_attrs||{};
+  extracted[pi].set_attrs[spec]=el.value;
+  extracted[pi].set_attrs._confirmed=true;   // 人が確認した→選定で◎にしてよい
 }
 
 // ② 選定
