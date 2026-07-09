@@ -1727,6 +1727,12 @@ def select_from_extracted(data):
         prev_is_main=False
         panel_nm=p.get('panel','')
         is_jushaden = ('受電' in panel_nm or '受変電' in panel_nm or '高圧' in panel_nm)
+        # 制御盤の判定: 盤名に「制御/動力」が無くても、主回路パターン凡例(legend)や主回路記号(A-L)を
+        # 持つ盤は動力制御盤→分岐MCBは端子台付き(50系)。盤名がM-1A/P-x等コードのみの制御盤を救済。
+        _panel_ctrl = bool(p.get('legend')) or any(it.get('symbol') for it in p.get('items',[]))
+        _panel_nm_for_sel = panel_nm
+        if _panel_ctrl and not re.search(r'制御|動力|分電', panel_nm):
+            _panel_nm_for_sel = panel_nm + ' 制御盤'   # _mcb_code等の盤種判定をctrl(50系)へ寄せる
         # 盤内コンデンサSCのkvarを先に把握(同一盤の直列リアクトルSRの容量算定に使う)
         _panel_sc_kvar=None
         for _it in p.get('items',[]):
@@ -1839,7 +1845,7 @@ def select_from_extracted(data):
             cleaned, qsuf = split_qty_suffix(nm)
             # 品名に「×N」がある場合はそれを数量の正とする(抽出側の数量より優先)
             if qsuf: it['qty']=qsuf
-            sel=select_one(cleaned if qsuf else nm, p.get('panel',''), prev_is_main, it.get('volt',''), it.get('symbol',''), it.get('kw',''), it.get('group',''),
+            sel=select_one(cleaned if qsuf else nm, _panel_nm_for_sel, prev_is_main, it.get('volt',''), it.get('symbol',''), it.get('kw',''), it.get('group',''),
                            legend=p.get('legend'), breaker=it.get('breaker',''))
             # 弱電端子盤の救済: 未選定/△なら terminal_select(極数P＋端子指標)で62系を選定。
             # (見積書「端子盤」語なし表記や図面「電話20P/放送30P」に対応。遮断器・コンセントは除外済)
