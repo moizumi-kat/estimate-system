@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>電気図面チェックシステム</title>
+<style>
+:root{--ink:#16201a;--paper:#f7f5ef;--line:#d6d1c4;--green:#1e3a28;--green2:#2e5e40;
+--err:#c0392b;--errbg:#fbe4e2;--warn:#c77f1a;--warnbg:#fcefda;--info:#b59318;--infobg:#fdf6e0;
+--mono:'SFMono-Regular',Consolas,Menlo,monospace;}
+*{box-sizing:border-box}body{margin:0;font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif;background:var(--paper);color:var(--ink);font-size:14px}
+header{background:var(--green);color:#f4f1ea;padding:14px 22px;display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--green2)}
+header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.04em}header .ver{font-size:11px;opacity:.7;font-family:var(--mono)}
+header .nav{margin-left:auto;font-size:12px}header .nav a{color:#cfe3d3;text-decoration:none;border:1px solid #3f6b4d;padding:5px 10px;border-radius:6px}
+header .nav a:hover{background:#26492f}
+.container{max-width:1180px;margin:0 auto;padding:22px}
+.lead{font-size:13px;color:#5c5648;margin:0 0 16px;line-height:1.7}
+.drop{border:2px dashed var(--line);border-radius:10px;background:#fbfaf6;padding:34px;text-align:center;cursor:pointer;transition:.15s}
+.drop.over{border-color:var(--green2);background:#f0f5f0}
+.drop .big{font-size:16px;font-weight:700;color:var(--green2)}.drop .sub{font-size:12px;color:#7a7568;margin-top:8px;line-height:1.6}
+.drop input{display:none}
+.bar{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.fname{font-family:var(--mono);font-size:12px;color:#555}
+.btn{padding:10px 18px;background:var(--green);color:#f4f1ea;border:0;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}
+.btn:hover{background:var(--green2)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.sec{background:#fff;color:var(--green);border:1px solid var(--line)}
+.btn.stop{background:#c0504d}.btn.stop:hover{background:#a23f3d}
+.status{margin-top:16px;padding:12px 16px;border-radius:8px;background:#fff;border:1px solid var(--line);font-size:13px;display:none;align-items:center;gap:10px}
+.status.show{display:flex}.status .step{color:var(--green2);font-weight:700}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--green2);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.err{color:#c0504d;background:#fce4e4;border:1px solid #c0504d;padding:12px;border-radius:8px;margin-top:14px;display:none}
+.err.show{display:block}
+.note{background:#eef4ef;border:1px solid #cfe0d3;color:#2e5e40;padding:10px 14px;border-radius:8px;margin-top:12px;font-size:12.5px;line-height:1.7;display:none}
+.note.show{display:block}
+.summary{display:none;gap:10px;margin:18px 0;flex-wrap:wrap}.summary.show{display:flex}
+.stat{flex:1;min-width:92px;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}
+.stat .n{font-size:26px;font-weight:800;font-family:var(--mono);line-height:1}.stat .l{font-size:10px;color:#7a7568;margin-top:5px;letter-spacing:.05em}
+.stat.err .n{color:var(--err)}.stat.warn .n{color:var(--warn)}.stat.info .n{color:var(--info)}
+.overview{display:none;margin:16px 0;padding:16px 18px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--green2);border-radius:8px;font-size:13.5px;line-height:1.85;white-space:pre-wrap}
+.overview.show{display:block}.overview .h{font-size:11px;font-weight:700;color:var(--green2);letter-spacing:.08em;margin-bottom:6px}
+.fbar{display:none;gap:8px;margin:14px 0 6px;flex-wrap:wrap}.fbar.show{display:flex}
+.fbar button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 14px;cursor:pointer;font-size:12px}.fbar button.on{background:var(--green);color:#fff;border-color:var(--green)}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;background:#fff}
+th{background:var(--green);color:#f4f1ea;text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}tr:hover td{background:#fffef9}
+.sev{display:inline-block;padding:3px 9px;border-radius:5px;font-weight:800;font-size:11px;white-space:nowrap}
+.sev.重大{background:var(--errbg);color:var(--err);border:1px solid var(--err)}
+.sev.警告{background:var(--warnbg);color:var(--warn);border:1px solid var(--warn)}
+.sev.注意{background:var(--infobg);color:var(--info);border:1px solid var(--info)}
+.cat{font-size:11px;color:#7a7568;white-space:nowrap}
+.dwg{font-family:var(--mono);font-size:12px;color:#555;white-space:nowrap}
+.tgt{font-size:12.5px;font-weight:600}
+.msg{font-size:13px}.sug{font-size:11.5px;color:#7a7568;margin-top:3px}
+.src{display:inline-block;font-size:9px;color:#888;border:1px solid #ccc;border-radius:3px;padding:0 4px;margin-left:6px;vertical-align:middle}
+.ok{display:none;text-align:center;padding:34px;color:var(--green2);font-size:15px;font-weight:700}.ok.show{display:block}
+.foot{font-size:11px;color:#9a9488;margin-top:16px;line-height:1.7}
+</style></head>
+<body>
+<header><h1>電気図面チェックシステム</h1><span class="ver">v1.0</span>
+  <span class="nav"><a href="/">積算コード選定へ →</a></span></header>
+<div class="container">
+  <p class="lead">設計図面（外形図・結線図）の<b>不整合・記載漏れ・二重計上</b>を自動チェックします。
+    DXFはブロック属性（部品コード・回路番号・容量・負荷名）を直接読み取り<b>決定論的に高精度</b>で検査します。
+    外形図と結線図を<b>両方まとめてアップ</b>すると、両者の突合（端子台の記載漏れ・順番不一致）まで検出できます。</p>
+
+  <div class="drop" id="drop">
+    <div class="big">図面をここにドラッグ＆ドロップ</div>
+    <div class="sub">または クリックして選択（DXF / PDF / PNG / JPG / ZIP・最大40MB）<br>
+      同一製番の外形図(G)・結線図(H)をまとめて選ぶと突合チェックが有効になります。<br>
+      DXF＝属性から厳密チェック / PDF・画像＝AI画像チェック（補助）</div>
+    <input type="file" id="file" accept=".dxf,.pdf,.png,.jpg,.jpeg,.zip" multiple>
+  </div>
+  <div class="bar">
+    <span class="fname" id="fname"></span>
+    <button class="btn" id="goCheck" disabled>図面をチェック</button>
+    <button class="btn sec" id="reset" style="display:none">やり直す</button>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="err" id="err"></div>
+  <div class="note" id="cov"></div>
+
+  <div class="summary" id="sum"></div>
+  <div class="overview" id="ov"></div>
+
+  <div class="bar" id="xlsbar" style="display:none">
+    <button class="btn sec" id="xls">Excelで保存</button>
+  </div>
+  <div class="fbar" id="fbar">
+    <button data-f="all" class="on">すべて</button>
+    <button data-f="重大">🔴 重大</button>
+    <button data-f="警告">🟠 警告</button>
+    <button data-f="注意">🟡 注意</button>
+  </div>
+  <div id="out"></div>
+  <div class="ok" id="ok">✓ 自動チェックでの指摘はありませんでした。<br><span style="font-size:12px;font-weight:400;color:#7a7568">（図面の全ミスを保証するものではありません。最終確認は設計者が行ってください）</span></div>
+
+  <div class="foot">🔴重大＝誤製作・手戻りに直結／🟠警告＝要確認／🟡注意＝念のため確認。
+    DXFは属性値から厳密判定、PDF・画像はAIによる補助チェック（<span class="src">AI</span>表示）です。
+    本ツールは設計者の確認を補助するもので、全ての不備の検出を保証しません。</div>
+</div>
+<script>
+let curFiles=null, lastData=null, controller=null;
+const $=id=>document.getElementById(id);
+const drop=$('drop'),file=$('file');
+drop.onclick=()=>file.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')};
+drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer.files.length)setFiles(e.dataTransfer.files)};
+file.onchange=()=>{if(file.files.length)setFiles(file.files)};
+function setFiles(fl){
+  curFiles=Array.from(fl);
+  $('fname').textContent = curFiles.length===1 ? curFiles[0].name : curFiles.length+'件: '+curFiles.map(f=>f.name).join(', ');
+  $('goCheck').disabled=false;$('err').classList.remove('show');clearResults();
+}
+function clearResults(){
+  lastData=null;$('sum').className='summary';$('ov').className='overview';$('fbar').className='fbar';
+  $('cov').className='note';$('xlsbar').style.display='none';$('out').innerHTML='';$('ok').className='ok';
+}
+function busy(m){$('status').className='status show';$('status').innerHTML='<span class="spinner"></span><span class="step">'+m+'</span>';}
+function idle(){$('status').className='status';}
+function fail(m){idle();$('err').textContent='エラー: '+m;$('err').classList.add('show');}
+
+$('goCheck').onclick=async()=>{
+  if(!curFiles||!curFiles.length)return;
+  $('err').classList.remove('show');$('goCheck').disabled=true;clearResults();
+  busy('図面を解析してチェックしています…（'+curFiles.length+'件・数十秒）');
+  controller=new AbortController();
+  const fd=new FormData();curFiles.forEach(f=>fd.append('file',f));
+  try{
+    const r=await fetch('/api/validate',{method:'POST',body:fd,signal:controller.signal});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'チェックに失敗しました');
+    lastData=d;idle();$('reset').style.display='inline-block';render(d,'all');
+  }catch(e){
+    if(e.name==='AbortError')return;
+    fail(e.message);
+  }finally{$('goCheck').disabled=false;}
+};
+$('reset').onclick=()=>{curFiles=null;$('fname').textContent='';$('goCheck').disabled=true;$('reset').style.display='none';clearResults();};
+$('xls').onclick=()=>{window.location.href='/api/validate/excel';};
+
+function render(d,filter){
+  const s=d.summary;
+  $('sum').className='summary show';
+  $('sum').innerHTML=stat('',s.total,'指摘 合計')+stat('err',s.error,'🔴 重大')+stat('warn',s.warn,'🟠 警告')+stat('info',s.info,'🟡 注意');
+  // カバレッジ注記
+  const notes=(d.coverage&&d.coverage.notes)||[];
+  let covh='解析: '+(d.ndraw||0)+'枚のDXF';
+  if(d.warnings&&d.warnings.length)covh+=' ／ '+d.warnings.length+'件の警告';
+  if(notes.length)covh+='<br>'+notes.map(n=>'💡 '+esc(n)).join('<br>');
+  if(d.warnings&&d.warnings.length)covh+='<br>'+d.warnings.map(w=>'⚠ '+esc(w)).join('<br>');
+  $('cov').innerHTML=covh;$('cov').className='note show';
+  // 総評
+  if(d.overview){$('ov').className='overview show';$('ov').innerHTML='<div class="h">AI総評</div>'+esc(d.overview);}
+  // 明細
+  const fs=d.findings||[];
+  if(!fs.length){$('ok').className='ok show';$('fbar').className='fbar';return;}
+  $('fbar').className='fbar show';$('xlsbar').style.display='flex';
+  const rows=fs.filter(f=>filter==='all'||f.sev===filter);
+  let h='<table><thead><tr><th>重大度</th><th>観点</th><th>図面</th><th>該当箇所</th><th>指摘内容 / 推奨対応</th></tr></thead><tbody>';
+  for(const f of rows){
+    h+='<tr>'+
+      '<td><span class="sev '+f.sev+'">'+esc(f.sev)+'</span></td>'+
+      '<td class="cat">'+esc(f.cat||'')+'</td>'+
+      '<td class="dwg">'+esc(f.dwg||'')+(f.source==='AI'?'<span class="src">AI</span>':'')+'</td>'+
+      '<td class="tgt">'+esc(f.target||'')+'</td>'+
+      '<td><div class="msg">'+esc(f.msg||'')+'</div>'+(f.suggest?'<div class="sug">→ '+esc(f.suggest)+'</div>':'')+'</td>'+
+    '</tr>';
+  }
+  h+='</tbody></table>';
+  $('out').innerHTML=h;
+}
+function stat(cls,n,l){return '<div class="stat '+cls+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>';}
+function esc(s){return(s+'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+document.querySelectorAll('.fbar button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.fbar button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  if(lastData)render(lastData,b.dataset.f);
+});
+</script></body></html>

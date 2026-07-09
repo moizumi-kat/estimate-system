@@ -1497,7 +1497,192 @@ def api_excel_download():
     return send_file(buf,as_attachment=True,download_name=f'積算コード選定_{ts}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+# ============================================================
+# 図面チェックツール（設計図面の不整合・記載漏れを検出）
+#   DXF: ブロック属性を構造化して決定論的にチェック（高精度）
+#   PDF/画像: Claude Visionで図面チェック（属性が無いため補助的）
+# ============================================================
+import dxf_check
+
+# --- 画像/PDF用: Claudeによる図面チェックプロンプト ---
+CHECK_VISION_PROMPT="""あなたは配電盤・制御盤の設計図面（単線結線図・盤外形図・分電盤結線図）を
+チェックする校閲の専門家です。この図面の設計ミス・不整合・記載漏れを洗い出してください。
+
+次の4観点で確認してください:
+1. 電気的整合性: 電圧帯の不整合、主幹より分岐の容量が大きい逆転、遮断器のフレーム(AF)<定格(AT)、CT変流比の妥当性
+2. 記載漏れ・欠落: 高圧主回路(VCB/DS/LBS)の定格欠落、保護セット不完全(DGRにZCT/ZPD無し等)、端子台・負荷端子台の記載漏れ、品番未記入
+3. 構成ルール違反: 高圧コンデンサ盤の4機器(PF/VMC/SR/SC)欠け、計器ヒューズFとパワーヒューズPFの混同、記号と機器名の不一致
+4. 重複・二重計上: 同一機器の重複記載、付属品(SOG/ZCT等)の二重計上
+
+図面から確実に読み取れる事実のみを根拠にし、推測での断定は避けてください。
+問題が無い観点は指摘しないでください。出力は次のJSONのみ（説明文・マークダウン禁止）:
+{"findings":[{"sev":"重大|警告|注意","cat":"電気的整合性|記載漏れ・欠落|構成ルール違反|重複・二重計上","dwg":"図面名/盤名","target":"該当機器・箇所","msg":"指摘内容","suggest":"推奨対応"}]}"""
+
+def ai_visual_check(cli, data_bytes, media, dwg_name=''):
+    """PDF/画像1件をClaude Visionで図面チェックし findings を返す。"""
+    src={"type":"base64","media_type":media,"data":base64.standard_b64encode(data_bytes).decode()}
+    block={"type":"document","source":src} if media=="application/pdf" else {"type":"image","source":src}
+    prompt=CHECK_VISION_PROMPT+(f"\n\n対象図面名: {dwg_name}" if dwg_name else "")
+    with cli.messages.stream(model=MODEL,max_tokens=8000,
+        messages=[{"role":"user","content":[block,{"type":"text","text":prompt}]}]) as stream:
+        msg=stream.get_final_message()
+    txt="".join(b.text for b in msg.content if b.type=="text").strip()
+    txt=re.sub(r'^```(json)?|```$','',txt,flags=re.M).strip()
+    try:
+        obj=json.loads(txt)
+    except Exception:
+        m=re.search(r'\{.*\}',txt,re.S)
+        obj=json.loads(m.group(0)) if m else {"findings":[]}
+    fs=obj.get('findings',[]) or []
+    for f in fs:
+        f.setdefault('dwg',dwg_name or '(画像図面)')
+        f['source']='AI'
+    return fs
+
+def ai_overview(cli, drawings, findings):
+    """図面全体の設計品質についてClaudeが総評を返す(短い日本語)。"""
+    lines=[]
+    for d in drawings:
+        lines.append(f"- {d['dwgno'] or d['name']}（種別:{d['kind_raw'] or d['kind']} / 機器{len(d['components'])}件）")
+    fsum={}
+    for f in findings:
+        fsum[f['sev']]=fsum.get(f['sev'],0)+1
+    ftext="\n".join(f"- [{f['sev']}][{f['cat']}] {f.get('dwg','')} {f.get('target','')}: {f.get('msg','')}" for f in findings[:40])
+    prompt=f"""あなたは盤設計のベテラン校閲者です。以下は設計図面のチェック結果です。
+現場の言葉で、要点を絞った総評を日本語300字以内で述べてください。
+・最も注意すべき点、手戻り/誤製作につながりやすい箇所を優先
+・重大が無くても「確認しておくと安全な点」を一言
+・機械的な列挙でなく、レビュアーの所見として簡潔に
+
+【対象図面】
+{chr(10).join(lines)}
+
+【指摘サマリ】重大{fsum.get('重大',0)} / 警告{fsum.get('警告',0)} / 注意{fsum.get('注意',0)}
+{ftext or '（自動チェックでの指摘なし）'}"""
+    try:
+        msg=cli.messages.create(model=MODEL,max_tokens=600,
+            messages=[{"role":"user","content":prompt}])
+        return "".join(b.text for b in msg.content if b.type=="text").strip()
+    except Exception as e:
+        return f'(総評の生成に失敗しました: {e})'
+
+def run_validation(files, want_overview=True):
+    """アップされた複数ファイルをチェック。戻り: dict(findings, coverage, overview, summary, warnings)"""
+    drawings=[]; findings=[]; warnings=[]; cli=None
+    def _client():
+        nonlocal cli
+        if cli is None: cli=client()
+        return cli
+    for fname, raw in files:
+        low=fname.lower()
+        try:
+            if low.endswith('.dxf'):
+                d=dxf_check.parse_dxf(raw, fallback_name=os.path.basename(fname).rsplit('.',1)[0])
+                drawings.append(d)
+            elif low.endswith('.zip'):
+                with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                    for info in z.infolist():
+                        if info.is_dir(): continue
+                        inner=info.filename
+                        if inner.startswith('__MACOSX') or '/.' in inner: continue
+                        il=inner.lower()
+                        if il.endswith('.dxf'):
+                            d=dxf_check.parse_dxf(z.read(info), fallback_name=os.path.basename(inner).rsplit('.',1)[0])
+                            drawings.append(d)
+                        elif il.endswith(('.pdf','.png','.jpg','.jpeg')):
+                            media='application/pdf' if il.endswith('.pdf') else ('image/png' if il.endswith('.png') else 'image/jpeg')
+                            findings+=ai_visual_check(_client(), z.read(info), media, os.path.basename(inner))
+            elif low.endswith('.pdf'):
+                findings+=ai_visual_check(_client(), raw, 'application/pdf', os.path.basename(fname))
+            elif low.endswith(('.png','.jpg','.jpeg')):
+                media='image/png' if low.endswith('.png') else 'image/jpeg'
+                findings+=ai_visual_check(_client(), raw, media, os.path.basename(fname))
+            else:
+                warnings.append(f'{fname}: 非対応形式（DXF/PDF/PNG/JPG/ZIP）')
+        except Exception as e:
+            warnings.append(f'{fname}: {e}')
+    # DXFの決定論チェック
+    if drawings:
+        findings = dxf_check.run_checks(drawings) + findings
+    cov=dxf_check.coverage(drawings) if drawings else dict(seibans={}, notes=[])
+    overview=''
+    if want_overview and (drawings or findings):
+        try:
+            overview=ai_overview(_client(), drawings, findings)
+        except Exception as e:
+            overview=f'(総評の生成に失敗: {e})'
+    return dict(findings=findings, coverage=cov, overview=overview,
+                summary=dxf_check.summarize(findings), warnings=warnings,
+                ndraw=len(drawings))
+
+def make_check_excel(result):
+    FONT='Meiryo'; thin=Side(style='thin',color='BBBBBB'); bd=Border(left=thin,right=thin,top=thin,bottom=thin)
+    sev_fill={'重大':PatternFill('solid',start_color='F4CCCC'),'警告':PatternFill('solid',start_color='FCE5CD'),'注意':PatternFill('solid',start_color='FFF2CC')}
+    wb=Workbook(); ws=wb.active; ws.title='チェック結果'
+    ws.append(['重大度','観点','図面','該当箇所','指摘内容','推奨対応'])
+    for c in ws[1]:
+        c.font=Font(name=FONT,bold=True,color='FFFFFF'); c.fill=PatternFill('solid',start_color='1E3A28'); c.border=bd; c.alignment=Alignment(horizontal='center',wrap_text=True)
+    for f in result['findings']:
+        ws.append([f.get('sev',''),f.get('cat',''),f.get('dwg',''),f.get('target',''),f.get('msg',''),f.get('suggest','')])
+        row=ws[ws.max_row]
+        for c in row: c.font=Font(name=FONT,size=9); c.border=bd; c.alignment=Alignment(vertical='center',wrap_text=True)
+        row[0].fill=sev_fill.get(f.get('sev',''),PatternFill()); row[0].alignment=Alignment(horizontal='center',vertical='center')
+    for i,w in enumerate([8,14,14,26,50,44],1): ws.column_dimensions[chr(64+i)].width=w
+    ws.freeze_panes='A2'; ws.auto_filter.ref=f'A1:F{ws.max_row}'
+    s=result['summary']
+    ws2=wb.create_sheet('サマリ',0)
+    ws2.append(['電気図面チェック結果']); ws2['A1'].font=Font(name=FONT,bold=True,size=13); ws2.append([])
+    for lab,val in [('指摘 合計',s['total']),('重大',s['error']),('警告',s['warn']),('注意',s['info'])]:
+        ws2.append([lab,val])
+    ws2.append([])
+    if result.get('overview'):
+        ws2.append(['総評']); ws2.append([result['overview']])
+        ws2['A%d'%ws2.max_row].alignment=Alignment(wrap_text=True,vertical='top')
+        ws2.column_dimensions['B'].width=80
+    ws2.column_dimensions['A'].width=16
+    buf=io.BytesIO(); wb.save(buf); buf.seek(0); return buf
+
+_LAST_CHECK={}  # sid -> result（Excel GETダウンロード用）
+
+@app.route('/check')
+@login_required
+def check_page(): return Response(CHECK_HTML, mimetype='text/html')
+
+@app.route('/api/validate', methods=['POST'])
+@login_required
+def api_validate():
+    files=request.files.getlist('file')
+    if not files:
+        f=request.files.get('file'); files=[f] if f else []
+    items=[(f.filename, f.read()) for f in files if f and f.filename]
+    if not items:
+        return jsonify(error='ファイルがありません'),400
+    try:
+        result=run_validation(items, want_overview=True)
+    except Exception as e:
+        return jsonify(error=str(e)),500
+    try:
+        sid=session.get('sid')
+        if not sid:
+            sid=secrets.token_hex(8); session['sid']=sid
+        _LAST_CHECK[sid]=result
+    except Exception: pass
+    return jsonify(result)
+
+@app.route('/api/validate/excel', methods=['GET'])
+@login_required
+def api_validate_excel():
+    sid=session.get('sid'); result=_LAST_CHECK.get(sid)
+    if not result:
+        return Response('チェック結果がありません。先に図面をアップしてチェックを実行してください。',
+                        status=404, mimetype='text/plain; charset=utf-8')
+    buf=make_check_excel(result)
+    ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
+    return send_file(buf,as_attachment=True,download_name=f'図面チェック_{ts}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
 INDEX_HTML=open(os.path.join(HERE,'index.html'),encoding='utf-8').read() if os.path.exists(os.path.join(HERE,'index.html')) else '<h1>index.html がありません</h1>'
+CHECK_HTML=open(os.path.join(HERE,'check.html'),encoding='utf-8').read() if os.path.exists(os.path.join(HERE,'check.html')) else '<h1>check.html がありません</h1>'
 
 if __name__=='__main__':
     port=int(os.environ.get('PORT','8000'))
