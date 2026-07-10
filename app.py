@@ -1321,8 +1321,12 @@ def _mcb_code(name, panel, meta):
     #   低圧+電灯/動力 or 配電/受電/高圧/キュービクル → 配電盤40系
     #   分電 or 1L-1/2L-2 形式 or 単独の電灯 → 分電盤60系  / 制御 → 制御盤50系
     if '制御' in pn: kind='ctrl'
-    elif '分電' in pn or re.match(r'^\d*[lｌ][ｰ\-－]?\d', pn) or re.match(r'^\d*[lｌ][ｍm]?[ｰ\-－]?\d', pn): kind='bunden'
+    # 受変電の低圧盤(低圧電灯盤/低圧動力盤)は自立でも40系。分電盤/制御盤より先に判定。
     elif ('低圧' in pn and ('電灯' in pn or '動力' in pn)) or any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): kind='haiden'
+    elif '分電' in pn or re.match(r'^\d*[lｌ][ｰ\-－]?\d', pn) or re.match(r'^\d*[lｌ][ｍm]?[ｰ\-－]?\d', pn): kind='bunden'
+    # 「自立(盤)」は床置きキャビネット=動力制御盤(端子台付き50系)。分電盤(壁掛/埋込)と区別。
+    # (実見積書照合: 表参道「1M-1 屋内自立扉付」等の制御盤分岐が正解50系。プロ端子台ルール)
+    elif '自立' in pn: kind='ctrl'
     elif '動力' in pn: kind='ctrl'   # 動力制御盤(制御表記なし)
     elif '電灯' in pn: kind='bunden'
     else: kind='bunden'  # 既定は分電盤
@@ -1768,7 +1772,8 @@ def select_from_extracted(data):
         is_jushaden = ('受電' in panel_nm or '受変電' in panel_nm or '高圧' in panel_nm)
         # 制御盤の判定: 盤名に「制御/動力」が無くても、主回路パターン凡例(legend)や主回路記号(A-L)を
         # 持つ盤は動力制御盤→分岐MCBは端子台付き(50系)。盤名がM-1A/P-x等コードのみの制御盤を救済。
-        _panel_ctrl = bool(p.get('legend')) or any(it.get('symbol') for it in p.get('items',[]))
+        _panel_ctrl = bool(p.get('legend')) or any(it.get('symbol') for it in p.get('items',[])) \
+                      or ('自立' in panel_nm and not re.search(r'低圧|受電|配電|電灯盤|分電', panel_nm))
         _panel_nm_for_sel = panel_nm
         if _panel_ctrl and not re.search(r'制御|動力|分電', panel_nm):
             _panel_nm_for_sel = panel_nm + ' 制御盤'   # _mcb_code等の盤種判定をctrl(50系)へ寄せる
