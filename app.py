@@ -804,11 +804,12 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
 
     # --- 主幹/分岐 MCB・ELB（MCBが主部品。M)=主幹, B)=分岐）---
     if meta['main'] in ('M)MCB','M)LUG','M)ELB','B)MCB','B)ELB','MCB','ELB'):
-        code=_mcb_code(name, panel, meta)
-        if code: return R(code,'◎' if code in byCode else '△', _mcb_note(name,panel))
-        # 分電盤の最終分岐: 遮断器枠(AF)/定格A無し・負荷VAのみ+MCB/ELB明示 → コンパクト分岐(60012/60014)
+        # 分電盤の最終分岐(負荷VA表記+MCB/ELB明示・遮断器枠なし)はコンパクト分岐を優先判定。
+        # ※_mcb_codeより先に判定(「280VA」等のVA数値をAF枠と誤解して誤コードを出すのを防ぐ)。
         cb=_compact_branch(name, panel)
         if cb: return R(cb[0],cb[1],cb[2])
+        code=_mcb_code(name, panel, meta)
+        if code: return R(code,'◎' if code in byCode else '△', _mcb_note(name,panel))
         return R('','△','MCB/ELB 容量・盤種別要確認')
     # --- 制御盤 分岐回路(L-S/スターデルタ/INV) 最優先 ---
     # 回路種別＋kW＋●○が読めれば決定的にコード確定→○(回路種別の推定余地を残し安全側)。容量外は△。
@@ -1347,10 +1348,12 @@ def _compact_branch(name, panel):
     if re.search(r'/\s*\d+\s*a(?![a-z])', n) or re.search(r'\d+\s*/\s*\d+', n): return None  # 定格A/枠対表記あり
     if 'mcb' not in n and 'elb' not in n and 'mccb' not in n and 'elcb' not in n: return None  # 遮断器種別が必要
     is_elb = ('elb' in n) or ('elcb' in n) or ('漏電' in n)
-    is_spare = bool(re.search(r'予備|将来|スペース|ｽﾍﾟｰｽ|空き|spare', n))
-    code = ('60029' if is_spare else '60014') if is_elb else ('60028' if is_spare else '60012')
+    # 遮断器○印が付いた回路は「設置済」なので、予備でも通常のコンパクト(60012/60014)で計上。
+    # (実見積書で空きスロット60028/60029は0件=予備は設置済スペア扱い)。真の空きスロット(遮断器なし)は
+    # そもそも遮断器種別が付かず本関数に到達しない。
+    code = '60014' if is_elb else '60012'
     if code not in byCode: return None
-    return code, '○', 'コンパクト分岐(2P50AF・%s%s)要確認'%('予備' if is_spare else '', 'ELB' if is_elb else 'MCB')
+    return code, '○', 'コンパクト分岐(2P50AF・%s)要確認'%('ELB' if is_elb else 'MCB')
 
 def _mcb_code(name, panel, meta):
     n=norm(name); pn=norm(panel)
