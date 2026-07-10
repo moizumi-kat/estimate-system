@@ -1324,14 +1324,14 @@ def _mcb_code(name, panel, meta):
     if '制御' in pn: kind='ctrl'
     # 受変電の低圧盤(低圧電灯盤/低圧動力盤)は自立でも40系。分電盤/動力盤より先に判定。
     elif ('低圧' in pn and ('電灯' in pn or '動力' in pn)) or any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): kind='haiden'
-    # M-x/1M-1 等(盤名にM記号)=動力盤→50系端子台付き。※pnはnorm済(小文字)なので[mｍ]で照合。
-    # (mcb/mdf/mgs等の語は直後が数字でないため除外される)
-    elif re.search(r'(^|[^a-zａ-ｚ])\d*[mｍ][a-zａ-ｚ]?[ｰ\-－]?\d', pn): kind='ctrl'
-    # L始まり/Lとある(1L-1/L-M等)=分電盤→60系端子台なし。
-    elif '分電' in pn or re.search(r'(^|[^a-zａ-ｚ])\d*[lｌ][a-zａ-ｚ]?[ｰ\-－]?\d', pn): kind='bunden'
+    # 盤名記号ルール(茂泉様確定): 動力盤=M(Motor)/P(Power)始まり(M1/P2/1M-1) → 端子台付き50系。
+    # 分電盤=L(Light)/稀にJ始まり(L3/J2/1L-1) → 端子台なし60系。※pnはnorm済(小文字)で照合。
+    # (mcb/mdf/mgs/pf/pas等は直後が数字でないため除外される)
+    elif re.search(r'(^|[^a-zａ-ｚ])\d*[mｍpｐ][a-zａ-ｚ]?[ｰ\-－]?\d', pn): kind='ctrl'
+    elif '分電' in pn or re.search(r'(^|[^a-zａ-ｚ])\d*[lｌjｊ][a-zａ-ｚ]?[ｰ\-－]?\d', pn): kind='bunden'
     elif '自立' in pn: kind='ctrl'   # 自立盤=床置きキャビネット=動力/制御盤
-    elif '動力' in pn: kind='ctrl'
-    elif '電灯' in pn: kind='bunden'
+    elif '動力' in pn: kind='ctrl'   # 動力制御盤/動力盤(日本語名)=50系
+    elif '電灯' in pn or '照明' in pn: kind='bunden'  # 電灯分電盤/照明分電盤(日本語名)=60系
     else: kind='bunden'  # 既定は分電盤
     # 主幹MCB 3P
     afmap_main={
