@@ -924,6 +924,8 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
     # 重要原則: 機器が特定できないときは選定コード欄を空(—)にする。
     # 候補先頭を入れると無関係コード(SR/低圧TR/SC/MGS/LA等)が選定欄に出て誤誘導するため。
     if not meta.get('main'):
+        # 注: 分電盤の裸のVA負荷を負荷ごとにコンパクト分岐へ割当てると「負荷数≠分岐数」で
+        # 過剰計上(実見積書照合で60012を約3倍過大)になるため、既定割当てはしない=安全側△。
         if cands:
             hint=cands[0]['code']
             return R('','△',f'機器未特定・要確認(参考候補{len(cands)}件: 先頭={hint})')
