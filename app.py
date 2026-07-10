@@ -1013,6 +1013,29 @@ def _remocon_code(name):
             return code,'○','リモコン設備(65系)'
     return None
 
+# 社内プロのフィードバック(△の実選定)由来の名称→コード直引き。実案件で人が確定したもの。
+# (東部/八戸/木村/尼崎の見積レビュー△回答。◯/◎は未回答のため対象外。)
+_PRO_MAP=[
+ (r'計器盤|指示計器盤',                         '42081','計器盤=マルチ指示計'),
+ (r'(^|\s)DA(\s|$|\d|[0-9〜~])',                '42083','DA(デマンド計)=マルチ指示計'),
+ (r'27R|27\b.*不足電圧|不足電圧継電器',          '73000','27R=AUX-RY(プロ確定)'),
+ (r'(^|\s)UV(\s|$)|不足電圧要素',               '46011','UV=UVR(静止型)'),
+ (r'EL\s*漏電継電器|漏電継電器(?!.*ZCT)',        '46401','EL漏電継電器=LG-RY'),
+ (r'接地端子(?!盤)',                            '62901','接地端子=接地端子盤1P'),
+ (r'24H停電補償|停電補償付.*TM|TM[×xX]\d.*停電',  '73202','24H停電補償=TM-SW'),
+ (r'中央監視盤|機械設備中央監視',                 '56900','中央監視盤=総合盤BOX'),
+ (r'(?<![A-Za-z])VT([×xX]\d+)?(?![A-Za-z])',    '44011','VT=6KV 50VA(コイルモールド)'),
+]
+def _pro_map(name):
+    s=unicodedata.normalize('NFKC',str(name))
+    # VMC(万能ヒューズ/カウンター付/引出) → VCS 電磁引出PF付(43103)。素のVMCは従来のVCS解釈(43101)。
+    if re.search(r'VMC', s, re.I) and re.search(r'万能ヒュ|ｶｳﾝﾀ|カウンタ|引出|引き出し|PF付', s):
+        if '43103' in byCode: return '43103','○','VMC=VCS 電磁引出PF付(プロ確定)'
+    for pat,code,note in _PRO_MAP:
+        if re.search(pat, s) and code in byCode:
+            return code,'○',note+'(プロ確定)'
+    return None
+
 # 高圧LBS(43320系): 3P200A枠のみDB実在。PFヒューズ定格→G感度バンド(75A以下/100A/200A)＋
 # オプション(PF無/AL/TC/電動/エネセーバ)でコード確定。バンドが読めればPF=30/50/75Aは同一(75以下)で◎。
 # 「励磁突入電流抑制機能」=エネセーバ(省エネ)機能→エネセーバ系。定格が読めなければ安全側△(呼出側の従来処理へ)。
@@ -1137,6 +1160,9 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     # リモコン設備(65系)は名称直引き(数値属性が無く候補生成に乗らないため)
     _rc=_remocon_code(name)
     if _rc: return R(_rc[0],_rc[1],_rc[2])
+    # 社内プロのフィードバック由来の直引き(計器盤/DA/27R/UV/EL/接地端子/TM/監視盤/VMC万能ヒューズ)
+    _pm=_pro_map(name)
+    if _pm: return R(_pm[0],_pm[1],_pm[2])
     # 受変電の保護継電器(DGR方向性/LG-RY ZCT付)の直引き
     _ry=_relay_code(name)
     if _ry: return R(_ry[0],_ry[1],_ry[2])
@@ -1704,13 +1730,18 @@ def terminal_select(name):
     n=re.sub(r'[（）]',lambda m:'(' if m.group()=='（' else ')',str(name))
     if _TERM_EXCLUDE.search(n) and not re.search(r'端子|MDF|保安器',n): return None
     p=_term_poles(n)
-    if p is None or not _TERM_POS.search(n): return None
+    # 極数表記が無くても「端子盤/保安器/接地端子」と分かれば既定極数で選定(プロは10P端子無で計上)。
+    if p is None:
+        if not _TERM_POS.search(n): return None
+        p=5 if '保安器' in n else 10   # 保安器函は5P、端子盤は10Pを既定
+    elif not _TERM_POS.search(n): return None
     if re.search(r'E1|E2|E3|ﾄｸE|トクE|接地',n): fam='接地端子盤'
     elif '保安器' in n: fam='保安器函'
-    elif re.search(r'MDF|主配線',n): fam='MDF(主配線盤)'
+    elif re.search(r'MDF|主配線',n) and '保安器' not in n: fam='MDF(主配線盤)'
     elif '安定器' in n: fam='安定器'
     else: fam='端子盤'
-    tsuki = bool(re.search(r'T付|端子付',n)) or not re.search(r'端子無',n)
+    # 端子台の既定は「端子無」(プロ確定: 弱電端子盤T-xは62001端子無)。端子付は明記時のみ。
+    tsuki = bool(re.search(r'T付|端子付',n))
     def pool(pred):
         out=[]
         for c,row in byCode.items():
@@ -1808,6 +1839,22 @@ def select_from_extracted(data):
             # 配線材(プルボックス)は本システム(盤コード)の対象外→計上しない。
             if re.search(r'電力量計.{0,4}(貸与|電力会社)|(貸与|電力会社).{0,4}電力量計|自動火災報知|火災報知|受信機|(^|\s)電話・?情報|プルボックス|ﾌﾟﾙﾎﾞｯｸｽ|(^|\s)PB[-\d]', nm):
                 continue
+            # === 社内プロのフィードバック(△回答)由来の積算対象外ルール ===
+            # 盤外設置: デマンド計/デマンド検出器/需要率計・サージインジケータ/雷電流記録カード。
+            if re.search(r'デマンド計|ﾃﾞﾏﾝﾄﾞ計|デマンド検出|ﾃﾞﾏﾝﾄﾞ検出|需要率計|サージインジケータ|ｻ-ｼﾞｲﾝｼﾞｹ-ﾀ|雷電流記録|雷電流ｶ-ﾄﾞ|雷電流カード', nm):
+                continue
+            # 計器用PF(VTに含む): 定格の無い素の「PF」は計器用ヒューズ扱い→VTに含む。
+            # (LBS内蔵PF・限流ヒューズPF(定格明記/コンデンサ40A級)は別扱いで残す)
+            if re.fullmatch(r'\s*(PF|ＰＦ)\s*', nm) or (re.match(r'^\s*PF\s*$', nm)):
+                continue
+            # UP-OVG(地絡過電圧の付属)は継電器に含む→計上対象外。
+            if re.search(r'UP-?OVG|OVG付属', nm):
+                continue
+            # 個別のアナログ計器(電圧計V/電流計A/切替スイッチVS・AS)は範囲外(客先/別途)。
+            # ただし計器盤(複合)・DA(デマンド計器)・マルチ指示計は_pro_mapで計上するので除外しない。
+            if re.search(r'電圧計|電流計|(^|\s)VS\s*電圧切替|(^|\s)AS\s*電流切替|電圧切替スイッチ|電流切替スイッチ', nm) \
+               and not re.search(r'計器盤|指示計器盤|マルチ|ﾏﾙﾁ|(^|\s)DA(\s|$)', nm):
+                continue
             # 発電機本体・エンジン・UPS(無停電電源)は支給品(客先支給・別途)でDB購入コードなし→計上対象外。
             # ただし「発電機充電用/ヒーター MCCB…」等の分岐遮断器や発電機「盤」は計上対象なので除外しない
             # (遮断器仕様AF/AT/MCCBや盤の語がある行は残す)。
@@ -1855,9 +1902,12 @@ def select_from_extracted(data):
             if qsuf: it['qty']=qsuf
             sel=select_one(cleaned if qsuf else nm, _panel_nm_for_sel, prev_is_main, it.get('volt',''), it.get('symbol',''), it.get('kw',''), it.get('group',''),
                            legend=p.get('legend'), breaker=it.get('breaker',''))
-            # 弱電端子盤の救済: 未選定/△なら terminal_select(極数P＋端子指標)で62系を選定。
-            # (見積書「端子盤」語なし表記や図面「電話20P/放送30P」に対応。遮断器・コンセントは除外済)
-            if (not sel.get('code')) or sel.get('conf')=='△':
+            # 弱電端子盤の救済: 未選定/△、または明らかに端子盤系(端子盤/保安器/接地端子/MDF)なら
+            # terminal_select(極数P＋端子指標、既定=端子無)を優先。遮断器/コンセントは除外済。
+            # (プロ確定: 端子盤T-x=62001端子無、保安器収納盤=62895保安器函)
+            _is_term = bool(re.search(r'端子盤|保安器|接地端子|(電話|放送|情報|LAN|通信).{0,4}\d+\s*[PＰ]', nm)) \
+                       and not re.search(r'MCB|ELB|MCCB|ELCB|LBS|VCB|VCS', nm, re.I)
+            if (not sel.get('code')) or sel.get('conf')=='△' or _is_term:
                 _tr=terminal_select(nm)
                 if _tr and _tr[0]:
                     nmp=byCode.get(_tr[0],{}).get('name','')
