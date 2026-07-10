@@ -1722,11 +1722,51 @@ def sc_classify(panel_name):
 def sc_needs_confirm(attrs):
     return [k for k in SC_REQ.get(attrs.get('settype'),[]) if not attrs.get(k)]
 
+def _sc_valid_options(st, spec, attrs):
+    """settypeと既知属性から、実在するセットコードに存在するspec値だけを選択肢に返す。
+    存在しない組合せ(例:受電盤に'電動引出')を選んで△の行き止まりになるのを防ぐ。"""
+    if spec=='cap': return []                       # 容量は数値入力(選択肢なし)
+    pool=[c for c in SET_CODES if c.get('settype')==st]
+    # 確定済の他属性(role/phase/vcb等)で母集団を絞る。ALWAYS_CONFIRM(計器/操作)自身では絞らない。
+    for k in SC_REQ.get(st,[]):
+        if k==spec: continue
+        v=attrs.get(k)
+        if v and k not in SC_ALWAYS_CONFIRM:
+            if k=='meter': pool=[c for c in pool if _sc_meter_key(c.get('meter'))==_sc_meter_key(v)]
+            else: pool=[c for c in pool if c.get(k)==v]
+    if spec=='meter':
+        keys=set(_sc_meter_key(c.get('meter')) for c in pool)
+        ui=[o for o in SC_OPTIONS.get('meter',[]) if _sc_meter_key(o) in keys]
+        return ui or SC_OPTIONS.get('meter',[])
+    vals=[c.get(spec) for c in pool if c.get(spec)]
+    ordered=[o for o in SC_OPTIONS.get(spec,[]) if o in vals]
+    for v in vals:                                   # 表示順にないDB実在値も末尾に補完
+        if v not in ordered: ordered.append(v)
+    return ordered or SC_OPTIONS.get(spec,[])
+
+def _sc_default(spec, options, attrs):
+    """初期選択値: 抽出値が選択肢にあればそれ、無ければ近い値/既定/先頭を返す。"""
+    v=attrs.get(spec)
+    if v and v in options: return v
+    if spec=='op' and v:                             # 電動引出/電磁引出等→電動系にフォールバック
+        if '電動' in v and '電動' in options: return '電動'
+        if '手動' in v and '手動' in options: return '手動'
+    if spec=='meter' and v:                          # 普通/広/等の表記ゆれを吸収
+        for o in options:
+            if _sc_meter_key(o)==_sc_meter_key(v): return o
+    d=SC_DEFAULTS.get(spec,'')
+    if d in options: return d
+    return options[0] if options else ''
+
 def sc_confirm_form(attrs):
     st=attrs.get('settype'); fields=list(sc_needs_confirm(attrs))
     for k in SC_REQ.get(st,[]):
         if k in SC_ALWAYS_CONFIRM and k not in fields: fields.append(k)
-    return [{'spec':k,'options':SC_OPTIONS.get(k,[]),'default':(attrs.get(k) or SC_DEFAULTS.get(k,''))} for k in fields]
+    out=[]
+    for k in fields:
+        opts=_sc_valid_options(st, k, attrs)
+        out.append({'spec':k,'options':opts,'default':_sc_default(k, opts, attrs)})
+    return out
 
 def sc_apply_defaults(attrs):
     a=dict(attrs)
