@@ -566,8 +566,9 @@ _PARTS = [
 def _detect_main(main_str):
     import re as _re
     n=norm(main_str)
-    # 最優先: B)/M) 接頭辞付きの遮断器(MCB/ELB/MCCB/ELCB/LUG)は、負荷名称より先に判定
-    m=_re.match(r'(b\)|m\))?(mccb|mcb|elcb|elb|lug)', n)
+    # 最優先: B)/M) 接頭辞付きの遮断器(MCB/ELB/MCCB/ELCB/LUG)は、負荷名称より先に判定。
+    # 「主幹/主/主開閉器」等の和名接頭辞が付いても遮断器語を拾えるようにする(主幹 MCCB 等)。
+    m=_re.match(r'(?:主幹用?|主開閉器?|主)?\s*(b\)|m\))?(mccb|mcb|elcb|elb|lug)', n)
     if m:
         kind=m.group(2)
         label={'mccb':'MCB','mcb':'MCB','elcb':'ELB','elb':'ELB','lug':'LUG'}[kind]
@@ -587,6 +588,13 @@ def _detect_main(main_str):
     if m3:
         kind='elb' if _re.search(r'(elb|elcb|漏電|漏保|el)(?![a-z])', n) else 'mcb'
         return kind, {'mcb':'MCB','elb':'ELB'}[kind], True
+    # 主幹/主開閉器: 極数表記が無くてもAF枠(NNNAF)や枠/トリップ対(NNN/MMM)を持つ主幹遮断器はMCB主幹として拾う。
+    # (開閉器＝MCCBを主幹遮断器として使う図面。AF枠は成形遮断器固有表記なので確定できる。極数既定3P。)
+    if _re.search(r'主幹|主開閉|開閉器|主機', n):
+        m4=_re.search(r'\d+\s*af', n) or _re.search(r'\d{2,4}\s*/\s*\d{2,4}(?![\d.]|v)', n)
+        if m4:
+            kind='elb' if _re.search(r'(elb|elcb|漏電|漏保)', n) else 'mcb'
+            return kind, {'mcb':'MCB','elb':'ELB'}[kind], True
     # 変圧器(TR): 「T:」始まり、または 相数φ+KVA を持つものはTRとして最優先判定。
     # (二次電圧の "S:210V" が "6600vs210" のように VS と誤マッチするのを防ぐ)
     if _re.match(r't\s*[:：]', n) or (_re.search(r'[13]φ', n) and _re.search(r'\d+\s*kva', n) and 'kvar' not in n):
@@ -1930,8 +1938,8 @@ def select_from_extracted(data):
             if re.search(r'異常|故障|満水|減水', nm) and re.search(r'警報|発電機|ポンプ|受水槽|ボイラー|受変電|外部', nm) \
                and not re.search(r'盤$|BOX|函|継電器|ﾘﾚｰ|リレー|RY', nm):
                 continue
-            # 「一括警報」(各盤の異常を集約した警報出力信号)は機器でなく信号→計上対象外。
-            if re.search(r'一括警報', nm) and not re.search(r'盤$|BOX|函|継電器|ﾘﾚｰ|リレー|RY', nm):
+            # 「一括警報」「一括(MCCB)トリップ」(各盤の異常/引外しを集約した信号)は機器でなく信号→計上対象外。
+            if re.search(r'一括警報|一括.{0,4}トリップ|トリップ.{0,4}\(?一括', nm) and not re.search(r'盤$|BOX|函|継電器|ﾘﾚｰ|リレー|RY', nm):
                 continue
             # 柱上装柱材・外構(玉碍子/腕金/支線/根かせ/引込柱/装柱/マスト)・照明器具/灯具は
             # 盤でなく別業者スコープ(柱上・外構・照明設備)→計上対象外。
