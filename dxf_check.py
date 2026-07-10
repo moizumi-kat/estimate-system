@@ -67,6 +67,7 @@ def parse_dxf(data, fallback_name=''):
     msp = doc.modelspace()
     title = {}
     comps = []
+    labels = []  # 負荷名称ラベル(PARTSを持たないがLOAD1/負荷名称を持つ別ブロック)
     for e in msp:
         if e.dxftype() != 'INSERT':
             continue
@@ -82,12 +83,16 @@ def parse_dxf(data, fallback_name=''):
         if 'FRAME' in bname.upper() and ('SEIBAN' in atts or 'DWGNAME2' in atts):
             title = atts
             continue
-        if 'PARTS' not in atts:
-            continue
         try:
             ins = e.dxf.insert; x, y = round(ins.x, 1), round(ins.y, 1)
         except Exception:
             x, y = 0.0, 0.0
+        if 'PARTS' not in atts:
+            ld = atts.get('LOAD1', '') or atts.get('負荷名称', '')
+            # 見出し行(値がラベル名そのもの)は除外
+            if ld and ld not in ('負荷名称', '機械No.', '負荷容量'):
+                labels.append(dict(x=x, y=y, load=ld, kw=atts.get('KW', '')))
+            continue
         comps.append(dict(
             block=bname, x=x, y=y,
             parts=atts.get('PARTS', ''),
@@ -105,6 +110,22 @@ def parse_dxf(data, fallback_name=''):
             volt=atts.get('C1', '') or atts.get('SPEC6', ''),
             attrs=atts,
         ))
+    # 負荷名称ラベルを同じ行(y近接)の遮断器に対応付ける(負荷名は別ブロックに分離されている)
+    if labels:
+        brs = [c for c in comps if _is_breaker(c)]
+        ys = sorted(c['y'] for c in brs)
+        pitches = [ys[i + 1] - ys[i] for i in range(len(ys) - 1) if ys[i + 1] - ys[i] > 1]
+        tol = max(20, (min(pitches) if pitches else 120) * 0.5)
+        for c in brs:
+            if c.get('load'):
+                continue
+            near = [lb for lb in labels if abs(lb['y'] - c['y']) <= tol]
+            if near:
+                near.sort(key=lambda lb: abs(lb['y'] - c['y']))
+                c['load'] = near[0]['load']
+                if not c.get('kw'):
+                    c['kw'] = near[0].get('kw', '')
+
     dwgno = title.get('DWGNAME2', '') or fallback_name
     kind_raw = title.get('TITLE2', '')
     return dict(
@@ -287,6 +308,10 @@ def _check_internal(d):
                 '二重配置/二重計上でないか確認してください。'))
         seen[key] = True
 
+    # --- 記載漏れ: 負荷端子台/端末処理の記載漏れ(同系統内の一貫性から検出) ---
+    if d['kind'] == 'H':
+        out += _check_load_termination(d, dwg, comps)
+
     # --- 電気的整合性: 結線図の回路番号(DEVICE1)の重複 ---
     if d['kind'] == 'H':
         dnos = {}
@@ -303,6 +328,61 @@ def _check_internal(d):
                     f'回路番号 {dn} が {len(cs)} 箇所で重複しています。',
                     '回路番号は一意になるよう振り直してください。'))
 
+    return out
+
+
+# 負荷側の端末処理とみなす PARTS(圧着端子 or 負荷端子台/端子台)
+_TERMINATION_PARTS = ('圧着端子', '負荷端子台', 'TB', '端子台')
+
+
+def _check_load_termination(d, dwg, comps):
+    """結線図の負荷端子台/端末処理の記載漏れを検出。
+    同一図面内で、大半の分岐回路には負荷側端末(圧着端子/負荷端子台)が付くのに
+    一部の回路だけ付いていない場合、その回路を「記載漏れの可能性」として指摘する。
+    ※全回路が別方式(ETバー等)で端末が無い図面では発火しない(誤検出防止)。"""
+    out = []
+    branches = [c for c in comps if _is_breaker(c) and not _is_main(c) and not _spare(c)]
+    if len(branches) < 2:
+        return out
+    # 負荷側端末(圧着端子 or 系統番号でなく回路番号を持つTB)。上位の受端子台は除く。
+    sys_no = ''
+    for c in comps:
+        if c['parts'] == '系統情報':
+            sys_no = str(c.get('dno', ''))
+            break
+    terms = []
+    for c in comps:
+        p = c.get('parts', '')
+        if p == '圧着端子':
+            terms.append(c)
+        elif p in ('TB', '端子台', '負荷端子台'):
+            dn = str(c.get('dno', ''))
+            # 系統情報と同じ番号(=受電端子台)は負荷端末ではない
+            if dn and dn != sys_no:
+                terms.append(c)
+    if not terms:
+        return out  # この図面は負荷端末を個別に描かない方式 → 判定しない
+    # 分岐回路の行ピッチから、同一行とみなす y 許容幅を決める
+    ys = sorted(c['y'] for c in branches)
+    pitches = [ys[i + 1] - ys[i] for i in range(len(ys) - 1) if ys[i + 1] - ys[i] > 1]
+    pitch = min(pitches) if pitches else 120
+    tol = max(20, pitch * 0.5)
+    missing = []
+    for b in branches:
+        has = any(abs(t['y'] - b['y']) <= tol for t in terms)
+        # 回路番号一致でも可
+        if not has and b.get('dno'):
+            has = any(str(t.get('dno', '')) == str(b['dno']) for t in terms)
+        if not has:
+            missing.append(b)
+    # 大半(過半数)に端末があり、一部だけ欠けている場合のみ指摘
+    if missing and len(missing) < len(branches):
+        for b in missing:
+            out.append(_f(SEV_WARN, CAT_MISS, dwg,
+                _tgt(b),
+                f'同系統の他の回路には負荷側端末（圧着端子/負荷端子台）があるのに、'
+                f'{_tgt(b)}には見当たりません。負荷端子台の記載漏れの可能性があります。',
+                '外部配線を接続する回路に負荷端子台/端末処理が必要か確認してください。'))
     return out
 
 
