@@ -1858,6 +1858,11 @@ def select_from_extracted(data):
         rows=[]
         prev_is_main=False
         panel_nm=p.get('panel','')
+        # 動力制御盤の「標準図/パターン集」は各負荷盤が参照する主回路パターンの凡例定義シート。
+        # それ自体は積算対象でない(構成部品MC/2E/MMCB等は各分岐回路コードに内包)。各負荷盤は
+        # 自前のlegendを持つので、この参照シートは盤ごとスキップする(誤△の大量発生を防ぐ)。
+        if re.search(r'標準図|パターン集|パターン図|標準回路図?|回路図集', panel_nm):
+            continue
         is_jushaden = ('受電' in panel_nm or '受変電' in panel_nm or '高圧' in panel_nm)
         # 制御盤の判定: 盤名に「制御/動力」が無くても、主回路パターン凡例(legend)や主回路記号(A-L)を
         # 持つ盤は動力制御盤→分岐MCBは端子台付き(50系)。盤名がM-1A/P-x等コードのみの制御盤を救済。
