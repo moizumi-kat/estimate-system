@@ -1423,13 +1423,20 @@ def _mcb_code(name, panel, meta):
       'bunden':{'50':'50503','100':'50103','225':'50203','200':'50203','400':'50403','600':'50603'},
       'haiden':{'50':'40503','100':'40103','225':'40203','200':'40203','400':'40403','600':'40603','800':'40803'},
     }
+    # AX付(欠相・中性線欠相・補助接点付)は系統を+1(40→41/50→51/60→61)。図面に明記がある時のみ。
+    is_ax = bool(re.search(r'AX付?|(?<![A-Za-z])AX(?![A-Za-z])|中欠|欠相|補助接点', name))
+    def _ax(code):
+        if is_ax and len(code)==5 and code[1]=='0':
+            axc=code[0]+'1'+code[2:]
+            if axc in byCode: return axc
+        return code
     if is_main and not is_elb and pole=='3':
         code=afmap_main.get(kind,{}).get(af,'')
-        if code in byCode: return code
+        if code in byCode: return _ax(code)
     # 分岐MCB/ELB(B)系): 極数×AF×盤種別で実在コードを探す
     if not is_main:
         for cand in _branch_candidates(pole, af, is_elb, kind):
-            if cand in byCode: return cand
+            if cand in byCode: return _ax(cand)
     return ''
 
 def _branch_candidates(pole, af, is_elb, kind):
