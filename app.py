@@ -1970,6 +1970,14 @@ def select_from_extracted(data):
             if re.search(r'操作電源|制御電源', nm) and (_panel_ctrl or re.search(r'制御|動力', panel_nm)) \
                and not re.search(r'\d+\s*k?va|変圧器|ﾄﾗﾝｽ|トランス', nm):
                 continue
+            # 盤/設備の見出し行(機器詳細記載なし・設備名のみ)は個別機器でない→計上対象外
+            # (盤内の機器/セットコードは別行で計上済)。
+            if re.search(r'機器詳細記載なし|詳細記載なし|明細記載なし|機器記載なし', nm):
+                continue
+            # 「高圧受電設備/受変電設備 6kV」等の設備一式見出し(電圧表記のみ・機器仕様なし)も対象外。
+            if re.search(r'(高圧)?受(変)?電設備|ｷｭ-ﾋﾞｸﾙ設備|キュービクル設備', nm) \
+               and not re.search(r'\d+\s*(AF|kW|kVA|P\b)|MCB|MCCB|ELB|LBS|VCB|VCS|TR|SC|SR|CT|VT|PF', nm):
+                continue
             # 柱上装柱材・外構(玉碍子/腕金/支線/根かせ/引込柱/装柱/マスト)・照明器具/灯具は
             # 盤でなく別業者スコープ(柱上・外構・照明設備)→計上対象外。
             if re.search(r'碍子|腕金|アームタイ|ｱｰﾑﾀｲ|支線|根かせ|根枷|引込柱|装柱|管端|止水|(^|\s)マスト|照明器具|灯具|ダウンライト|ﾀﾞｳﾝﾗｲﾄ', nm):
