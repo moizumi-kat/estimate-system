@@ -1044,35 +1044,57 @@ _LBS_MAP={
  ('100','PF'):'43330',('100','PFなし'):'43334',('100','AL'):'43331',('100','エネセーバ'):'43337',
  ('200','エネセーバ'):'43347',
 }
-def _lbs_code(name):
+def _lbs_code(name, panel=''):
     n=unicodedata.normalize('NFKC',str(name))
     if not re.search(r'(?<![A-Za-z])LBS(?![A-Za-z])', n, re.I): return None
     # 3P200A枠以外(例:400A)はDBに無い→従来処理へ委ねる
     if re.search(r'(\d{3,4})\s*A', n) and not re.search(r'200\s*A', n): return None
-    mpf=re.search(r'PF\s*[=＝]?\s*(\d+)\s*A', n, re.I)
+    # PF定格(G感度)表記ゆれ対応: PF=20A / PF(G)20A / PF G20A / PF T40A / PF=20A(T) 等。
+    # PFの直後に (G)/(T)/G/T が入る図面がある(実物件: 西新宿・城山・表参道)。
+    mpf=re.search(r'PF\s*[=＝]?\s*(?:\(?[GＧTＴ]\)?\s*)?[=＝]?\s*(\d+)\s*A', n, re.I)
     pf=int(mpf.group(1)) if mpf else None
     if pf is None: band=None
     elif pf<=75: band='75'
     elif pf<=100: band='100'
     else: band='200'
-    # オプション(優先度高い順)
+    # オプション(優先度高い順)。variant_explicit=図面に変種を示す語があったか(無ければPF/ALの区別不能)。
+    variant_explicit=True
     if re.search(r'エネセ[ー-]?バ|エネルギ[ー-]?セ[ー-]?バ|励磁突入|突入電流抑制|インラッシュ', n): variant,vnote='エネセーバ','エネセーバ(励磁突入抑制)'
     elif re.search(r'電動', n): variant,vnote='電動','電動操作'
     elif re.search(r'(?<![A-Za-z])TC(?![A-Za-z])|トリップコイル', n, re.I): variant,vnote='TC','トリップコイル'
-    elif re.search(r'(?<![A-Za-z])AL(?![A-Za-z])|アラ[ー-]?ム', n, re.I): variant,vnote='AL','アラーム接点'
+    elif re.search(r'(?<![A-Za-z])AL(?![A-Za-z])|アラ[ー-]?ム|溶断接点|溶断表示|ヒュ[ー-]?ズ溶断|溶断ﾋｭ', n, re.I): variant,vnote='AL','アラーム接点(溶断表示)'
     elif re.search(r'PF\s*無|ヒュ[ー-]?ズ\s*無|無ヒュ|ﾋｭ-ｽﾞ無', n): variant,vnote='PFなし','PF無し'
-    else: variant,vnote='PF','PF付'
+    else: variant,vnote,variant_explicit='PF','PF付',False
+    # 変種語が図面に無い場合、PF付/AL付は盤種で決まる(実見積書8面照合で確立):
+    #   低圧/一般 電灯盤・動力盤(TR二次側配電盤) → AL付(43321系)が定番【八戸/東部/城山/表参道/西新宿=5/5】
+    #   高圧コンデンサ盤・饋電盤 → 素PF(43320系)【八戸コンデンサ/船引饋電=2/2】
+    #   受電盤・変圧器盤・その他 → PF/AL判別不能→△(迷ったら安全側)
+    pn=norm(panel)
+    ambiguous=False
+    if not variant_explicit:
+        if any(k in pn for k in ['低圧','一般']) and ('電灯' in pn or '動力' in pn):
+            variant,vnote='AL','アラーム接点(低圧配電盤の定番)'
+        elif 'コンデンサ' in pn or '饋電' in pn or 'き電' in pn:
+            variant,vnote='PF','PF付(饋電/コンデンサ側)'
+        else:
+            variant,vnote,ambiguous='PF','PF付',True
     if band is None:
-        # PF定格(G感度バンド)が読めない。基本PF付なら基本形43320を△で提示(オプション/G感度要確認)。
-        # generic選定に委ねるとエネセーバ等の変種を誤選択するため(実見積書照合の反省)。
+        # G感度バンド不明。盤種でAL/PFが決まる場合は基本形を△で提示、そうでなければ従来処理へ。
+        base='43321' if (variant=='AL' and '43321' in byCode) else ('43320' if '43320' in byCode else None)
+        if base and not ambiguous:
+            return base,'△','高圧LBS 3P200A %s(G感度定格要確認)'%vnote
         if variant=='PF' and '43320' in byCode:
             return '43320','△','高圧LBS 3P200A PF付(G感度/TC/エネセーバ等のオプション要確認)'
         return None   # 変種明示ありでバンド不明→従来処理
     code=_LBS_MAP.get((band,variant)) or _LBS_MAP.get((band,'PF'))
     if not code or code not in byCode: return None
+    gtxt='75A以下' if band=='75' else band+'A'
+    # PF/AL判別不能(受電盤等・変種語なし) → 誤った◎を避け△で基本形提示(実績はAL付が主)。
+    if ambiguous:
+        return code,'△','高圧LBS 3P200A G%s(AL/TC/電動等のオプション要確認・低圧配電盤側はAL付が主)'%gtxt
     # 定格バンドとオプションが確定→◎。ただしエネセーバは名称解釈が入るので○(安全側)。
     conf='○' if variant=='エネセーバ' else '◎'
-    return code,conf,'高圧LBS 3P200A G%s %s'%('75A以下' if band=='75' else band+'A', vnote)
+    return code,conf,'高圧LBS 3P200A G%s %s'%(gtxt, vnote)
 
 # AC/DCリアクトル(52系): INV(インバータ)分岐の付随品(支給品が多い)。容量kW→最近傍上位。
 # 電圧は明記が無ければ既定200V(小容量INVは200Vが通例)。半角カナ(ﾘｱｸﾄﾙ)はNFKC正規化で吸収。
@@ -1194,7 +1216,7 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     _rk=_reactor_code(name)
     if _rk: return R(_rk[0],_rk[1],_rk[2])
     # 高圧LBS(43320系): PFヒューズ定格→G感度バンドで確定(PF=30/50/75Aは同一枠)
-    _lb=_lbs_code(name)
+    _lb=_lbs_code(name, panel)
     if _lb: return R(_lb[0],_lb[1],_lb[2])
     # 動力盤: 主回路記号があれば記号方式を最優先。
     # ただし名称に明示のMCCB分岐仕様(NP＋NNNAF/MMAT)があれば、記号方式より分岐遮断器選定を優先
