@@ -788,6 +788,9 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
     if meta['main'] in ('M)MCB','M)LUG','M)ELB','B)MCB','B)ELB','MCB','ELB'):
         code=_mcb_code(name, panel, meta)
         if code: return R(code,'◎' if code in byCode else '△', _mcb_note(name,panel))
+        # 分電盤の最終分岐: 遮断器枠(AF)/定格A無し・負荷VAのみ+MCB/ELB明示 → コンパクト分岐(60012/60014)
+        cb=_compact_branch(name, panel)
+        if cb: return R(cb[0],cb[1],cb[2])
         return R('','△','MCB/ELB 容量・盤種別要確認')
     # --- 制御盤 分岐回路(L-S/スターデルタ/INV) 最優先 ---
     # 回路種別＋kW＋●○が読めれば決定的にコード確定→○(回路種別の推定余地を残し安全側)。容量外は△。
@@ -1310,6 +1313,24 @@ def _pole(n):
 
 # AF枠→コード末尾2桁前(代表AF: 50/100/225/400/600/800/1000...)
 _AF_KEY={'50':'5','100':'1','225':'2','200':'2','400':'4','600':'6','800':'8','1000':'70','1200':'73','1600':'76'}
+
+def _compact_branch(name, panel):
+    """分電盤の最終分岐(コンパクト遮断器)。遮断器枠(AF)/定格Aが無く負荷VAのみ+MCB/ELB明示の
+    分岐は、実見積書で全て『B)MCB(コンパクト)2P50AF=60012 / B)ELB(コンパクト)=60014』(予備は
+    60028/60029)。図面の遮断器種別に従い○(コンパクト前提・要確認)で返す。◎にはしない。"""
+    n=norm(name); pn=norm(panel)
+    # 分電盤か(分電/照明分電/L・S番号)。制御盤・受変電配電盤には適用しない。
+    is_bunden = ('分電' in pn) or bool(re.search(r'(^|[^a-zａ-ｚ])\d*[lｌsｓ][a-zａ-ｚ]?[ｰ\-－]?\d', pn))
+    if not is_bunden: return None
+    if not re.search(r'v\s*a', n): return None                  # 負荷VA表記が必要(最終分岐)
+    if 'af' in n: return None                                   # AF枠明示は通常分岐(60系)へ委ねる
+    if re.search(r'/\s*\d+\s*a(?![a-z])', n) or re.search(r'\d+\s*/\s*\d+', n): return None  # 定格A/枠対表記あり
+    if 'mcb' not in n and 'elb' not in n and 'mccb' not in n and 'elcb' not in n: return None  # 遮断器種別が必要
+    is_elb = ('elb' in n) or ('elcb' in n) or ('漏電' in n)
+    is_spare = bool(re.search(r'予備|将来|スペース|ｽﾍﾟｰｽ|空き|spare', n))
+    code = ('60029' if is_spare else '60014') if is_elb else ('60028' if is_spare else '60012')
+    if code not in byCode: return None
+    return code, '○', 'コンパクト分岐(2P50AF・%s%s)要確認'%('予備' if is_spare else '', 'ELB' if is_elb else 'MCB')
 
 def _mcb_code(name, panel, meta):
     n=norm(name); pn=norm(panel)
@@ -1863,6 +1884,9 @@ def select_from_extracted(data):
                 continue
             if re.search(r'異常|故障|満水|減水', nm) and re.search(r'警報|発電機|ポンプ|受水槽|ボイラー|受変電|外部', nm) \
                and not re.search(r'盤$|BOX|函|継電器|ﾘﾚｰ|リレー|RY', nm):
+                continue
+            # 「一括警報」(各盤の異常を集約した警報出力信号)は機器でなく信号→計上対象外。
+            if re.search(r'一括警報', nm) and not re.search(r'盤$|BOX|函|継電器|ﾘﾚｰ|リレー|RY', nm):
                 continue
             # 柱上装柱材・外構(玉碍子/腕金/支線/根かせ/引込柱/装柱/マスト)・照明器具/灯具は
             # 盤でなく別業者スコープ(柱上・外構・照明設備)→計上対象外。
