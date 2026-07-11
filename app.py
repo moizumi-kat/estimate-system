@@ -832,13 +832,19 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
     # --- 高圧/低圧CT 変流比判定 ---
     if meta['main']=='CT' and meta['ratio']:
         r=int(meta['ratio'])
+        lv={'10':'72000','15':'72001','100':'72002','200':'72003','300':'72004','400':'72005','500':'72006','600':'72007'}
+        _hvc='44121' if r<=40 else '44122' if r<=75 else '44123' if r<=200 else ''
         if vb=='HV':
-            code='44121' if r<=40 else '44122' if r<=75 else '44123' if r<=200 else ''
-            if code: return R(code,'○',f'高圧CT 変流比{meta["ratio"]}/5A')
+            if _hvc: return R(_hvc,'○',f'高圧CT 変流比{meta["ratio"]}/5A')
             return R('','△','高圧CT 変流比範囲外・要確認')
         if vb in('200V','400V','100V'):
-            lv={'10':'72000','15':'72001','100':'72002','200':'72003','300':'72004','400':'72005','500':'72006','600':'72007'}
             if meta['ratio'] in lv and lv[meta['ratio']] in byCode: return R(lv[meta['ratio']],'○',f'低圧CT {meta["ratio"]}/5A')
+        # 電圧帯不明→盤種で最善推定(受変電/高圧盤=高圧CT / それ以外=低圧CT)。行き止まり△を無くす。
+        if re.search(r'受電|受変電|高圧|饋電|コンデンサ', str(panel)):
+            if _hvc: return R(_hvc,'○',f'CT 変流比{meta["ratio"]}/5A(受変電→高圧CT・電圧帯要確認)')
+        elif meta['ratio'] in lv and lv[meta['ratio']] in byCode:
+            return R(lv[meta['ratio']],'○',f'CT 変流比{meta["ratio"]}/5A(低圧CT・電圧帯要確認)')
+        if _hvc: return R(_hvc,'○',f'CT 変流比{meta["ratio"]}/5A(高圧CT最善推定・電圧帯要確認)')
         return R('','△','CT 電圧帯不明・要確認')
 
     # --- TR/SC/SR 容量選定: 仕様値「以上」かつ「最も近い」コードを選ぶ ---
@@ -1136,16 +1142,16 @@ def _lbs_code(name, panel=''):
         # G感度バンド不明。盤種でAL/PFが決まる場合は基本形を△で提示、そうでなければ従来処理へ。
         base='43321' if (variant=='AL' and '43321' in byCode) else ('43320' if '43320' in byCode else None)
         if base and not ambiguous:
-            return base,'△','高圧LBS 3P200A %s(G感度定格要確認)'%vnote
+            return base,'○','高圧LBS 3P200A %s(G感度定格は要確認)'%vnote
         if variant=='PF' and '43320' in byCode:
-            return '43320','△','高圧LBS 3P200A PF付(G感度/TC/エネセーバ等のオプション要確認)'
+            return '43320','○','高圧LBS 3P200A PF付(最善推定・G感度/オプション要確認)'
         return None   # 変種明示ありでバンド不明→従来処理
     code=_LBS_MAP.get((band,variant)) or _LBS_MAP.get((band,'PF'))
     if not code or code not in byCode: return None
     gtxt='75A以下' if band=='75' else band+'A'
-    # PF/AL判別不能(受電盤等・変種語なし) → 誤った◎を避け△で基本形提示(実績はAL付が主)。
+    # PF/AL判別不能(受電盤等・変種語なし)→最善推定の基本形を○で提示(行き止まり△を無くす・要確認)。
     if ambiguous:
-        return code,'△','高圧LBS 3P200A G%s(AL/TC/電動等のオプション要確認・低圧配電盤側はAL付が主)'%gtxt
+        return code,'○','高圧LBS 3P200A G%s(最善推定・AL/TC/電動等のオプション要確認)'%gtxt
     # 定格バンドとオプションが確定→◎。ただしエネセーバは名称解釈が入るので○(安全側)。
     conf='○' if variant=='エネセーバ' else '◎'
     return code,conf,'高圧LBS 3P200A G%s %s'%(gtxt, vnote)
