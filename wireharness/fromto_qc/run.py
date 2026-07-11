@@ -30,6 +30,7 @@ def main(argv=None):
     ap.add_argument('--vision', action='store_true', help='Claude Visionトレースを実行（要 ANTHROPIC_API_KEY）')
     ap.add_argument('--gemini', action='store_true', help='Gemini Visionも実行しアンサンブル（要 GEMINI_API_KEY）')
     ap.add_argument('--alias', help='機器別名JSON（{"入102":"3102",...}）任意')
+    ap.add_argument('--out', help='From-To データCSVの出力先（--vision/--gemini時）')
     args = ap.parse_args(argv)
 
     alias = json.load(open(args.alias, encoding='utf-8')) if args.alias else {}
@@ -71,6 +72,8 @@ def main(argv=None):
         from . import vision, ensemble
         from .geometry import norm
 
+        traced_full = {}   # 名前 -> merge_sheets結果（端子込み）
+
         def run_tracer(tracer, label):
             per = []
             for p, m in zip(args.dxf, models):
@@ -81,6 +84,7 @@ def main(argv=None):
                     continue
                 per.append(t)
             merged = vision.merge_sheets(*per) if per else {}
+            traced_full[label] = merged
             return {sid: slot['devices'] for sid, slot in merged.items()}
 
         sources = {'幾何': {}}
@@ -97,6 +101,13 @@ def main(argv=None):
             print(f"  号線 {len(sources['Gemini'])} 本")
 
         rows = ensemble.ensemble(sources)
+        if args.out:
+            from . import export
+            # From-To本体は Claude（無ければ Gemini）を採用、幾何/他モデルは裏付け
+            primary = traced_full.get('Claude') or traced_full.get('Gemini') or {}
+            extra = {k: v for k, v in sources.items() if k not in ('幾何', 'Claude')}
+            export.export_fromto_csv(primary, sources.get('幾何', {}), args.out, extra_sources=extra)
+            print(f"\nFrom-To データCSVを出力: {args.out}")
         print("\n=== アンサンブル判定（幾何×Claude×Gemini）===")
         for r in rows:
             tag = {'confirmed': '◎自動確定', 'majority': '○多数決', 'split': '△要確認'}[r['decision']]
