@@ -1044,8 +1044,9 @@ def _get_amp(n):
 # 照合前に NFKC 正規化(半角カナ→全角: ﾀｲﾏ→タイマ 等)するのでパターンは全角で書く。
 _REMOCON_MAP=[
  (r'伝送ユニット','65022'),
- (r'(年間)?プログラムタイマ','65019'),
- (r'EE.{0,4}連動','65018'),
+ (r'(年間)?プログラムタイマ|年間タイマ|タイマユニット|ﾀｲﾏﾕﾆｯﾄ','65019'),
+ (r'EE.{0,4}連動|自動点滅.{0,4}連動|点滅器?連動','65018'),
+ (r'自動点滅器(?!.{0,4}連動)','74082'),
  (r'(パターン|タイプ).{0,6}設定','65050'),
  (r'蛍光灯調光|調光.{0,3}[TＴ]/?U','65037'),
  (r'接点入力','65040'),
@@ -1097,10 +1098,13 @@ def _vmc_code(name):
        ・変種語なし(素の電磁) → 電磁(200A=43101/400A=43111)。
        実績: 尼崎/西新宿=43101, 表参道/六本木/城山=43103, 木村/尼崎(万能ヒューズ・カウンター)=人手43103。"""
     s=unicodedata.normalize('NFKC',str(name))
-    if not re.search(r'(?<![A-Za-z])VMC(?![A-Za-z])', s, re.I): return None
-    amp400 = bool(re.search(r'400\s*A', s))
+    _vmc = bool(re.search(r'(?<![A-Za-z])VMC(?![A-Za-z])', s, re.I))
+    _vcs = bool(re.search(r'(?<![A-Za-z])VCS(?![A-Za-z])', s, re.I))
     # PF/引出/万能ヒューズ/カウンター/(電磁,E) を PF付引出の指標とする
     pf = bool(re.search(r'PF|万能ヒュ|ｶｳﾝﾀ|カウンタ|引出|引き出し|電磁[,，、]\s*[EＥ]', s))
+    # VMCは常にVCS解釈。素のVCSは通常照合に任せるが、VCS＋PF指標は変種確定のためここで拾う。
+    if not (_vmc or (_vcs and pf)): return None
+    amp400 = bool(re.search(r'400\s*A', s))
     if pf:
         code = '43113' if amp400 else '43103'
     else:
@@ -1108,7 +1112,8 @@ def _vmc_code(name):
     if code not in byCode:  # DB欠番時は200A電磁へフォールバック
         code = '43101' if '43101' in byCode else None
     if not code: return None
-    return code,'◎','VMC→VCS(%s・御社実績で確定)'%byCode.get(code,{}).get('name','')[:20]
+    _pfx = 'VMC→VCS' if _vmc else 'VCS変種確定'
+    return code,'◎','%s(%s・御社実績で確定)'%(_pfx, byCode.get(code,{}).get('name','')[:20])
 def _pro_map(name):
     s=unicodedata.normalize('NFKC',str(name))
     v=_vmc_code(name)
