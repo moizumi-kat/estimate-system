@@ -67,18 +67,21 @@ def trace_tile(png_path, model=os.environ.get('VISION_MODEL', 'claude-opus-4-8')
 
 def trace_tile_gemini(png_path, model=os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')):
     """タイル画像1枚をGemini Visionでトレースし {"nets":[...]} を返す。
-    要 GEMINI_API_KEY（または GOOGLE_API_KEY）。google-genai SDK を使用。"""
+    要 GEMINI_API_KEY（または GOOGLE_API_KEY）。REST API を直接呼ぶ（SDK非依存）。"""
+    import base64
+    import urllib.request
     key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
     if not key:
         raise RuntimeError('GEMINI_API_KEY 未設定（Geminiトレースには必要）')
-    from google import genai
-    from google.genai import types
-    cli = genai.Client(api_key=key)
-    img = open(png_path, 'rb').read()
-    resp = cli.models.generate_content(
-        model=model,
-        contents=[types.Part.from_bytes(data=img, mime_type='image/png'), VISION_PROMPT])
-    txt = (resp.text or '').strip()
+    data = base64.standard_b64encode(open(png_path, 'rb').read()).decode()
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+    body = json.dumps({"contents": [{"parts": [
+        {"text": VISION_PROMPT},
+        {"inline_data": {"mime_type": "image/png", "data": data}}]}]}).encode()
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        d = json.load(r)
+    txt = "".join(p.get('text', '') for p in d['candidates'][0]['content']['parts']).strip()
     txt = re.sub(r'^```(json)?|```$', '', txt, flags=re.M).strip()
     try:
         return json.loads(txt)

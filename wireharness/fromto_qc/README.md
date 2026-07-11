@@ -70,7 +70,7 @@ ANTHROPIC_API_KEY=sk-... GEMINI_API_KEY=... python -m wireharness.fromto_qc.run 
 ezdxf>=1.1
 matplotlib>=3.5
 anthropic>=0.40        # Claude Visionトレース時のみ
-google-genai>=0.3      # Gemini Visionトレース時のみ
+# Gemini は REST API を直接呼ぶため追加SDK不要（GEMINI_API_KEY のみ）
 ```
 
 ## 設計上の前提（精度を上げる条件）
