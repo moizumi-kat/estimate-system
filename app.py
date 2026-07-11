@@ -956,8 +956,9 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
         # 追加計器(IWM無効電力計/PFM力率計)は計器種別(普通角/広角)でコード確定。
         _emc=_extra_meter_code(name)
         if _emc: return R(_emc,'◎',byCode.get(_emc,{}).get('name',''))
-        # 注: 分電盤の裸のVA負荷を負荷ごとにコンパクト分岐へ割当てると「負荷数≠分岐数」で
-        # 過剰計上(実見積書照合で60012を約3倍過大)になるため、既定割当てはしない=安全側△。
+        # 注: 遮断器記号(MCB/ELB等)が付く分岐は _compact_branch がコンパクトで確定する(上流で処理)。
+        # ここに来るのは遮断器種別が全く無い「裸のVA負荷/機器名」=分岐か否かも図面から判別不能。
+        # 負荷ごとに勝手に分岐を立てると過剰計上になるため割当てはせず安全側△(人が確認)。
         if cands:
             hint=cands[0]['code']
             return R('','△',f'機器未特定・要確認(参考候補{len(cands)}件: 先頭={hint})')
@@ -1418,27 +1419,42 @@ _AF_KEY={'50':'5','100':'1','225':'2','200':'2','400':'4','600':'6','800':'8','1
 
 _WET_ELB=re.compile(r'ｺﾝｾﾝﾄ|コンセント|便座|洗浄|浴室|給湯|食洗|温水|水栓|ｳｫｼｭ|ウォシュ|ﾃﾞｨｽﾎﾟｰｻﾞ|ディスポーザ|洗濯|乾燥機|屋外|ﾍﾞﾗﾝﾀﾞ|ベランダ|ﾙｰﾌ|屋上', re.I)
 def _compact_branch(name, panel):
-    """分電盤の最終分岐(コンパクト遮断器)。遮断器枠(AF)/定格Aが無く負荷VAのみ+MCB/ELB明示の
-    分岐は、実見積書で全て『B)MCB(コンパクト)2P50AF=60012 / B)ELB(コンパクト)=60014』(予備は
-    60028/60029)。図面の遮断器種別に従い○(コンパクト前提・要確認)で返す。◎にはしない。"""
+    """分電盤(60系)の2P分岐は、実見積書4案件(西新宿/表参道/城山/六本木)で
+    **全て コンパクト**(B)MCB(コンパクト)2P50AF=60012 / B)ELB(コンパクト)=60014 /
+    スペース=60028)。非コンパクトの60522/60525は4案件とも0件。
+    ∴ 分電盤の2P分岐(MCB/ELB明示)はコンパクトで確定する。枠は50AF(実見積書は全て2P50AF、
+    100AF以上の2P分岐は無い。抽出の数値は容量VA/電圧の混入が多く枠表記として信頼しない)。
+    真の空きスロット(遮断器種別が付かない=本関数に到達しない)のみ通常選定へ委ねる。"""
     n=norm(name); pn=norm(panel)
-    # 分電盤か(分電/照明分電/L・S番号)。制御盤・受変電配電盤には適用しない。
-    is_bunden = ('分電' in pn) or bool(re.search(r'(^|[^a-zａ-ｚ])\d*[lｌsｓ][a-zａ-ｚ]?[ｰ\-－]?\d', pn))
-    if not is_bunden: return None
-    if not re.search(r'v\s*a', n): return None                  # 負荷VA表記が必要(最終分岐)
-    if 'af' in n: return None                                   # AF枠明示は通常分岐(60系)へ委ねる
-    if re.search(r'/\s*\d+\s*a(?![a-z])', n) or re.search(r'\d+\s*/\s*\d+', n): return None  # 定格A/枠対表記あり
     if 'mcb' not in n and 'elb' not in n and 'mccb' not in n and 'elcb' not in n: return None  # 遮断器種別が必要
+    if _pole(n) not in ('2',''):    # 2P分岐のみ対象(3P/4P主幹・動力分岐は通常選定へ)
+        return None
+    # 盤種: 制御盤(50系端子台)・受変電低圧配電盤(40系)以外=分電系(60系コンパクト)。
+    #  ※norm はハイフン/括弧を除去するためL番号検出が外れる盤名(AC-GC(LG-201)/共用盤/専用盤等)がある。
+    #    そこで「制御/受変電でなければ分電系」と広く判定(実見積書4案件で2P50AF分岐は全てコンパクト)。
+    _mp=re.search(r'(^|[^a-zａ-ｚ])\d*[mｍpｐ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)
+    is_ctrl = ('制御' in pn) or ('自立' in pn) or (bool(_mp) and not ('電灯' in pn or '照明' in pn))
+    is_haiden = any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ','変圧器盤'])
+    if is_ctrl or is_haiden: return None
+    # 3P/4P明示や大枠(100AF以上)は通常分岐(60系)へ委ねる。50AFのみコンパクト。
+    if re.search(r'3\s*p|4\s*p', n): return None
+    af,_at=_amp_af(n)
+    if af and af not in ('50','30','20'):   # 100AF以上の明示枠はコンパクト対象外
+        try:
+            if int(af) >= 100: return None
+        except: pass
     # コンセント/温水洗浄便座/給湯/浴室等の湿式・接触注意負荷は漏電遮断器(ELB)が電気規定上必須。
     # 単線図の分岐開閉器列(1P/2P/ELB)は列が近接しVisionが2P⇔ELBを誤読しやすいため、負荷種別で補正する
     # (実見積書でも客室のコンセント・温水洗浄便座は全てELB=60014)。
     is_elb = ('elb' in n) or ('elcb' in n) or ('漏電' in n) or bool(_WET_ELB.search(name))
-    # 遮断器○印が付いた回路は「設置済」なので、予備でも通常のコンパクト(60012/60014)で計上。
-    # (実見積書で空きスロット60028/60029は0件=予備は設置済スペア扱い)。真の空きスロット(遮断器なし)は
-    # そもそも遮断器種別が付かず本関数に到達しない。
+    # 空きスペース(遮断器なしの空きスロット)＝スペースコード。「予備実装」等の実装済スペアは通常コンパクト。
+    is_space = bool(re.search(r'スペース|ｽﾍﾟｰｽ|空き|空棒|空回路', name)) and '実装' not in name
+    if is_space:
+        code = '60029' if is_elb else '60028'
+        return (code,'○','コンパクト空きスペース(2P50AF・%s)要確認'%('ELB' if is_elb else 'MCB')) if code in byCode else None
     code = '60014' if is_elb else '60012'
     if code not in byCode: return None
-    return code, '○', 'コンパクト分岐(2P50AF・%s)要確認'%('ELB' if is_elb else 'MCB')
+    return code, '◎', 'コンパクト分岐(2P50AF・%s)実見積書4案件で確定'%('ELB' if is_elb else 'MCB')
 
 def _mcb_code(name, panel, meta):
     n=norm(name); pn=norm(panel)
