@@ -16,6 +16,38 @@ def _bounds(model):
     return (min(xs), max(xs), min(ys), max(ys)) if xs else (0, 1, 0, 1)
 
 
+def content_bounds(model, margin=150):
+    """端子・号線・機器の位置から“中身のある”範囲を求める（遠方の空白を除外）。"""
+    pts = [(t.x, t.y) for t in model.terminals] + [(x, y) for _, x, y in model.senban] \
+          + [(d.x, d.y) for d in model.devices]
+    if not pts:
+        return _bounds(model)
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return (min(xs) - margin, max(xs) + margin, min(ys) - margin, max(ys) + margin)
+
+
+def smart_tiles(model, tile_w=1700, tile_h=1050, overlap=250, min_anchors=2):
+    """内容領域を、判読可能な固定サイズ(mm)のタイルで重なり付きに覆う。
+    号線または端子が min_anchors 個以上あるタイルだけ返す（空タイルを除外）。"""
+    x0, x1, y0, y1 = content_bounds(model)
+    step_x = max(tile_w - overlap, 100)
+    step_y = max(tile_h - overlap, 100)
+    anchors = [(t.x, t.y) for t in model.terminals] + [(x, y) for _, x, y in model.senban]
+    tiles = []
+    yy = y0
+    while yy < y1:
+        xx = x0
+        while xx < x1:
+            rg = (xx, min(xx + tile_w, x1 + 1), yy, min(yy + tile_h, y1 + 1))
+            n = sum(1 for ax, ay in anchors if rg[0] <= ax <= rg[1] and rg[2] <= ay <= rg[3])
+            if n >= min_anchors:
+                tiles.append(rg)
+            xx += step_x
+        yy += step_y
+    return tiles or [content_bounds(model)]
+
+
 def tile_grid(model, cols=2, rows=2, pad=100):
     """図面を cols×rows のタイル矩形に分割して返す（(x0,x1,y0,y1) のリスト）。"""
     x0, x1, y0, y1 = _bounds(model)

@@ -83,7 +83,7 @@ def trace_drawing(model, regions=None, dpi=140, tmpdir=None, cols=1, rows=3, pad
     alias = {}
     tmpdir = tmpdir or tempfile.mkdtemp(prefix='wh_tiles_')
     if regions is None:
-        regions = render.tile_grid(model, cols=cols, rows=rows, pad=pad)
+        regions = render.smart_tiles(model)
     merged = {}
     for i, rg in enumerate(regions):
         png = os.path.join(tmpdir, f'tile_{i}.png')
