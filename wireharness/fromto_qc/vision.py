@@ -27,6 +27,11 @@ VISION_PROMPT = """あなたは制御盤のシーケンス図（ラダー/展開
 線が分岐(T字)している場合は、そのネットに繋がる全ての端点を1つの号線にまとめること。
 描かれていない接続を創作しないこと。読み取れない箇所は unclear:true を付けること。
 
+【機器名の書き方（厳守）】
+- device には図中の濃紺太字の機器記号だけを書く（例 "52-102", "43-102", "TB-102"）。
+- 「上/下/左/右/接点/母線」などの位置語を機器名に混ぜないこと（それは terminal 側に書く）。
+- 隣接する別ラベルを連結しないこと（各機器記号は独立して書く）。
+
 出力はJSONのみ（説明文やコードフェンス不要）:
 {
   "nets": [
@@ -58,6 +63,56 @@ def trace_tile(png_path, model=os.environ.get('VISION_MODEL', 'claude-opus-4-8')
     except Exception:
         m = re.search(r'\{.*\}', txt, re.S)
         return json.loads(m.group(0)) if m else {"nets": []}
+
+
+def clean_device(s):
+    """Vision出力の機器名から位置語・ノイズを除去し正規化キーにする（ASCII英数字のみ）。"""
+    import re
+    from .geometry import norm
+    return re.sub(r'[^A-Z0-9]', '', norm(s))
+
+
+def trace_drawing(model, regions=None, dpi=140, tmpdir=None, cols=1, rows=3, pad=100):
+    """図面全体をタイル分割してVisionでトレースし、号線でネットを統合して返す。
+    戻り: {senban: {"devices": set(), "terminals": [ {device,terminal} ...], "unclear": bool}}
+    ※ 複数シート（シーケンス＋スケルトン）を跨ぐ号線は、各図面の結果を号線で merge すれば連結できる。
+    """
+    import os
+    import tempfile
+    from . import render
+    alias = {}
+    tmpdir = tmpdir or tempfile.mkdtemp(prefix='wh_tiles_')
+    if regions is None:
+        regions = render.tile_grid(model, cols=cols, rows=rows, pad=pad)
+    merged = {}
+    for i, rg in enumerate(regions):
+        png = os.path.join(tmpdir, f'tile_{i}.png')
+        render.render_region(model, rg, png, dpi=dpi)
+        v = trace_tile(png)
+        for n in v.get('nets', []):
+            sid = str(n.get('senban', '')).strip()
+            if not sid:
+                continue
+            slot = merged.setdefault(sid, {'devices': set(), 'terminals': [], 'unclear': False})
+            for e in n.get('ends', []):
+                d = clean_device(e.get('device', ''))
+                if d:
+                    slot['devices'].add(d)
+                    slot['terminals'].append({'device': d, 'terminal': e.get('terminal', '')})
+            slot['unclear'] = slot['unclear'] or bool(n.get('unclear'))
+    return merged
+
+
+def merge_sheets(*traced):
+    """複数図面(シーケンス/スケルトン)の trace_drawing 結果を号線で統合。"""
+    out = {}
+    for t in traced:
+        for sid, slot in t.items():
+            o = out.setdefault(sid, {'devices': set(), 'terminals': [], 'unclear': False})
+            o['devices'] |= slot['devices']
+            o['terminals'] += slot['terminals']
+            o['unclear'] = o['unclear'] or slot['unclear']
+    return out
 
 
 def cross_check(vision_nets, geom_model, alias=None):

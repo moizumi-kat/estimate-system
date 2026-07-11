@@ -65,19 +65,42 @@ def main(argv=None):
                 tile_paths.append((m, out))
         print(f"\nタイル画像 {len(tile_paths)} 枚を {args.tiles} に出力")
 
-    # Visionトレース
+    # Visionトレース（全面タイル化＋号線でシート統合）
     if args.vision:
         from . import vision
-        print("\n=== Visionトレース → 幾何突合 ===")
-        for m, png in (tile_paths or []):
+        print("\n=== Visionトレース（全面タイル → 号線統合）===")
+        per_sheet = []
+        for p, m in zip(args.dxf, models):
             try:
-                v = vision.trace_tile(png)
+                t = vision.trace_drawing(m, cols=args.cols, rows=args.rows)
             except Exception as e:
-                print(f"  {png}: Vision失敗 {e}")
+                print(f"  [{os.path.basename(p)}] Vision失敗 {e}")
                 continue
-            for row in vision.cross_check(v, m, alias):
-                print(f"  {os.path.basename(png)} 号線{row['senban']}: {row['status']} "
-                      f"vision={row['vision']} geom={row['geom']}")
+            per_sheet.append(t)
+            print(f"  [{os.path.basename(p)}] 号線 {len(t)} 本を読取")
+        traced = vision.merge_sheets(*per_sheet) if per_sheet else {}
+        # From-To（Vision・号線→機器）出力
+        for sid in sorted(traced):
+            print(f"    号線{sid}: {sorted(traced[sid]['devices'])}"
+                  + ("  ※要確認" if traced[sid]['unclear'] else ""))
+        # 人手正解と突合（あれば）
+        if args.human:
+            from .geometry import norm
+            gt = {}
+            for hn in compare.parse_human(args.human):
+                if hn['kind'] == 'ctrl':
+                    gt[hn['id'].replace('_', '')] = {alias.get(norm(e[0] + e[1]), norm(e[0] + e[1]))
+                                                     for e in hn['ends'] if e[0]}
+            ok = part = 0
+            for sid, G in gt.items():
+                V = traced.get(sid, {}).get('devices', set())
+                if V >= G and V:
+                    ok += 1
+                elif V & G:
+                    part += 1
+            tot = len(gt) or 1
+            print(f"\n  Vision突合: 号線{len(gt)}件中 完全{ok} 部分{part} "
+                  f"→ 完全{ok/tot*100:.0f}% 検出{(ok+part)/tot*100:.0f}%")
 
 
 if __name__ == '__main__':
