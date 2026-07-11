@@ -65,6 +65,28 @@ def trace_tile(png_path, model=os.environ.get('VISION_MODEL', 'claude-opus-4-8')
         return json.loads(m.group(0)) if m else {"nets": []}
 
 
+def trace_tile_gemini(png_path, model=os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')):
+    """タイル画像1枚をGemini Visionでトレースし {"nets":[...]} を返す。
+    要 GEMINI_API_KEY（または GOOGLE_API_KEY）。google-genai SDK を使用。"""
+    key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+    if not key:
+        raise RuntimeError('GEMINI_API_KEY 未設定（Geminiトレースには必要）')
+    from google import genai
+    from google.genai import types
+    cli = genai.Client(api_key=key)
+    img = open(png_path, 'rb').read()
+    resp = cli.models.generate_content(
+        model=model,
+        contents=[types.Part.from_bytes(data=img, mime_type='image/png'), VISION_PROMPT])
+    txt = (resp.text or '').strip()
+    txt = re.sub(r'^```(json)?|```$', '', txt, flags=re.M).strip()
+    try:
+        return json.loads(txt)
+    except Exception:
+        m = re.search(r'\{.*\}', txt, re.S)
+        return json.loads(m.group(0)) if m else {"nets": []}
+
+
 def clean_device(s):
     """Vision出力の機器名から位置語・ノイズを除去し正規化キーにする（ASCII英数字のみ）。"""
     import re
@@ -72,15 +94,16 @@ def clean_device(s):
     return re.sub(r'[^A-Z0-9]', '', norm(s))
 
 
-def trace_drawing(model, regions=None, dpi=140, tmpdir=None, cols=1, rows=3, pad=100):
+def trace_drawing(model, regions=None, dpi=140, tmpdir=None, cols=1, rows=3, pad=100, tracer=None):
     """図面全体をタイル分割してVisionでトレースし、号線でネットを統合して返す。
+    tracer: タイル画像→{"nets":[...]} の関数（既定 trace_tile=Claude。trace_tile_gemini でGemini）。
     戻り: {senban: {"devices": set(), "terminals": [ {device,terminal} ...], "unclear": bool}}
     ※ 複数シート（シーケンス＋スケルトン）を跨ぐ号線は、各図面の結果を号線で merge すれば連結できる。
     """
     import os
     import tempfile
     from . import render
-    alias = {}
+    tracer = tracer or trace_tile
     tmpdir = tmpdir or tempfile.mkdtemp(prefix='wh_tiles_')
     if regions is None:
         regions = render.smart_tiles(model)
@@ -88,7 +111,7 @@ def trace_drawing(model, regions=None, dpi=140, tmpdir=None, cols=1, rows=3, pad
     for i, rg in enumerate(regions):
         png = os.path.join(tmpdir, f'tile_{i}.png')
         render.render_region(model, rg, png, dpi=dpi)
-        v = trace_tile(png)
+        v = tracer(png)
         for n in v.get('nets', []):
             sid = str(n.get('senban', '')).strip()
             if not sid:

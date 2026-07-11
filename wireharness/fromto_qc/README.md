@@ -21,7 +21,8 @@
 | `geometry.py` | DXF→構造モデル（端子ピン・電線・ネット・号線・機器外形枠）。TB属性＋TEMPLATE点＋ブロック内電線＋外形枠を統合 |
 | `qc.py` | 製造前QCチェック（浮き電線・スナップ誤差・号線欠落・孤立ネット） |
 | `render.py` | 構造モデル→Vision入力用のタイル画像（端子ピン・号線を強調） |
-| `vision.py` | Vision（Claude）で結線トレース→From-To、幾何との突合（要 `ANTHROPIC_API_KEY`） |
+| `vision.py` | Vision（Claude / Gemini）で結線トレース→From-To（`trace_tile` / `trace_tile_gemini`）。スマートタイリングで全面処理 |
+| `ensemble.py` | 幾何 × Claude × Gemini を号線単位で突合し「全一致=自動確定 / 多数決=準確定 / 割れ=要確認」を判定 |
 | `compare.py` | 人手ハーネスデータ.txt の解析と一致率スコア |
 | `run.py` | CLIオーケストレータ |
 
@@ -36,10 +37,20 @@ python -m wireharness.fromto_qc.run \
 # Vision入力用タイル画像を出力
 python -m wireharness.fromto_qc.run --dxf seq.dxf --tiles out/ --cols 2 --rows 3
 
-# Visionトレース（要 ANTHROPIC_API_KEY）→ 幾何と突合
+# Claude Visionトレース（要 ANTHROPIC_API_KEY）→ 幾何と突合
 ANTHROPIC_API_KEY=sk-... python -m wireharness.fromto_qc.run \
-  --dxf seq.dxf --vision --tiles out/
+  --dxf seq.dxf skel.dxf --human harness.txt --vision
+
+# 三重アンサンブル（幾何 × Claude × Gemini）: 全一致=自動確定 / 割れ=要確認
+ANTHROPIC_API_KEY=sk-... GEMINI_API_KEY=... python -m wireharness.fromto_qc.run \
+  --dxf seq.dxf skel.dxf --human harness.txt --vision --gemini
 ```
+
+## アンサンブル（幾何 × Claude × Gemini）
+
+独立した読みを号線単位で突合し、`confirmed`(全一致・自動確定) / `majority`(多数決・準確定) /
+`split`(割れ・人が確認) を判定。独立した検出を重ねるほど「サイレント誤り」が希少になり、
+人の確認は "割れた少数" だけに縮む（＝限りなく無人に近い半自動）。
 
 `alias.json` は機器別名辞書（人手データの命名 ↔ 図面の機器記号）。例：
 ```json
@@ -58,7 +69,8 @@ ANTHROPIC_API_KEY=sk-... python -m wireharness.fromto_qc.run \
 ```
 ezdxf>=1.1
 matplotlib>=3.5
-anthropic>=0.40   # Visionトレース時のみ
+anthropic>=0.40        # Claude Visionトレース時のみ
+google-genai>=0.3      # Gemini Visionトレース時のみ
 ```
 
 ## 設計上の前提（精度を上げる条件）
