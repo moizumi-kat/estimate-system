@@ -129,6 +129,29 @@ def trace_drawing(model, regions=None, dpi=140, tmpdir=None, cols=1, rows=3, pad
     return merged
 
 
+def integrate_skeleton(ctrl_traced, skel_traced):
+    """制御(シーケンス)の号線ネットに、スケルトンのネットを『共有する機器:端子』で連結。
+    スケルトンは号線を持たないことが多いので、端子一致でシート跨ぎを埋める。
+    ctrl_traced/skel_traced: {id:{devices:set, terminals:[{device,terminal}], unclear:bool}}
+    戻り: ctrl_traced を拡張したもの（新規devicesを追記）。"""
+    # スケルトン: (device,terminal) -> そのネットの機器集合
+    idx = {}
+    for sid, slot in skel_traced.items():
+        devs = set(slot['devices'])
+        for t in slot.get('terminals', []):
+            key = (clean_device(t.get('device', '')), str(t.get('terminal', '')).strip())
+            if key[0] and key[1]:
+                idx.setdefault(key, set()).update(devs)
+    for sid, slot in ctrl_traced.items():
+        add = set()
+        for t in slot.get('terminals', []):
+            key = (clean_device(t.get('device', '')), str(t.get('terminal', '')).strip())
+            if key in idx:
+                add |= idx[key]
+        slot['devices'] |= add
+    return ctrl_traced
+
+
 def merge_sheets(*traced):
     """複数図面(シーケンス/スケルトン)の trace_drawing 結果を号線で統合。"""
     out = {}
