@@ -985,10 +985,10 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
     # --- 候補数で信頼度を決定 ---
     if not cands:
         return R('','△','該当コードなし・要確認')
-    # VMC(真空電磁接触器)はVCSと解釈してコードを当てるが、図面表記との差異があるため
-    # 確定にせず要確認(△)とする(ユーザー方針)。
+    # VMC(真空電磁接触器)はVCSと解釈してコードを当てる。従来は△だったが、行き止まり△を無くす方針で
+    # 最善推定として○(VCS解釈・要確認フラグ)で返す(茂泉様: 確定できない△をゼロに)。
     if re.search(r'(?<![a-z])vmc(?![a-z])', norm(name)):
-        return R(cands[0]['code'],'△',f'VMC→VCSと解釈・要確認({byCode.get(cands[0]["code"],{}).get("name","")[:24]})')
+        return R(cands[0]['code'],'○',f'VMC→VCS解釈(要確認・{byCode.get(cands[0]["code"],{}).get("name","")[:20]})')
     if len(cands)==1:
         return R(cands[0]['code'],'◎','属性一致(単一候補)')
     # 複数候補の最終判定
@@ -1078,6 +1078,7 @@ _PRO_MAP=[
  (r'(TH[-\s]?RY|THｻｰﾏﾙ|TH\s*ｻｰﾏﾙ|TH\s*サーマル|ｻｰﾏﾙﾘﾚ|サーマルリレー|熱動継電器)', '73300','THサーマルリレー'),
  # ELR漏電警報器(集合形・回路数不明は5回路を既定で要確認)。
  (r'(?<![A-Za-z])ELR(?![A-Za-z])|漏電警報器',                    '46410','ELR漏電警報器(集合形5回路・回路数要確認)'),
+ (r'(?<![A-Za-z])TC(?![A-Za-z]).{0,6}トリップコイル|トリップコイル|ﾄﾘｯﾌﾟｺｲﾙ', '43390','TC=LBSトリップコイル'),
 ]
 def _pro_map(name):
     s=unicodedata.normalize('NFKC',str(name))
@@ -2076,6 +2077,9 @@ def select_from_extracted(data):
             # DCC(放電コイル)は高圧コンデンサに内蔵→計上対象外(コンデンサ側で計上)。
             if re.search(r'(?<![A-Za-z])DCC(?![A-Za-z])|放電コイル|ﾃﾞｨｽﾁｬｰｼﾞｺｲﾙ|ディスチャージコイル', nm) \
                and not re.search(r'盤$|BOX|函', nm):
+                continue
+            # 所用電源(所内電源)・警報表示用等の補機信号は盤製作/回路に内包→計上対象外。
+            if re.fullmatch(r'\s*(所用電源|所内電源|警報表示用?|表示用|信号用|運転表示用?)\s*', nm):
                 continue
             # 予備・分岐の回路参照(予備(107)/分岐(G05)等・機器仕様なし)は空き回路の参照→計上対象外。
             if re.fullmatch(r'\s*(予備|分岐|スペース|ｽﾍﾟｰｽ)\s*[\(（][0-9A-Za-z\-]{1,6}[\)）]\s*', nm):
