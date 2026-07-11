@@ -1287,9 +1287,9 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
             c=_DT.get((pole,astd))
             if c: return R(c,('◎' if amp in (60,100,200,400) else '○'),'手動電源切替器DT %sP %sA'%(pole,astd))
         return R('68731','△','手動電源切替器DT・極数/容量要確認(既定3P60A)')
-    # THR: 通常は計器切替スイッチ(COS/VS/AS)。ただしサーマルリレーの場合もあるため要確認(△)。
+    # THR: サーマルリレー(TH-RY)が主(実見積書で73300)。最善推定○(COSの可能性もあり要確認)。
     if re.fullmatch(r'\s*THR\s*', str(name), re.I):
-        return R('71021','△','切替スイッチ(COS)と仮定・サーマルリレーの可能性あり要確認')
+        return R('73300','○','THR=サーマルリレー最善推定(COSの可能性あり要確認)')
     # スコットトランス(支給品45050系)
     _sk=_scott_code(name)
     if _sk: return R(_sk[0],_sk[1],_sk[2])
