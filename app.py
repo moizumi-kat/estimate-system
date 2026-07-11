@@ -822,6 +822,9 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
         if cb: return R(cb[0],cb[1],cb[2])
         code=_mcb_code(name, panel, meta)
         if code: return R(code,'◎' if code in byCode else '△', _mcb_note(name,panel))
+        # 主幹ELB(『ELB付 主幹』): 変種(EL・中欠/AX)が図面に明記されないため素のM)ELBを○(要確認)。
+        me=_main_elb_code(name, panel, meta)
+        if me: return R(me,'○','主幹ELB(%s・EL/中欠/AX変種は要確認)'%byCode.get(me,{}).get('name','')[:18])
         return R('','△','MCB/ELB 容量・盤種別要確認')
     # --- 制御盤 分岐回路(L-S/スターデルタ/INV) 最優先 ---
     # 回路種別＋kW＋●○が読めれば決定的にコード確定→○(回路種別の推定余地を残し安全側)。容量外は△。
@@ -1529,6 +1532,35 @@ def _mcb_code(name, panel, meta):
         for cand in _branch_candidates(pole, af, is_elb, kind):
             if cand in byCode: return _ax(cand)
     return ''
+
+def _main_elb_code(name, panel, meta):
+    """主幹ELB(『ELB付 主幹』等)の最善推定コード。M)ELB=base+AF桁+極数尾(3P=06/4P=07/2P=05)。
+    実見積書(表参道)ではこの主幹が M)MCB(EL・中欠)(AX)=61系01 になる例があるが、EL/中欠/AXは
+    図面に明記されない社内標準のため◎にせず、素のM)ELBを○(最善推定・変種要確認)で返す。"""
+    n=norm(name); pn=norm(panel)
+    is_main = n.startswith('m)') or ('主幹' in name) or (str(meta.get('main','')).startswith('M)'))
+    is_elb = ('elb' in n) or ('elcb' in n) or ('漏電' in n)
+    if not (is_main and is_elb): return None
+    af,_at=_amp_af(n)
+    if not af:
+        mp=re.search(r'(\d{2,4})\s*/\s*(\d{2,4})', n)
+        af=mp.group(1) if mp else None
+    if not af: return None
+    STD_AF=[50,100,225,400,600,800]
+    try:
+        afi=int(af); af=str(next((s for s in STD_AF if s>=afi), 800))
+    except: return None
+    afdig={'50':'5','100':'1','225':'2','400':'4','600':'6','800':'8'}.get(af,'')
+    if not afdig: return None
+    pole=_pole(n) or '3'
+    tail='07' if pole=='4' else ('05' if pole=='2' else '06')
+    if '制御' in pn or '自立' in pn: bases=['50','60']
+    elif any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電']): bases=['40','60','50']
+    else: bases=['60','50']
+    for base in bases:
+        c=base+afdig+tail
+        if c in byCode: return c
+    return None
 
 def _branch_candidates(pole, af, is_elb, kind):
     """極数・AF・盤種別から分岐コード候補を実在順に返す。
