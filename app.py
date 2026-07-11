@@ -1996,7 +1996,7 @@ def select_from_extracted(data):
         # 動力制御盤の「標準図/パターン集」は各負荷盤が参照する主回路パターンの凡例定義シート。
         # それ自体は積算対象でない(構成部品MC/2E/MMCB等は各分岐回路コードに内包)。各負荷盤は
         # 自前のlegendを持つので、この参照シートは盤ごとスキップする(誤△の大量発生を防ぐ)。
-        if re.search(r'標準図|パターン集|パターン図|標準回路図?|回路図集', panel_nm):
+        if re.search(r'標準図|パターン集|パターン図|標準回路図?|回路図集|結線図', panel_nm):
             continue
         # 電力会社供給品(高圧キャビネット/UAS/PAS/区分開閉器等)は電力会社の資産=当社積算対象外→盤ごとスキップ。
         if re.search(r'電力会社供給|電力会社支給|(供給|支給)品\)?\s*$|電力会社.{0,4}(キャビネット|ｷｬﾋﾞﾈｯﾄ)', panel_nm):
@@ -2078,6 +2078,13 @@ def select_from_extracted(data):
             # ただし独立した操作用変圧器(kVA明記)は別計上のため除外しない。
             if re.search(r'操作電源|制御電源', nm) and (_panel_ctrl or re.search(r'制御|動力', panel_nm)) \
                and not re.search(r'\d+\s*k?va|変圧器|ﾄﾗﾝｽ|トランス', nm):
+                continue
+            # 盤見出しの重複行(item名＝盤名、または盤名+重量(kg)注記のみ・機器仕様なし)は盤自身の
+            # 見出しが機器行として抽出されたもの→対象外(盤内機器・受電盤等のセットは別行で計上済)。
+            _nm_np = re.sub(r'\s*[\(（]\s*\d+\s*(kg|ｋｇ|t|ﾄﾝ)\s*[\)）]\s*$', '', str(nm)).strip()
+            if _nm_np and norm(_nm_np)==norm(panel_nm) \
+               and re.search(r'盤$|受電|電灯盤|動力盤|分電盤|制御盤|配電盤|キュービクル|ｷｭ-ﾋﾞｸﾙ', str(nm)) \
+               and not re.search(r'MCB|MCCB|ELB|ELCB|LBS|VCB|VCS|(?<![A-Za-z])TR|(?<![A-Za-z])CT|(?<![A-Za-z])VT|(?<![A-Za-z])SC|(?<![A-Za-z])SR|(?<![A-Za-z])PF|\d+\s*(AF|AT|kVA|kW|kvar)|[1-4]\s*[PＰ]\b|継電器|ﾘﾚｰ|リレー|計器|指示計', str(nm)):
                 continue
             # 盤/設備の見出し行(機器詳細記載なし・設備名のみ)は個別機器でない→計上対象外
             # (盤内の機器/セットコードは別行で計上済)。
