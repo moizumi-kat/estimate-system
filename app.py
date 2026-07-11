@@ -1213,8 +1213,8 @@ def _sr_from_sc(name, sc_kvar):
 
 # 受変電の保護継電器(名称で一意に決まるもの)の直引き。候補多で△に落ちるのを救済。
 # 容量変種があるもの(EL-RY等)は名称だけで断定しないので対象にしない(generic選定へ委ねる)。
-def _relay_code(name):
-    n=unicodedata.normalize('NFKC',str(name)).upper(); s=str(name)
+def _relay_code(name, panel=''):
+    n=unicodedata.normalize('NFKC',str(name)).upper(); s=str(name); pn=str(panel)
     引出='引出' in s or 'ﾋｷﾀﾞｼ' in s
     # DGR 地絡方向継電器
     if re.search(r'(?<![A-Z])DGR(?![A-Z])', n) or '地絡方向' in s:
@@ -1239,9 +1239,12 @@ def _relay_code(name):
     # RPR 逆電力継電器(67P)
     if re.search(r'(?<![A-Z])RPR(?![A-Z])|逆電力継電|(?<![0-9])67P(?![0-9])', n):
         if '46385' in byCode: return '46385','◎','RPR(逆電力 67P)'
-    # GR 地絡継電器(無方向・ZCT/LG/DGRでない)。46031。
+    # GR 地絡継電器(無方向・ZCT/LG/DGRでない)。
     if re.search(r'(?<![A-Z])GR(?![A-Z])', n) and not re.search(r'DGR|LGR|LG-?RY|ZCT|IGR|OVGR', n) \
        and not re.search(r'方向', s):
+        # 高圧受電/饋電盤は高圧GR無方向=46031。低圧の変圧器盤/電灯盤/動力盤ではLG-RY(46401)相当。
+        if re.search(r'受電|饋電|き電|高圧', pn) and '46031' in byCode: return '46031','○','GR(無方向性)'
+        if re.search(r'変圧器盤|電灯盤|動力盤|低圧|スコット|ｽｺｯﾄ', pn) and '46401' in byCode: return '46401','○','GR=LG-RY(低圧地絡・ZCT付)'
         if '46031' in byCode: return '46031','○','GR(無方向性)'
     # LGR/LG-RY 地絡継電器(ZCT付)。ZCT併記かつ低圧アンペア指定が無いものだけ(46401=汎用)。
     if (re.search(r'(?<![A-Z])LGR(?![A-Z])|LG-?RY', n) and re.search(r'ZCT', n)) \
@@ -1258,8 +1261,8 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     # 社内プロのフィードバック由来の直引き(計器盤/DA/27R/UV/EL/接地端子/TM/監視盤/VMC万能ヒューズ)
     _pm=_pro_map(name)
     if _pm: return R(_pm[0],_pm[1],_pm[2])
-    # 受変電の保護継電器(DGR方向性/LG-RY ZCT付)の直引き
-    _ry=_relay_code(name)
+    # 受変電の保護継電器(DGR方向性/LG-RY ZCT付/OCR/UVR/OVGR/GR)の直引き
+    _ry=_relay_code(name, panel)
     if _ry: return R(_ry[0],_ry[1],_ry[2])
     # 手動電源切替器DT(68系): 極数×容量。極数/容量が読めれば確定、読めなければ△(既定3P60A提示)。
     _ns=unicodedata.normalize('NFKC',str(name))
@@ -1949,6 +1952,9 @@ def select_from_extracted(data):
         # それ自体は積算対象でない(構成部品MC/2E/MMCB等は各分岐回路コードに内包)。各負荷盤は
         # 自前のlegendを持つので、この参照シートは盤ごとスキップする(誤△の大量発生を防ぐ)。
         if re.search(r'標準図|パターン集|パターン図|標準回路図?|回路図集', panel_nm):
+            continue
+        # 電力会社供給品(高圧キャビネット/UAS/PAS/区分開閉器等)は電力会社の資産=当社積算対象外→盤ごとスキップ。
+        if re.search(r'電力会社供給|電力会社支給|(供給|支給)品\)?\s*$|電力会社.{0,4}(キャビネット|ｷｬﾋﾞﾈｯﾄ)', panel_nm):
             continue
         is_jushaden = ('受電' in panel_nm or '受変電' in panel_nm or '高圧' in panel_nm)
         # 制御盤の判定: 盤名に「制御/動力」が無くても、主回路パターン凡例(legend)や主回路記号(A-L)を
