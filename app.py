@@ -991,10 +991,10 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
     # --- 候補数で信頼度を決定 ---
     if not cands:
         return R('','△','該当コードなし・要確認')
-    # VMC(真空電磁接触器)はVCSと解釈してコードを当てる。従来は△だったが、行き止まり△を無くす方針で
-    # 最善推定として○(VCS解釈・要確認フラグ)で返す(茂泉様: 確定できない△をゼロに)。
-    if re.search(r'(?<![a-z])vmc(?![a-z])', norm(name)):
-        return R(cands[0]['code'],'○',f'VMC→VCS解釈(要確認・{byCode.get(cands[0]["code"],{}).get("name","")[:20]})')
+    # VMC(真空電磁接触器)→VCS(43系)。御社の実見積書で確定した規則で変種を決める(PF/引出=43103, 素=43101)。◎。
+    v=_vmc_code(name)
+    if v:
+        return R(v[0],v[1],v[2])
     if len(cands)==1:
         return R(cands[0]['code'],'◎','属性一致(単一候補)')
     # 複数候補の最終判定
@@ -1086,11 +1086,29 @@ _PRO_MAP=[
  (r'(?<![A-Za-z])ELR(?![A-Za-z])|漏電警報器',                    '46410','ELR漏電警報器(集合形5回路・回路数要確認)'),
  (r'(?<![A-Za-z])TC(?![A-Za-z]).{0,6}トリップコイル|トリップコイル|ﾄﾘｯﾌﾟｺｲﾙ', '43390','TC=LBSトリップコイル'),
 ]
+def _vmc_code(name):
+    """VMC(真空電磁接触器)→VCS(43系)。御社の実見積書で確定した規則:
+       ・VMC は常に VCS(43系)で計上(VMC→VCS は社内慣行で確定=◎)。
+       ・PF/引出(E)/万能ヒューズ/カウンター付 → 電磁引出PF付(200A=43103/400A=43113)。
+       ・変種語なし(素の電磁) → 電磁(200A=43101/400A=43111)。
+       実績: 尼崎/西新宿=43101, 表参道/六本木/城山=43103, 木村/尼崎(万能ヒューズ・カウンター)=人手43103。"""
+    s=unicodedata.normalize('NFKC',str(name))
+    if not re.search(r'(?<![A-Za-z])VMC(?![A-Za-z])', s, re.I): return None
+    amp400 = bool(re.search(r'400\s*A', s))
+    # PF/引出/万能ヒューズ/カウンター/(電磁,E) を PF付引出の指標とする
+    pf = bool(re.search(r'PF|万能ヒュ|ｶｳﾝﾀ|カウンタ|引出|引き出し|電磁[,，、]\s*[EＥ]', s))
+    if pf:
+        code = '43113' if amp400 else '43103'
+    else:
+        code = '43111' if amp400 else '43101'
+    if code not in byCode:  # DB欠番時は200A電磁へフォールバック
+        code = '43101' if '43101' in byCode else None
+    if not code: return None
+    return code,'◎','VMC→VCS(%s・御社実績で確定)'%byCode.get(code,{}).get('name','')[:20]
 def _pro_map(name):
     s=unicodedata.normalize('NFKC',str(name))
-    # VMC(万能ヒューズ/カウンター付/引出) → VCS 電磁引出PF付(43103)。素のVMCは従来のVCS解釈(43101)。
-    if re.search(r'VMC', s, re.I) and re.search(r'万能ヒュ|ｶｳﾝﾀ|カウンタ|引出|引き出し|PF付', s):
-        if '43103' in byCode: return '43103','○','VMC=VCS 電磁引出PF付(プロ確定)'
+    v=_vmc_code(name)
+    if v: return v
     for pat,code,note in _PRO_MAP:
         if re.search(pat, s) and code in byCode:
             return code,'○',note+'(プロ確定)'
