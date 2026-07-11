@@ -1057,7 +1057,7 @@ def _remocon_code(name):
 _PRO_MAP=[
  (r'計器盤|指示計器盤',                         '42081','計器盤=マルチ指示計'),
  (r'(^|\s)DA(\s|$|\d|[0-9〜~])',                '42083','DA(デマンド計)=マルチ指示計'),
- (r'27R|27\b.*不足電圧|不足電圧継電器',          '73000','27R=AUX-RY(プロ確定)'),
+ (r'(?<![0-9])27R(?![A-Za-z])',                 '73000','27R=AUX-RY(プロ確定)'),
  (r'(^|\s)UV(\s|$)|不足電圧要素',               '46011','UV=UVR(静止型)'),
  (r'EL\s*漏電継電器|漏電継電器(?!.*ZCT)',        '46401','EL漏電継電器=LG-RY'),
  (r'接地端子(?!盤)',                            '62901','接地端子=接地端子盤1P'),
@@ -1215,10 +1215,34 @@ def _sr_from_sc(name, sc_kvar):
 # 容量変種があるもの(EL-RY等)は名称だけで断定しないので対象にしない(generic選定へ委ねる)。
 def _relay_code(name):
     n=unicodedata.normalize('NFKC',str(name)).upper(); s=str(name)
+    引出='引出' in s or 'ﾋｷﾀﾞｼ' in s
     # DGR 地絡方向継電器
     if re.search(r'(?<![A-Z])DGR(?![A-Z])', n) or '地絡方向' in s:
-        if '引出' in s and '46040' in byCode: return '46040','○','DGR(引出型)'
+        if 引出 and '46040' in byCode: return '46040','○','DGR(引出型)'
         if '46041' in byCode: return '46041','○','DGR(方向性)'
+    # OCR 過電流継電器(静止型が既定・引出型は46000)。OCR51は46387。
+    if re.search(r'(?<![A-Z])OCR(?![A-Z])', n) or '過電流継電' in s:
+        if re.search(r'(?<![0-9])51(?![0-9])', n) and '46387' in byCode: return '46387','○','OCR 51'
+        if 引出 and '46000' in byCode: return '46000','○','OCR(引出型)'
+        if '46001' in byCode: return '46001','○','OCR(静止型)'
+    # UVR/27 不足電圧継電器(静止型が既定・引出型は46010・27Hは46382)
+    if re.search(r'(?<![A-Z])UVR(?![A-Z])|(?<![0-9])27H(?![0-9])', n) or '不足電圧継電' in s \
+       or re.search(r'(?<![0-9])27(?![0-9RA-Z])', n):
+        if '27H' in n and '46382' in byCode: return '46382','○','UVR 27H'
+        if 引出 and '46010' in byCode: return '46010','○','UVR(引出型)'
+        if '46011' in byCode: return '46011','○','UVR(静止型)'
+    # OVGR 地絡過電圧(RPR併記は46361, 64Gは46381, 単独46360)
+    if re.search(r'(?<![A-Z])OVGR(?![A-Z])|(?<![0-9])64G(?![0-9])', n) or '地絡過電圧' in s:
+        if re.search(r'(?<![A-Z])RPR(?![A-Z])|逆電力', n) and '46361' in byCode: return '46361','○','OVGR・RPR'
+        if '64G' in n and '46381' in byCode: return '46381','○','OVGR 64G'
+        if '46360' in byCode: return '46360','○','OVGR(地絡過電圧)'
+    # RPR 逆電力継電器(67P)
+    if re.search(r'(?<![A-Z])RPR(?![A-Z])|逆電力継電|(?<![0-9])67P(?![0-9])', n):
+        if '46385' in byCode: return '46385','◎','RPR(逆電力 67P)'
+    # GR 地絡継電器(無方向・ZCT/LG/DGRでない)。46031。
+    if re.search(r'(?<![A-Z])GR(?![A-Z])', n) and not re.search(r'DGR|LGR|LG-?RY|ZCT|IGR|OVGR', n) \
+       and not re.search(r'方向', s):
+        if '46031' in byCode: return '46031','○','GR(無方向性)'
     # LGR/LG-RY 地絡継電器(ZCT付)。ZCT併記かつ低圧アンペア指定が無いものだけ(46401=汎用)。
     if (re.search(r'(?<![A-Z])LGR(?![A-Z])|LG-?RY', n) and re.search(r'ZCT', n)) \
        or (re.search(r'地絡継電', s) and '方向' not in s and 'ZCT' in n):
