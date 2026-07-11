@@ -196,13 +196,21 @@ class DrawingModel:
         return [s for s in segs if s[0] != s[1]]
 
     def _senban(self):
+        """号線(線番)ラベルを収集。図面により2系統ある:
+          - SENBANブロックの『線番』属性（制御=シーケンス図）
+          - SOU1/SOU2/SOU3 属性（主回路=スケルトン図の相/号線ラベル）
+        """
         out = []
         for e in self.msp:
-            if e.dxftype() == 'INSERT' and e.dxf.layer == 'SENBAN':
-                a = {at.dxf.tag: at.dxf.text for at in (e.attribs or [])}
-                v = a.get('線番', '')
-                if v:
-                    out.append((v, e.dxf.insert.x, e.dxf.insert.y))
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            a = {at.dxf.tag: at.dxf.text for at in e.attribs}
+            if e.dxf.layer == 'SENBAN' and a.get('線番', '').strip():
+                out.append((a['線番'].strip(), e.dxf.insert.x, e.dxf.insert.y))
+            for j, k in enumerate(('SOU1', 'SOU2', 'SOU3')):
+                v = a.get(k, '').strip()
+                if v and v.lower() != 'sq':
+                    out.append((v, e.dxf.insert.x, e.dxf.insert.y - j * 30))
         return out
 
     # ---- ネット（結線の連結成分）----
