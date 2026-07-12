@@ -213,8 +213,61 @@ class DrawingModel:
                     out.append((v, e.dxf.insert.x, e.dxf.insert.y - j * 30))
         return out
 
-    # ---- ネット（結線の連結成分）----
+    # ---- ネット ----
     def _build_nets(self, tol=8):
+        """号線(SENBAN/SOU)ラベルがあれば号線でネットを分離（母線経由の過剰結合を回避）。
+        号線が無ければ幾何連結でフォールバック。"""
+        if self.senban and self.segments:
+            return self._build_nets_by_senban(tol)
+        return self._build_nets_geometric(tol)
+
+    def _build_nets_by_senban(self, tol=8):
+        segs = self.segments
+        sb = self.senban
+
+        def midp(s):
+            return ((s[0][0] + s[1][0]) / 2, (s[0][1] + s[1][1]) / 2)
+
+        # 各セグメントを最寄り号線ラベルに割付け
+        seg_sid = []
+        for s in segs:
+            mx, my = midp(s)
+            seg_sid.append(min(sb, key=lambda z: (z[1] - mx) ** 2 + (z[2] - my) ** 2)[0])
+        groups = collections.defaultdict(lambda: {'terminals': [], 'devices': set(), 'nodes': []})
+        for i, (a, b) in enumerate(segs):
+            groups[seg_sid[i]]['nodes'] += [a, b]
+        # 端子 → 最寄りセグメントの号線
+        for t in self.terminals:
+            bi, bd = -1, 1e9
+            for i, (a, b) in enumerate(segs):
+                d, _ = pt_seg_dist(t.x, t.y, a[0], a[1], b[0], b[1])
+                if d < bd:
+                    bd, bi = d, i
+            if bi >= 0 and bd <= tol * 3:
+                g = groups[seg_sid[bi]]
+                g['terminals'].append(t)
+                g['devices'].add(t.device)
+        # 端子が取れない機器（スケルトンのMCCB等）は外形枠で補完
+        no_term = {t.device for t in self.terminals}
+        for dv in self.devices:
+            if dv.sym in no_term:
+                continue
+            x0, y0, x1, y1 = dv.box
+            for i, (a, b) in enumerate(segs):
+                if any(x0 <= p[0] <= x1 and y0 <= p[1] <= y1 for p in (a, b)):
+                    groups[seg_sid[i]]['devices'].add(dv.sym)
+        nets = []
+        for sid, g in groups.items():
+            if len(g['devices']) < 2 and len(g['terminals']) < 2:
+                continue
+            nodes = g['nodes'] or [(t.x, t.y) for t in g['terminals']]
+            cx = sum(n[0] for n in nodes) / len(nodes)
+            cy = sum(n[1] for n in nodes) / len(nodes)
+            nets.append({'id': sid, 'terminals': g['terminals'], 'devices': sorted(g['devices']),
+                         'nodes': nodes, 'center': (cx, cy)})
+        return nets
+
+    def _build_nets_geometric(self, tol=8):
         segs = self.segments
         if not segs:
             return []
