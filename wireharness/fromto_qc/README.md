@@ -24,6 +24,7 @@
 | `vision.py` | Vision（Claude / Gemini）で結線トレース→From-To（`trace_tile` / `trace_tile_gemini`）。スマートタイリングで全面処理 |
 | `ensemble.py` | 幾何 × Claude × Gemini を号線単位で突合し「全一致=自動確定 / 多数決=準確定 / 割れ=要確認」を判定 |
 | `terminal_library.json` / `terminals.py` | 型式→端子番号・位置(x,y,z)・ねじ径 辞書。印字されない規約端子を型式から補完 |
+| `routing.py` | 機器to機器の最適配線＋中継端子の最適配置(線長最小)。多点ネットをMSTで分解、2本/端子制約超は中継端子を幾何中央へ |
 | `compare.py` | 人手ハーネスデータ.txt の解析と一致率スコア |
 | `run.py` | CLIオーケストレータ |
 
