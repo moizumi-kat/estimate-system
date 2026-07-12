@@ -103,7 +103,12 @@ class DrawingModel:
         self.terminals = self._terminals()
         self.devices = self._devices()
         self.segments = self._wire_segments()
-        self.senban = self._senban()
+        raw_sb = self._senban()
+        # senban は (号線, x, y) の3要素で公開（後方互換）。kind は並行リストで保持。
+        #   kind='ctrl' … SENBANブロックの『線番』（制御号線）
+        #   kind='main' … SOU属性（スケルトンの相/主回路ラベル）
+        self.senban = [(v, x, y) for v, x, y, _ in raw_sb]
+        self.senban_kind = [k for *_, k in raw_sb]
         self.nets = self._build_nets()
 
     # ---- 端子ピン ----
@@ -196,9 +201,11 @@ class DrawingModel:
         return [s for s in segs if s[0] != s[1]]
 
     def _senban(self):
-        """号線(線番)ラベルを収集。図面により2系統ある:
-          - SENBANブロックの『線番』属性（制御=シーケンス図）
-          - SOU1/SOU2/SOU3 属性（主回路=スケルトン図の相/号線ラベル）
+        """号線(線番)ラベルを収集。図面により2系統あり、種別(kind)を付ける:
+          - SENBANブロックの『線番』属性（制御=シーケンス図）→ kind='ctrl'
+          - SOU1/SOU2/SOU3 属性（主回路=スケルトン図の相/号線ラベル）→ kind='main'
+        戻り: [(号線, x, y, kind), ...]。同じ号線名でも 制御(ctrl) と 相(main) で意味が違う
+        （例 "102S"）ため、ネット構築時に種別を分離して名前衝突による誤結合を防ぐ。
         """
         out = []
         for e in self.msp:
@@ -206,11 +213,11 @@ class DrawingModel:
                 continue
             a = {at.dxf.tag: at.dxf.text for at in e.attribs}
             if e.dxf.layer == 'SENBAN' and a.get('線番', '').strip():
-                out.append((a['線番'].strip(), e.dxf.insert.x, e.dxf.insert.y))
+                out.append((a['線番'].strip(), e.dxf.insert.x, e.dxf.insert.y, 'ctrl'))
             for j, k in enumerate(('SOU1', 'SOU2', 'SOU3')):
                 v = a.get(k, '').strip()
                 if v and v.lower() != 'sq':
-                    out.append((v, e.dxf.insert.x, e.dxf.insert.y - j * 30))
+                    out.append((v, e.dxf.insert.x, e.dxf.insert.y - j * 30, 'main'))
         return out
 
     # ---- ネット ----
@@ -223,7 +230,11 @@ class DrawingModel:
 
     def _build_nets_by_senban(self, tol=8):
         segs = self.segments
-        sb = self.senban
+        # 号線ラベルに種別(kind)を添えて扱う。号線名→kind の対応も作る。
+        sb = [(v, x, y, k) for (v, x, y), k in zip(self.senban, self.senban_kind)]
+        id2kind = {}
+        for v, x, y, k in sb:
+            id2kind.setdefault(v, k)
 
         def midp(s):
             return ((s[0][0] + s[1][0]) / 2, (s[0][1] + s[1][1]) / 2)
@@ -263,7 +274,8 @@ class DrawingModel:
             nodes = g['nodes'] or [(t.x, t.y) for t in g['terminals']]
             cx = sum(n[0] for n in nodes) / len(nodes)
             cy = sum(n[1] for n in nodes) / len(nodes)
-            nets.append({'id': sid, 'terminals': g['terminals'], 'devices': sorted(g['devices']),
+            nets.append({'id': sid, 'kind': id2kind.get(sid, 'ctrl'),
+                         'terminals': g['terminals'], 'devices': sorted(g['devices']),
                          'nodes': nodes, 'center': (cx, cy)})
         return nets
 
@@ -314,9 +326,13 @@ class DrawingModel:
             cx = sum(n[0] for n in nodes) / len(nodes)
             cy = sum(n[1] for n in nodes) / len(nodes)
             sid = ''
+            kind = 'ctrl'
             if self.senban:
-                sid = min(self.senban, key=lambda s: (s[1] - cx) ** 2 + (s[2] - cy) ** 2)[0]
-            nets.append({'id': sid, 'terminals': tset, 'devices': sorted(dset),
+                bi = min(range(len(self.senban)),
+                         key=lambda i: (self.senban[i][1] - cx) ** 2 + (self.senban[i][2] - cy) ** 2)
+                sid = self.senban[bi][0]
+                kind = self.senban_kind[bi]
+            nets.append({'id': sid, 'kind': kind, 'terminals': tset, 'devices': sorted(dset),
                          'nodes': nodes, 'center': (cx, cy)})
         return nets
 
