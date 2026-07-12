@@ -60,6 +60,37 @@ def pattern_terminal_names(pattern_name):
     return []
 
 
+def pattern_stud(pattern_name):
+    """パターンのねじ径(圧着端子選定用)。socket=リレーソケットで圧着なし。"""
+    p = library()['patterns'].get(pattern_name, {})
+    return p.get('stud', '')
+
+
+def positioned_terminals(insert, rotation, parts, type_str, template_points=None):
+    """機器1つの端子を『端子名＋絶対座標(x,y)＋ねじ径』で返す（測長・端末加工用）。
+    template_points があれば実位置を優先し、無ければ辞書coordsの公称値を使う。
+    insert=(ix,iy), rotation=deg。戻り: [(name, x, y, stud), ...]"""
+    import math
+    pat = resolve_pattern(parts, type_str)
+    if not pat:
+        return []
+    stud = pattern_stud(pat)
+    ix, iy = insert
+    r = math.radians(rotation or 0)
+    c, s = math.cos(r), math.sin(r)
+
+    def rot(dx, dy):
+        return (ix + dx * c - dy * s, iy + dx * s + dy * c)
+    if template_points:
+        named = assign_names(template_points, pat)
+        return [(nm, x, y, stud) for nm, x, y in named]
+    coords = library()['patterns'].get(pat, {}).get('coords')
+    if coords:
+        return [(nm, *rot(dx, dy), stud) for nm, (dx, dy) in coords.items()]
+    # coords未整備: 名前だけ（位置はカタログ拡張待ち）
+    return [(nm, None, None, stud) for nm in pattern_terminal_names(pat)]
+
+
 def assign_names(points, pattern_name):
     """端子“位置”のリスト [(x,y),...] に、パターンの端子名を空間順で割り当てる。
     行優先（yで上下段に分け、各段xで左右）に並べて names を zip する。
