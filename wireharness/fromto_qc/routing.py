@@ -58,31 +58,48 @@ def geometric_median(points, iters=64):
     return (x, y, z)
 
 
-def optimal_wiring(net_devices, positions, max_per_node=2, mode='manhattan'):
-    """機器to機器の最適配線を返す。
+def best_terminal_block(cluster_points, terminal_blocks, mode='manhattan'):
+    """既存端子台の中から、cluster_points 全点への総線長が最小の端子台を選ぶ。
+    terminal_blocks: {端子台名:(x,y,z)}。戻り: (名前, 位置, 総線長) or None。"""
+    if not terminal_blocks:
+        return None
+    best = None
+    for name, pos in terminal_blocks.items():
+        s = sum(dist3(pos, p, mode) for p in cluster_points)
+        if best is None or s < best[2]:
+            best = (name, pos, s)
+    return best
+
+
+def optimal_wiring(net_devices, positions, terminal_blocks=None, max_per_node=2, mode='manhattan'):
+    """機器to機器の最適配線を返す。中継は『図面にある既存端子台』から選ぶ。
     net_devices: この号線に接続する機器名リスト。
     positions: {機器名:(x,y,z)}。
-    戻り: {"wires":[(a,b,length)], "relays":[{"pos":(x,y,z),"to":[...]}], "total":総長}
-    2本/端子制約を超える機器があれば中継端子を最適位置に置いて分配する。
+    terminal_blocks: {端子台名:(x,y,z)} 図面に配置済みの端子台。中継候補。
+    戻り: {"wires":[(a,b,length)], "relays":[{"tb":名, "pos":(x,y,z), "to":[...]}], "total":総長}
+    2本/端子制約を超える機器があれば、既存端子台の中で線長最小のものを中継に使う。
     """
     nodes = {d: positions[d] for d in net_devices if d in positions}
     if len(nodes) < 2:
         return {"wires": [], "relays": [], "total": 0.0, "note": "位置不明or2点未満"}
     edges = mst_edges(nodes, mode)
-    # 各機器の次数
     deg = {}
     for a, b, _ in edges:
         deg[a] = deg.get(a, 0) + 1
         deg[b] = deg.get(b, 0) + 1
     relays = []
     over = [n for n, k in deg.items() if k > max_per_node]
-    if over:
-        # 次数超過機器の接続先を中継端子に束ねる（最適位置=接続先の幾何中央）
-        for n in over:
-            nbrs = [b for a, b, _ in edges if a == n] + [a for a, b, _ in edges if b == n]
-            relay_pos = geometric_median([nodes[n]] + [nodes[x] for x in nbrs])
-            relays.append({"pos": tuple(round(v, 1) for v in relay_pos), "to": [n] + nbrs})
+    for n in over:
+        nbrs = [b for a, b, _ in edges if a == n] + [a for a, b, _ in edges if b == n]
+        cluster = [nodes[n]] + [nodes[x] for x in nbrs]
+        tb = best_terminal_block(cluster, terminal_blocks, mode)
+        if tb:
+            relays.append({"tb": tb[0], "pos": tuple(round(v, 1) for v in tb[1]), "to": [n] + nbrs})
+        else:
+            # 端子台情報が無い場合のみ幾何中央（図面端子台の指定を促す）
+            relays.append({"tb": None, "pos": tuple(round(v, 1) for v in geometric_median(cluster)),
+                           "to": [n] + nbrs, "note": "既存端子台の位置を渡してください"})
     total = sum(l for _, _, l in edges)
+    note = "全機器2本以内" if not over else ("既存端子台を中継に使用" if terminal_blocks else "中継要・端子台未指定")
     return {"wires": [(a, b, round(l, 1)) for a, b, l in edges],
-            "relays": relays, "total": round(total, 1),
-            "note": ("中継端子で2本制約を解消" if over else "全機器2本以内")}
+            "relays": relays, "total": round(total, 1), "note": note}
