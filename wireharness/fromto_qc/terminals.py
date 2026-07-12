@@ -66,15 +66,22 @@ def pattern_stud(pattern_name):
     return p.get('stud', '')
 
 
+def pattern_z(pattern_name):
+    """パターンの端子高さ(取付板からの高さ[mm]・測長の3次元用)。"""
+    p = library()['patterns'].get(pattern_name, {})
+    return p.get('z', 0)
+
+
 def positioned_terminals(insert, rotation, parts, type_str, template_points=None):
-    """機器1つの端子を『端子名＋絶対座標(x,y)＋ねじ径』で返す（測長・端末加工用）。
-    template_points があれば実位置を優先し、無ければ辞書coordsの公称値を使う。
-    insert=(ix,iy), rotation=deg。戻り: [(name, x, y, stud), ...]"""
+    """機器1つの端子を『端子名＋絶対座標(x,y,z)＋ねじ径』で返す（測長・端末加工用）。
+    x,y=盤面内位置, z=取付板からの高さ。template_points があれば実xy位置を優先。
+    insert=(ix,iy), rotation=deg。戻り: [(name, x, y, z, stud), ...]"""
     import math
     pat = resolve_pattern(parts, type_str)
     if not pat:
         return []
     stud = pattern_stud(pat)
+    z = pattern_z(pat)
     ix, iy = insert
     r = math.radians(rotation or 0)
     c, s = math.cos(r), math.sin(r)
@@ -83,12 +90,12 @@ def positioned_terminals(insert, rotation, parts, type_str, template_points=None
         return (ix + dx * c - dy * s, iy + dx * s + dy * c)
     if template_points:
         named = assign_names(template_points, pat)
-        return [(nm, x, y, stud) for nm, x, y in named]
+        return [(nm, x, y, z, stud) for nm, x, y in named]
     coords = library()['patterns'].get(pat, {}).get('coords')
     if coords:
-        return [(nm, *rot(dx, dy), stud) for nm, (dx, dy) in coords.items()]
-    # coords未整備: 名前だけ（位置はカタログ拡張待ち）
-    return [(nm, None, None, stud) for nm in pattern_terminal_names(pat)]
+        return [(nm, *rot(dx, dy), z, stud) for nm, (dx, dy) in coords.items()]
+    # coords未整備: 名前＋高さ＋ねじ径（xy位置はカタログ拡張待ち）
+    return [(nm, None, None, z, stud) for nm in pattern_terminal_names(pat)]
 
 
 def assign_names(points, pattern_name):

@@ -23,8 +23,21 @@
 | `render.py` | 構造モデル→Vision入力用のタイル画像（端子ピン・号線を強調） |
 | `vision.py` | Vision（Claude / Gemini）で結線トレース→From-To（`trace_tile` / `trace_tile_gemini`）。スマートタイリングで全面処理 |
 | `ensemble.py` | 幾何 × Claude × Gemini を号線単位で突合し「全一致=自動確定 / 多数決=準確定 / 割れ=要確認」を判定 |
+| `terminal_library.json` / `terminals.py` | 型式→端子番号・位置(x,y,z)・ねじ径 辞書。印字されない規約端子を型式から補完 |
 | `compare.py` | 人手ハーネスデータ.txt の解析と一致率スコア |
 | `run.py` | CLIオーケストレータ |
+
+## 端子辞書 (Terminal Library)
+
+図面に印字されない規約端子(MCCB=1,3,5/2,4,6, リレー=ソケットピン 等)を、機器の
+**型式(TYPE)・部品カテゴリ(PARTS)・極数**から補完する。1つの端子が:
+- **端子名** → From-To（配線表）
+- **位置 x,y,z** → 測長（z=取付板からの端子高さ で3次元）
+- **ねじ径 stud** → 端末加工（圧着端子 R2-6 等の選定）
+
+を持つ。出典は IEC 60947 標準端子 + メーカーカタログ(IDEC RU / 富士 SC 等)。
+**新しい部品は `terminal_library.json` の `patterns`(端子配置)と `match`(型式→pattern割付)に
+追記して拡張**する。z/coords/stud はカタログ値で精緻化していく。
 
 ## 使い方
 
