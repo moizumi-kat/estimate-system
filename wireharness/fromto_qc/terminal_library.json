@@ -1,0 +1,38 @@
+{
+  "_comment": "型式→端子番号 辞書。印字されない規約端子(MCCB/リレー等)を型式から補完する。patternsは端子配置、matchは(部品カテゴリ/型式)→patternの割付ルール。カタログ値で拡張可能。",
+  "patterns": {
+    "breaker_3P": {"desc": "MCCB/ELCB 3極 主端子", "rows": [["1", "3", "5"], ["2", "4", "6"]]},
+    "breaker_2P": {"desc": "MCCB/ELCB 2極 主端子", "rows": [["1", "3"], ["2", "4"]]},
+    "breaker_2P_N": {"desc": "MCCB/ELCB 2P+N", "rows": [["1", "3", "N"], ["2", "4", "N"]]},
+    "fuse": {"desc": "ヒューズ", "rows": [["1"], ["2"]]},
+    "relay_RU4S": {"desc": "アイデック RU4S 4PDT 14pinソケット", "pins": ["1", "5", "9", "2", "6", "10", "3", "7", "11", "4", "8", "12", "13", "14"], "coil": ["13", "14"]},
+    "relay_RU2S": {"desc": "アイデック RU2S 2PDT 8pinソケット", "pins": ["1", "5", "2", "6", "3", "7", "4", "8"], "coil": ["7", "8"]},
+    "relay_R87F": {"desc": "オムロン MYタイプ相当", "pins": ["1", "5", "9", "2", "6", "10", "3", "7", "11", "4", "8", "12", "13", "14"], "coil": ["13", "14"]},
+    "contactor": {"desc": "電磁接触器 主+コイル+補助", "main_rows": [["1", "3", "5"], ["2", "4", "6"]], "coil": ["A1", "A2"], "aux": ["13", "14", "21", "22"]},
+    "pb_contact": {"desc": "押ボタン/切替 接点ブロック", "blocks": [["13", "14"], ["21", "22"], ["43", "44"], ["31", "32"]]},
+    "lamp": {"desc": "表示灯", "pins": ["+", "-"]},
+    "meter": {"desc": "計器(電流計/電圧計)", "pins": ["1", "2"]}
+  },
+  "match": [
+    {"parts": "MCCB", "pole": "3P", "pattern": "breaker_3P"},
+    {"parts": "MCCB", "pole": "2P", "pattern": "breaker_2P"},
+    {"parts": "ELCB", "pole": "3P", "pattern": "breaker_3P"},
+    {"parts": "ELCB", "pole": "2P", "pattern": "breaker_2P"},
+    {"parts": "MS", "pattern": "contactor"},
+    {"parts": "MC", "pattern": "contactor"},
+    {"type_contains": "RU4S", "pattern": "relay_RU4S"},
+    {"type_contains": "RU2S", "pattern": "relay_RU2S"},
+    {"type_contains": "R87F", "pattern": "relay_R87F"},
+    {"parts": "AXR", "pattern": "relay_RU4S"},
+    {"parts": "ﾋｭｰｽﾞﾎﾙﾀﾞ", "pattern": "fuse"},
+    {"parts": "F", "pattern": "fuse"},
+    {"parts": "PBS", "pattern": "pb_contact"},
+    {"parts": "COS", "pattern": "pb_contact"},
+    {"parts": "SL", "pattern": "lamp"},
+    {"parts": "WL", "pattern": "lamp"},
+    {"parts": "PL", "pattern": "lamp"},
+    {"parts": "AM", "pattern": "meter"},
+    {"parts": "VM", "pattern": "meter"}
+  ],
+  "_needs_catalog": ["INV (FR-F820 等インバータ)", "TB (端子台=印字あり)", "特殊計器"]
+}
