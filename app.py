@@ -1309,8 +1309,26 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     # 受変電の保護継電器(DGR方向性/LG-RY ZCT付/OCR/UVR/OVGR/GR)の直引き
     _ry=_relay_code(name, panel)
     if _ry: return R(_ry[0],_ry[1],_ry[2])
-    # 手動電源切替器DT(68系): 極数×容量。極数/容量が読めれば確定、読めなければ△(既定3P60A提示)。
     _ns=unicodedata.normalize('NFKC',str(name))
+    # MCTT(電源切替器)3P/4P: 型式規則(茂泉様)=DT型(一般的でDT表示を省略)とLT型(ラッチ型)。
+    #  MCTT/MC-DT/MCDT/手動切替+DT → DT型=47系(3P-DT:47000-47012, 4P-DT:47042系)。
+    #  ラッチ/LT明記 → LT型=64系(交流ラッチ3P:64101-64112)。容量は最近傍上位(切上)。
+    if re.search(r'MCTT|MC-?DT|MCDT', _ns) or (re.search(r'手動.{0,3}切替', _ns) and re.search(r'(?<![A-Za-z])DT(?![A-Za-z])', _ns)):
+        is_latch=bool(re.search(r'ラッチ|ﾗｯﾁ|(?<![A-Za-z])LT(?![A-Za-z])|latch', _ns, re.I))
+        mp=re.search(r'([234])\s*P', _ns); ma=re.search(r'(\d+)\s*A[TF]?(?![A-Za-z])', _ns)
+        pole=mp.group(1) if mp else '3'; amp=int(ma.group(1)) if ma else None
+        if amp:
+            if is_latch:  # LT型=64系 交流ラッチ3P
+                for a,c in [(20,'64101'),(30,'64102'),(50,'64104'),(60,'64105'),(80,'64106'),(100,'64107'),(150,'64108'),(200,'64109'),(300,'64110'),(400,'64111'),(600,'64112')]:
+                    if amp<=a and c in byCode: return R(c,('◎' if amp==a else '○'),'MCTT 交流ラッチ(LT)3P %dA%s'%(a,'' if amp==a else '(容量繰上)'))
+            elif pole=='4':  # 4P-DT
+                for a,c in [(100,'47042'),(200,'47043'),(400,'47045'),(600,'47046'),(800,'47047')]:
+                    if amp<=a and c in byCode: return R(c,('◎' if amp==a else '○'),'MCTT 4P-DT %dA%s'%(a,'' if amp==a else '(容量繰上)'))
+            else:  # DT型(既定)=47系 3P-DT
+                for a,c in [(30,'47000'),(60,'47001'),(100,'47002'),(200,'47003'),(300,'47004'),(400,'47005'),(600,'47006'),(800,'47007'),(1000,'47008'),(1200,'47009'),(1600,'47010'),(2000,'47011'),(3000,'47012')]:
+                    if amp<=a and c in byCode: return R(c,('◎' if amp==a else '○'),'MCTT 3P-DT %dA%s'%(a,'' if amp==a else '(容量繰上)'))
+        return R('47005','△','MCTT(電源切替器)・極数/容量要確認')
+    # 手動電源切替器DT(68系): 極数×容量。極数/容量が読めれば確定、読めなければ△(既定3P60A提示)。
     if re.search(r'手動.{0,2}切替|手動電源切替|切替器.*DT|DT.*切替|(?<![A-Za-z])DT(?![A-Za-z]).{0,6}(\d+\s*P|\d+\s*A)', _ns):
         mp=re.search(r'([234])\s*P', _ns); ma=re.search(r'(\d+)\s*A(?![A-Za-z])', _ns)
         pole=mp.group(1) if mp else None; amp=int(ma.group(1)) if ma else None
