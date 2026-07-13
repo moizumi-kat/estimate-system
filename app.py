@@ -1120,6 +1120,11 @@ def _pro_map(name):
     if v: return v
     sc=_scott_code(name)
     if sc: return sc
+    # 高圧避雷器LA: 8.4kV 3P。標準/引出型/断路型/10KAの変種は図面から読めないことが多く、
+    # 放電電流(2.5kA等)は変種選定に使えない→標準(43461)を○(変種要確認)で確定し△を解消。
+    if re.search(r'(?<![A-Za-z])LA(?![A-Za-z])|避雷器', s) and re.search(r'\d\.?\d*\s*kv', s, re.I):
+        if re.search(r'10\s*kA', s, re.I) and '43464' in byCode: return '43464','○','LA避雷器8.4kV(10KA)'
+        if '43461' in byCode: return '43461','○','LA避雷器8.4kV(標準)・変種(引出/断路/10KA)は要確認'
     for pat,code,note in _PRO_MAP:
         if re.search(pat, s) and code in byCode:
             return code,'○',note+'(プロ確定)'
