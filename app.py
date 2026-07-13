@@ -2438,10 +2438,15 @@ def select_from_extracted(data):
                 _mx['conf']='○' if _up else '◎'
                 _mx['note']='MCTT 3P-DT %dA(盤内最大=主電源切替)%s'%(_mx['_mctt']['amp'],'(容量繰上)' if _up else '')
                 # コード表p13: DTの時は必ず 18-100(電源切替制御一式:COS×1,PL×2,T-Ry×2,AUX-Ry×2)を同時計上。
+                # AUX-Ryの型(標準73000/高級73001)は案件の仕様レベルで変わる(森ビル等の高仕様=高級)。
+                # 仕様レベルは確認ゲートで確定: 既定=標準(18100)、高級(18101)を候補提示し○(要確認)。
                 if '18100' in byCode:
-                    rows.append(dict(code='18100',name=byCode['18100'].get('name',''),conf='◎',
-                                     note='DTの時に必ず拾う(コード表p13):COS×1,PL×2,T-Ry×2,AUX-Ry×2',
-                                     raw='(MCTT DT付随 18-100)',qty='1',load_detail=False,feed=''))
+                    _cands=[{'code':'18100','name':byCode.get('18100',{}).get('name',''),'volt':''}]
+                    if '18101' in byCode: _cands.append({'code':'18101','name':byCode.get('18101',{}).get('name',''),'volt':''})
+                    rows.append(dict(code='18100',name=byCode['18100'].get('name',''),conf='○',
+                                     note='DT付随(コード表p13)。仕様レベルを確認ゲートで選択: 標準=18100/高級=18101(AUX-Ry高級)',
+                                     raw='(MCTT DT付随 18-100)',qty='1',load_detail=False,feed='',
+                                     candidates=_cands,spec_gate=True))
         for r in rows: r.pop('_mctt',None)   # 内部タグ除去
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
