@@ -223,11 +223,112 @@ class DrawingModel:
 
     # ---- ネット ----
     def _build_nets(self, tol=8):
-        """号線(SENBAN/SOU)ラベルがあれば号線でネットを分離（母線経由の過剰結合を回避）。
-        号線が無ければ幾何連結でフォールバック。"""
+        """ネット構築。属性端子ピン＋電線連結を辿る方式を優先（過剰収集を回避）。
+        号線ラベルはあるが電線が無い等の例外時のみ従来方式へフォールバック。"""
+        if self.segments and self.senban:
+            nets = self._build_nets_connectivity(tol)
+            if nets:
+                return nets
+            return self._build_nets_by_senban(tol)
         if self.senban and self.segments:
             return self._build_nets_by_senban(tol)
         return self._build_nets_geometric(tol)
+
+    def _build_nets_connectivity(self, tol=8):
+        """部品属性を最大活用するネット構築。
+        考え方: 属性端子ピン(TB+TERMINAL, 100%電線端点に一致)を起点に、電線の連結成分
+        (union-find＋T字分岐)を作り、成分ごとに『実際に繋がる端子・機器』だけを集める。
+        号線ラベルは“ラベル自身の位置”に最も近い電線端点の成分へ与える（最寄りセグメント割付
+        の様に一つのラベルを遠方まで広げない）。同じ号線が複数成分に付く場合のみ連結
+        （作図のスナップ隙間を号線で橋渡し）。
+        """
+        segs = self.segments
+
+        def qn(p):
+            return (round(p[0] / tol) * tol, round(p[1] / tol) * tol)
+
+        uf = UF()
+        for a, b in segs:
+            uf.union(qn(a), qn(b))
+        nodes_all = set()
+        for a, b in segs:
+            nodes_all.add(a)
+            nodes_all.add(b)
+        # T字分岐: 端点が別線分の途中に乗れば結合
+        for (px, py) in list(nodes_all):
+            for (ax, ay), (bx, by) in segs:
+                if (px, py) in ((ax, ay), (bx, by)):
+                    continue
+                d, t = pt_seg_dist(px, py, ax, ay, bx, by)
+                if d <= tol and 0.02 < t < 0.98:
+                    uf.union(qn((px, py)), qn((ax, ay)))
+
+        # 号線ラベル → ラベル位置に最も近い電線端点の成分root（＋種別）
+        node_list = list(nodes_all)
+        label_root = {}    # root -> [(号線, kind), ...]
+        for (v, x, y), k in zip(self.senban, self.senban_kind):
+            if not node_list:
+                break
+            nn = _nearest_node(x, y, node_list)
+            label_root.setdefault(uf.find(qn(nn)), []).append((v, k))
+
+        # 同じ号線名を持つ成分同士を連結（スナップ隙間の橋渡し）
+        id_first_root = {}
+        for root, labs in list(label_root.items()):
+            for (v, k) in labs:
+                if v in id_first_root:
+                    uf.union(root, id_first_root[v])
+                else:
+                    id_first_root[v] = root
+
+        # 端子ピン → その端子が乗る電線端点の成分（一致=確定的に接続）
+        comp_terms = collections.defaultdict(list)
+        for tm in self.terminals:
+            nn = _nearest_node(tm.x, tm.y, node_list) if node_list else None
+            if nn is None:
+                continue
+            if abs(nn[0] - tm.x) + abs(nn[1] - tm.y) <= tol * 3:
+                comp_terms[uf.find(qn(nn))].append(tm)
+
+        # 端子を持たない機器(スケルトンのMCCB等) → 外形枠に電線端点が入る成分へ
+        no_term = {t.device for t in self.terminals}
+        comp_footdev = collections.defaultdict(set)
+        for dv in self.devices:
+            if dv.sym in no_term:
+                continue
+            x0, y0, x1, y1 = dv.box
+            for nd in node_list:
+                if x0 <= nd[0] <= x1 and y0 <= nd[1] <= y1:
+                    comp_footdev[uf.find(qn(nd))].add(dv.sym)
+
+        # 成分ごとの号線ラベル（連結後のrootで引き直す。連結でrootがずれるため）
+        root_labels = collections.defaultdict(list)
+        for (v, x, y), k in zip(self.senban, self.senban_kind):
+            if not node_list:
+                break
+            nn = _nearest_node(x, y, node_list)
+            root_labels[uf.find(qn(nn))].append((v, k))
+
+        nets = []
+        seen_roots = set(comp_terms) | set(comp_footdev) | set(root_labels)
+        for root in seen_roots:
+            terms = comp_terms.get(root, [])
+            devs = {t.device for t in terms} | comp_footdev.get(root, set())
+            labs = root_labels.get(root, [])
+            if not labs:
+                continue                       # 号線が付かない成分は出力しない
+            # 号線id・種別＝この成分の最多ラベル
+            cnt = collections.Counter(v for v, _ in labs)
+            sid = cnt.most_common(1)[0][0]
+            kind = dict((v, k) for v, k in labs).get(sid, 'ctrl')
+            if len(devs) < 2 and len(terms) < 2:
+                continue
+            nodes = [(t.x, t.y) for t in terms] or [(0, 0)]
+            nets.append({'id': sid, 'kind': kind, 'terminals': terms,
+                         'devices': sorted(devs), 'nodes': nodes,
+                         'center': (sum(n[0] for n in nodes) / len(nodes),
+                                    sum(n[1] for n in nodes) / len(nodes))})
+        return nets
 
     def _build_nets_by_senban(self, tol=8):
         segs = self.segments
