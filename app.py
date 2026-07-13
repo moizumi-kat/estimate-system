@@ -1310,23 +1310,33 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     _ry=_relay_code(name, panel)
     if _ry: return R(_ry[0],_ry[1],_ry[2])
     _ns=unicodedata.normalize('NFKC',str(name))
-    # MCTT(電源切替器)3P/4P: 型式規則(茂泉様)=DT型(一般的でDT表示を省略)とLT型(ラッチ型)。
-    #  MCTT/MC-DT/MCDT/手動切替+DT → DT型=47系(3P-DT:47000-47012, 4P-DT:47042系)。
-    #  ラッチ/LT明記 → LT型=64系(交流ラッチ3P:64101-64112)。容量は最近傍上位(切上)。
+    # MCTT(電源切替器): 実見積書で盤種により系統が分かれる(茂泉様確定):
+    #  ①配電盤(非常・保安の動力盤/電灯盤=受変電低圧配電盤) → 47系(3P-DT:47000系 / 3P-ST:47020系)。
+    #     47系内は「動力盤の最大容量1台=DT(主電源切替)、他=ST」→ ST既定で出し、盤内最大をpost-passでDT昇格。
+    #  ②制御盤(M/P番号)・分電盤(L番号) → 64系(交流3P:64001系)。
+    #  ③ラッチ/LT明記 → 64系(交流ラッチ3P:64101系)。容量は最近傍上位(切上)、極数/容量不明は△。
     if re.search(r'MCTT|MC-?DT|MCDT', _ns) or (re.search(r'手動.{0,3}切替', _ns) and re.search(r'(?<![A-Za-z])DT(?![A-Za-z])', _ns)):
         is_latch=bool(re.search(r'ラッチ|ﾗｯﾁ|(?<![A-Za-z])LT(?![A-Za-z])|latch', _ns, re.I))
         mp=re.search(r'([234])\s*P', _ns); ma=re.search(r'(\d+)\s*A[TF]?(?![A-Za-z])', _ns)
         pole=mp.group(1) if mp else '3'; amp=int(ma.group(1)) if ma else None
+        _kd=_mctt_kind(panel)
         if amp:
             if is_latch:  # LT型=64系 交流ラッチ3P
                 for a,c in [(20,'64101'),(30,'64102'),(50,'64104'),(60,'64105'),(80,'64106'),(100,'64107'),(150,'64108'),(200,'64109'),(300,'64110'),(400,'64111'),(600,'64112')]:
                     if amp<=a and c in byCode: return R(c,('◎' if amp==a else '○'),'MCTT 交流ラッチ(LT)3P %dA%s'%(a,'' if amp==a else '(容量繰上)'))
-            elif pole=='4':  # 4P-DT
+            elif _kd in ('ctrl','bunden'):  # 制御盤/分電盤 → 64系 交流3P
+                for a,c in [(20,'64001'),(30,'64002'),(50,'64004'),(60,'64005'),(80,'64006'),(100,'64007'),(150,'64008'),(200,'64009'),(300,'64010'),(400,'64011'),(600,'64012')]:
+                    if amp<=a and c in byCode: return R(c,('◎' if amp==a else '○'),'MCTT 交流3P %dA%s'%(a,'' if amp==a else '(容量繰上)'))
+            elif pole=='4':  # 配電盤の4P(DT)
                 for a,c in [(100,'47042'),(200,'47043'),(400,'47045'),(600,'47046'),(800,'47047')]:
                     if amp<=a and c in byCode: return R(c,('◎' if amp==a else '○'),'MCTT 4P-DT %dA%s'%(a,'' if amp==a else '(容量繰上)'))
-            else:  # DT型(既定)=47系 3P-DT
-                for a,c in [(30,'47000'),(60,'47001'),(100,'47002'),(200,'47003'),(300,'47004'),(400,'47005'),(600,'47006'),(800,'47007'),(1000,'47008'),(1200,'47009'),(1600,'47010'),(2000,'47011'),(3000,'47012')]:
-                    if amp<=a and c in byCode: return R(c,('◎' if amp==a else '○'),'MCTT 3P-DT %dA%s'%(a,'' if amp==a else '(容量繰上)'))
+            else:  # 配電盤(haiden) 3P → 既定ST型(47020系)。盤内最大はpost-passでDT(47000系)へ昇格。
+                _st=[(30,'47020'),(60,'47021'),(100,'47022'),(200,'47023'),(300,'47024'),(400,'47025'),(600,'47026'),(800,'47027'),(1000,'47028'),(1200,'47029'),(1600,'47030'),(2000,'47031')]
+                for a,c in _st:
+                    if amp<=a and c in byCode:
+                        r=R(c,('◎' if amp==a else '○'),'MCTT 3P-ST %dA%s'%(a,'' if amp==a else '(容量繰上)'))
+                        r['_mctt']={'amp':a,'st':c,'dt':str(int(c)-20)}  # DT=47系ST-20(47024→47004)
+                        return r
         return R('47005','△','MCTT(電源切替器)・極数/容量要確認')
     # 手動電源切替器DT(68系): 極数×容量。極数/容量が読めれば確定、読めなければ△(既定3P60A提示)。
     if re.search(r'手動.{0,2}切替|手動電源切替|切替器.*DT|DT.*切替|(?<![A-Za-z])DT(?![A-Za-z]).{0,6}(\d+\s*P|\d+\s*A)', _ns):
@@ -1635,6 +1645,18 @@ def _mcb_note(name, panel):
     role='主幹' if (n.startswith('m)') or '主幹' in name) else '分岐'
     typ='ELB' if 'elb' in n else 'MCB'
     return f'{role}{typ}(盤種別・AF枠で選定)'
+
+def _mctt_kind(panel):
+    """MCTTの盤種判定: 制御盤(M/P番号・制御/自立)/分電盤(L番号・分電)→'ctrl'/'bunden'(→64系)、
+    それ以外の配電盤(非常・保安の動力盤/電灯盤=受変電低圧配電盤)→'haiden'(→47系)。"""
+    pn=norm(panel)
+    if '制御' in pn or '自立' in pn: return 'ctrl'
+    if '分電' in pn: return 'bunden'
+    _mp=re.search(r'(^|[^a-zａ-ｚ])\d*[mｍpｐ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)
+    _lj=re.search(r'(^|[^a-zａ-ｚ])\d*[lｌjｊsｓ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)
+    if _mp and not ('電灯' in pn or '照明' in pn): return 'ctrl'
+    if _lj: return 'bunden'
+    return 'haiden'
 
 def _ax_gate(code, name, panel):
     """AX付(補助接点付)は図面に特記が無いと確定できない社内標準仕様。実見積書(城山)では
@@ -2401,6 +2423,18 @@ def select_from_extracted(data):
             loads=r.get('loads',[])
             if loads: disp=f'{disp}({", ".join(loads)})'
             r['display']=disp.strip()
+        # MCTT 47系: 動力配電盤(非常・保安動力盤)は盤内の最大容量1台をDT(主電源切替)へ昇格、他はST維持。
+        # 電灯盤(動力の語なし)は全てST維持(実見積書で電灯盤=全ST)。
+        _mrows=[r for r in rows if r.get('_mctt')]
+        if _mrows and '動力' in norm(p.get('panel','')) and _mctt_kind(p.get('panel',''))=='haiden':
+            _mx=max(_mrows, key=lambda r: r['_mctt']['amp'])
+            _dt=_mx['_mctt']['dt']
+            if _dt in byCode:
+                _up='容量繰上' in str(_mx.get('note',''))
+                _mx['code']=_dt; _mx['name']=byCode[_dt].get('name','')
+                _mx['conf']='○' if _up else '◎'
+                _mx['note']='MCTT 3P-DT %dA(盤内最大=主電源切替)%s'%(_mx['_mctt']['amp'],'(容量繰上)' if _up else '')
+        for r in rows: r.pop('_mctt',None)   # 内部タグ除去
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
 
