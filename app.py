@@ -2437,6 +2437,11 @@ def select_from_extracted(data):
                 _mx['code']=_dt; _mx['name']=byCode[_dt].get('name','')
                 _mx['conf']='○' if _up else '◎'
                 _mx['note']='MCTT 3P-DT %dA(盤内最大=主電源切替)%s'%(_mx['_mctt']['amp'],'(容量繰上)' if _up else '')
+                # コード表p13: DTの時は必ず 18-100(電源切替制御一式:COS×1,PL×2,T-Ry×2,AUX-Ry×2)を同時計上。
+                if '18100' in byCode:
+                    rows.append(dict(code='18100',name=byCode['18100'].get('name',''),conf='◎',
+                                     note='DTの時に必ず拾う(コード表p13):COS×1,PL×2,T-Ry×2,AUX-Ry×2',
+                                     raw='(MCTT DT付随 18-100)',qty='1',load_detail=False,feed=''))
         for r in rows: r.pop('_mctt',None)   # 内部タグ除去
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
