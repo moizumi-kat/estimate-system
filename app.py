@@ -1118,6 +1118,8 @@ def _pro_map(name):
     s=unicodedata.normalize('NFKC',str(name))
     v=_vmc_code(name)
     if v: return v
+    sc=_scott_code(name)
+    if sc: return sc
     for pat,code,note in _PRO_MAP:
         if re.search(pat, s) and code in byCode:
             return code,'○',note+'(プロ確定)'
@@ -1208,7 +1210,7 @@ def _reactor_code(name):
 # スコットトランス(45050系・支給品): 3φ→1φ変換TR。kVA最近傍上位。高圧TR同様に購入品コードなし=支給品。
 def _scott_code(name):
     s=unicodedata.normalize('NFKC',str(name))
-    if not re.search(r'スコット', s): return None
+    if not re.search(r'スコット|ｽｺｯﾄ|scott|sctt', s, re.I): return None
     mk=re.search(r'(\d+\.?\d*)\s*KVA', s, re.I)
     if not mk: return None
     want=float(mk.group(1))
@@ -1350,6 +1352,11 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
             sel['set_qty']=qty
             return sel
     meta,cands=gen_candidates(name,volt,panel)
+    # 高圧コンデンサの略号「C」(C3φ/C 3φ/SC C3φ)は SC の別名だが device検出が崩れ main=None になる。
+    # kvar表記＋(コンデンサ盤 or C略号)なら SC として扱い、45系(支給品)選定へ載せる。
+    if not meta.get('main') and re.search(r'kvar', str(name), re.I) \
+       and (re.search(r'コンデンサ', str(panel)+str(name)) or re.search(r'(^|\s)C\s?\d?\s*[φΦ]', str(name))):
+        meta['main']='SC'
     sel=refine(meta,cands,name,panel,prev_is_main,volt)
     sel['candidates']=[{'code':c['code'],'name':c['name'],'volt':c['volt']} for c in cands[:5]]
     # 動力/電灯/制御盤の3P分岐: AX付(補助接点付)は図面特記が無ければ盤種単位で要確認(既定=非AX)。
@@ -2183,9 +2190,18 @@ def select_from_extracted(data):
             # 高圧ケーブル端末処理・ケーブルヘッド(CH)はケーブル付属→計上対象外(ケーブル類は対象外)。
             if re.search(r'ケーブルヘッド|ｹｰﾌﾞﾙﾍｯﾄﾞ|ケーブル端末|ｹｰﾌﾞﾙ端末|端末処理', nm):
                 continue
+            # 電力会社引込の高圧開閉器(UGS/UAS/PGS/地中線用気中・ガス開閉器)はDBに購入品コードが無い
+            # =電力会社供給/支給の引込設備→当社積算対象外。地絡検出器(ZVD/PDS)も検出器単体は支給/内蔵→対象外。
+            if re.search(r'(?<![A-Za-z])(UGS|UAS|PGS|PAS)(?![A-Za-z])|地中線用.{0,6}(気中|ｶﾞｽ|ガス)?.{0,4}開閉器|(?<![A-Za-z])(ZVD|PDS)(?![A-Za-z])', nm) \
+               and not re.search(r'盤$|BOX|函|制御', nm):
+                continue
+            # テナント工事(端末開閉器以降)・別スコープの見出しは当社範囲外→対象外。
+            if re.search(r'テナント工事|以降\s*テナント|別途工事|別途スコープ', nm):
+                continue
             # 照明器具(誘導灯/非常照明の器具本体)・設備機器・貸与計器は別業者/対象外(分岐遮断器は別行で計上)。
             # ※負荷名としての「誘導灯 XXVA」は分電盤分岐で扱うが、器具単体行(コード化対象外)はここで除外。
-            if re.search(r'^\s*誘導灯|^\s*非常照明|^\s*非常灯|ドックレベラー|ﾄﾞｯｸﾚﾍﾞﾗｰ|(^|\s)DL(\s|$)|受水槽(?!.*(盤|警報|ポンプ制御))|SCG制御箱|(^|\s)TW-\d|私設メーター|ﾀﾞｲﾔﾙ温度計|ダイヤル温度計|(^|\s)SOG制御器|自動応答装置', nm) \
+            # 接頭の回路記号(A/a等)が付く器具単体行も対象(遮断器記号が無い＝器具本体)。
+            if re.search(r'(^|\s)誘導灯|(^|\s)非常照明|(^|\s)非常灯|ドックレベラー|ﾄﾞｯｸﾚﾍﾞﾗｰ|(^|\s)DL(\s|$)|受水槽(?!.*(盤|警報|ポンプ制御))|SCG制御箱|(^|\s)TW-\d|私設メーター|ﾀﾞｲﾔﾙ温度計|ダイヤル温度計|(^|\s)SOG制御器|自動応答装置', nm) \
                and not re.search(r'MCB|MCCB|ELB|AF|\d+\s*A(?![a-z])|盤$|BOX|函', nm):
                 continue
             # DCC(放電コイル)は高圧コンデンサに内蔵→計上対象外(コンデンサ側で計上)。
