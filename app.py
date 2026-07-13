@@ -1491,7 +1491,7 @@ def _compact_branch(name, panel):
     # 盤種: 制御盤(50系端子台)・受変電低圧配電盤(40系)以外=分電系(60系コンパクト)。
     #  ※norm はハイフン/括弧を除去するためL番号検出が外れる盤名(AC-GC(LG-201)/共用盤/専用盤等)がある。
     #    そこで「制御/受変電でなければ分電系」と広く判定(実見積書4案件で2P50AF分岐は全てコンパクト)。
-    _mp=re.search(r'(^|[^a-zａ-ｚ])\d*[mｍpｐ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)
+    _mp=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[mｍpｐ][ｰ\-－]?\d', pn)
     is_ctrl = ('制御' in pn) or ('自立' in pn) or (bool(_mp) and not ('電灯' in pn or '照明' in pn))
     is_haiden = any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ','変圧器盤'])
     if is_ctrl or is_haiden: return None
@@ -1552,8 +1552,8 @@ def _mcb_code(name, panel, meta):
     #  ① 制御盤(制御/自立/M・P番号・動力制御盤) = 端子台付き50系
     #  ② 分電盤(分電/照明分電/L・J・S番号)     = 端子台なし60系
     #  ③ 無印の電灯盤・動力盤(一般/低圧/非常/保安) = 上流の低圧配電盤40系(AX付=41系)
-    _mp=re.search(r'(^|[^a-zａ-ｚ])\d*[mｍpｐ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)   # 1M-1,1P-1,M1(制御盤)
-    _lj=re.search(r'(^|[^a-zａ-ｚ])\d*[lｌjｊsｓ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)  # 1L-1,1S-1(分電盤)
+    _mp=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[mｍpｐ][ｰ\-－]?\d', pn)   # 1M-1,1P-1,M1(制御盤)
+    _lj=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?\d', pn)  # 1L-1,1S-1(分電盤)
     if '制御' in pn or '自立' in pn: kind='ctrl'          # 動力制御盤/自立盤=50系
     elif '分電' in pn: kind='bunden'                      # 照明分電盤/電灯分電盤=60系
     elif _mp and not ('電灯' in pn or '照明' in pn): kind='ctrl'   # M/P番号=制御盤50系
@@ -1656,8 +1656,8 @@ def _mctt_kind(panel):
     # 無印/非常/保安/一般/低圧の「動力盤・電灯盤」は受変電低圧配電盤=haiden(47系)を優先。
     # (盤名に変圧器参照のM4等が括弧付きで混じっても、動力盤/電灯盤の語があれば配電盤とする)
     if re.search(r'動力盤|電灯盤', pn): return 'haiden'
-    _mp=re.search(r'(^|[^a-zａ-ｚ])\d*[mｍpｐ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)
-    _lj=re.search(r'(^|[^a-zａ-ｚ])\d*[lｌjｊsｓ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)
+    _mp=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[mｍpｐ][ｰ\-－]?\d', pn)
+    _lj=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?\d', pn)
     if _mp and not ('電灯' in pn or '照明' in pn): return 'ctrl'
     if _lj: return 'bunden'
     return 'haiden'
