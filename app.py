@@ -1352,6 +1352,17 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     meta,cands=gen_candidates(name,volt,panel)
     sel=refine(meta,cands,name,panel,prev_is_main,volt)
     sel['candidates']=[{'code':c['code'],'name':c['name'],'volt':c['volt']} for c in cands[:5]]
+    # 動力/電灯/制御盤の3P分岐: AX付(補助接点付)は図面特記が無ければ盤種単位で要確認(既定=非AX)。
+    _ag=_ax_gate(sel.get('code',''), name, panel)
+    if _ag:
+        axc, ptype = _ag
+        if sel.get('conf')=='◎': sel['conf']='○'
+        sel['note']='AX付の有無を盤種【%s】単位で要確認(図面特記なし・既定=非AX) / %s'%(ptype, sel.get('note',''))
+        _cl=sel.get('candidates') or []
+        _codes=[c.get('code') for c in _cl]
+        _new=[{'code':sel['code'],'name':byCode.get(sel['code'],{}).get('name',''),'volt':''},
+              {'code':axc,'name':byCode.get(axc,{}).get('name',''),'volt':''}]
+        sel['candidates']=_new+[c for c in _cl if c.get('code') not in (sel['code'],axc)]
     # 保護セット: 付属(group有でリレー本体以外)は、親リレーが特定された文脈で
     # コードが一意に決まれば確定度を上げる（ZCT/CT/VT等が単独で△に落ちるのを救う）
     if group and cands:
@@ -1594,6 +1605,25 @@ def _mcb_note(name, panel):
     role='主幹' if (n.startswith('m)') or '主幹' in name) else '分岐'
     typ='ELB' if 'elb' in n else 'MCB'
     return f'{role}{typ}(盤種別・AF枠で選定)'
+
+def _ax_gate(code, name, panel):
+    """AX付(補助接点付)は図面に特記が無いと確定できない社内標準仕様。実見積書(城山)では
+    受変電低圧動力盤/電灯盤(40系)・動力制御盤(50系)の3P分岐が一律AX付(41/51系)だが図面に明記なし。
+    ∴ 40/50系の3P分岐(B)で図面にAX特記が無ければ、AX付は【盤種単位の確認ゲート】項目とし、
+    非AXを既定表示しつつ○(要確認)＋AX付変種を候補提示する。分電盤(60系)は非AX既定(対象外)。
+    戻り値: (AX付コード, 盤種ラベル) / None。"""
+    if not code or len(code)!=5 or code[:2] not in ('40','50'): return None
+    nm=byCode.get(code,{}).get('name','')
+    if not nm.startswith('B)') or not re.search(r'3\s*[PＰ]', nm): return None  # 3P分岐(B)のみ
+    if code[1]!='0': return None                                   # 既にAX(41/51)なら対象外
+    if re.search(r'AX|欠相|中欠|補助接点', str(name)): return None    # 図面にAX特記あり→確定
+    axc=code[0]+'1'+code[2:]
+    if axc not in byCode: return None
+    pn=norm(panel)
+    if code[0]=='5': ptype='動力制御盤'
+    elif '電灯' in pn or '照明' in pn: ptype='電灯盤'
+    else: ptype='動力盤'
+    return axc, ptype
 
 # ===== 動力盤：主回路記号(A〜L)方式 =====
 _LS_SUF={'2.2':'000','3.7':'001','5.5':'011','7.5':'021','11':'031','15':'041','18.5':'061','22':'071','30':'081','37':'091','45':'111','55':'121','75':'131'}
