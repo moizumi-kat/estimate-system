@@ -1517,7 +1517,7 @@ def _compact_branch(name, panel):
 
 def _mcb_code(name, panel, meta):
     n=norm(name); pn=norm(panel)
-    is_main = n.startswith('m)') or ('主幹' in name) or (meta.get('main','').startswith('M)'))
+    is_main = n.startswith('m)') or ('主幹' in name) or ('主開閉器' in name) or (meta.get('main','').startswith('M)'))
     is_elb = ('elb' in n) or (meta.get('main')=='ELB' or meta.get('main')=='M)ELB' or meta.get('main')=='B)ELB')
     af,at=_amp_af(n)
     if not af:
@@ -1566,7 +1566,8 @@ def _mcb_code(name, panel, meta):
     afmap_main={
       'ctrl':{'50':'50503','100':'50103','225':'50203','200':'50203','400':'50403','600':'50603','800':'50803'},
       # 分電盤主幹は欠相保護無(50系)を既定とする（会社確認: 欠相保護有なら60系）
-      'bunden':{'50':'50503','100':'50103','225':'50203','200':'50203','400':'50403','600':'50603'},
+      # 分電盤=60系(50系は制御盤・茂泉様確定)。M)MCB(ELB)3P50〜600Aは中性線欠相保護付が既定(コード表p33)。
+      'bunden':{'50':'60503','100':'60103','225':'60203','200':'60203','400':'60403','600':'60603','800':'60803'},
       'haiden':{'50':'40503','100':'40103','225':'40203','200':'40203','400':'40403','600':'40603','800':'40803'},
     }
     # AX付(欠相・中性線欠相・補助接点付)は系統を+1(40→41/50→51/60→61)。図面に明記がある時のみ。
@@ -1594,7 +1595,7 @@ def _main_elb_code(name, panel, meta):
     実見積書(表参道)ではこの主幹が M)MCB(EL・中欠)(AX)=61系01 になる例があるが、EL/中欠/AXは
     図面に明記されない社内標準のため◎にせず、素のM)ELBを○(最善推定・変種要確認)で返す。"""
     n=norm(name); pn=norm(panel)
-    is_main = n.startswith('m)') or ('主幹' in name) or (str(meta.get('main','')).startswith('M)'))
+    is_main = n.startswith('m)') or ('主幹' in name) or ('主開閉器' in name) or (str(meta.get('main','')).startswith('M)'))
     is_elb = ('elb' in n) or ('elcb' in n) or ('漏電' in n)
     if not (is_main and is_elb): return None
     af,_at=_amp_af(n)
@@ -1662,20 +1663,21 @@ def _mctt_kind(panel):
     return 'haiden'
 
 def _ax_gate(code, name, panel):
-    """AX付(補助接点付)は図面に特記が無いと確定できない社内標準仕様。実見積書(城山)では
-    受変電低圧動力盤/電灯盤(40系)・動力制御盤(50系)の3P分岐が一律AX付(41/51系)だが図面に明記なし。
-    ∴ 40/50系の3P分岐(B)で図面にAX特記が無ければ、AX付は【盤種単位の確認ゲート】項目とし、
-    非AXを既定表示しつつ○(要確認)＋AX付変種を候補提示する。分電盤(60系)は非AX既定(対象外)。
+    """AX付(補助接点付)は図面に特記が無いと確定できない社内標準仕様。実見積書(城山/表参道/六本木)では
+    受変電低圧動力盤/電灯盤(40系)・動力制御盤(50系)・分電盤(60系)の3P主幹・分岐が一律AX付(41/51/61系)
+    だが図面に明記なし(コード表p33: AX付は上2桁を61)。∴ 40/50/60系の3P主幹(M)・分岐(B)で図面にAX特記が
+    無ければ、AX付は【盤種単位の確認ゲート】項目とし、非AXを既定表示しつつ○(要確認)＋AX付変種を候補提示する。
     戻り値: (AX付コード, 盤種ラベル) / None。"""
-    if not code or len(code)!=5 or code[:2] not in ('40','50'): return None
+    if not code or len(code)!=5 or code[:2] not in ('40','50','60'): return None
     nm=byCode.get(code,{}).get('name','')
-    if not nm.startswith('B)') or not re.search(r'3\s*[PＰ]', nm): return None  # 3P分岐(B)のみ
-    if code[1]!='0': return None                                   # 既にAX(41/51)なら対象外
+    if not re.search(r'^[BM]\)', nm) or not re.search(r'3\s*[PＰ]', nm): return None  # 3P主幹(M)/分岐(B)
+    if code[1]!='0': return None                                   # 既にAX(41/51/61)なら対象外
     if re.search(r'AX|欠相|中欠|補助接点', str(name)): return None    # 図面にAX特記あり→確定
     axc=code[0]+'1'+code[2:]
     if axc not in byCode: return None
     pn=norm(panel)
-    if code[0]=='5': ptype='動力制御盤'
+    if code[0]=='6': ptype='分電盤'
+    elif code[0]=='5': ptype='動力制御盤'
     elif '電灯' in pn or '照明' in pn: ptype='電灯盤'
     else: ptype='動力盤'
     return axc, ptype
