@@ -1652,6 +1652,9 @@ def _mctt_kind(panel):
     pn=norm(panel)
     if '制御' in pn or '自立' in pn: return 'ctrl'
     if '分電' in pn: return 'bunden'
+    # 無印/非常/保安/一般/低圧の「動力盤・電灯盤」は受変電低圧配電盤=haiden(47系)を優先。
+    # (盤名に変圧器参照のM4等が括弧付きで混じっても、動力盤/電灯盤の語があれば配電盤とする)
+    if re.search(r'動力盤|電灯盤', pn): return 'haiden'
     _mp=re.search(r'(^|[^a-zａ-ｚ])\d*[mｍpｐ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)
     _lj=re.search(r'(^|[^a-zａ-ｚ])\d*[lｌjｊsｓ][a-zａ-ｚ]?[ｰ\-－]?\d', pn)
     if _mp and not ('電灯' in pn or '照明' in pn): return 'ctrl'
