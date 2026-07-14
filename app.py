@@ -1134,12 +1134,41 @@ def _vmc_code(name):
     if not code: return None
     _pfx = 'VMC→VCS' if _vmc else 'VCS変種確定'
     return code,'◎','%s(%s・御社実績で確定)'%(_pfx, byCode.get(code,{}).get('name','')[:20])
+def _whm_code(name):
+    """WHM(電力量計・電子式コンパクト)→70系。相(1φ2W/Nφ3W)×容量(30A/120A/N-5A/250A)×検定(検付/未検/
+    通信付)で選定。N/5A(CT動作型)はコード表p13/41の注記でCTを別途拾う(呼出側でco-selection)。
+    取引用/貸与の電力量計は別処理で対象外除外済のためここは計量用のWHMのみ。"""
+    s=unicodedata.normalize('NFKC',str(name))
+    # 遮断器行(MCCB/MCB/ELB…)に付く「Wh」は計量注記でありWHM本体ではない→除外(誤爆防止)。
+    if re.search(r'MCCB|MCB|ELB|ELCB|LBS|VCB|VCS|(?<![A-Za-z])AF(?![A-Za-z])|\d+\s*AF|\d+\s*AT', s, re.I): return None
+    # WHM本体は名称先頭がWHM/電力量計/Wh(単独)であること。数値注記中のwhには反応しない。
+    if not (re.match(r'\s*(WHM|電力量計)', s, re.I) or re.search(r'(^|\s)Wh(\s|$)', s) or '電力量計' in s): return None
+    if re.search(r'取引|貸与|課金', s): return None  # 貸与/取引は対象外
+    is_n5=bool(re.search(r'N\s*/\s*5A|(?<!\d)/\s*5A', s))     # N/5A(CT動作)
+    phase = 'N' if re.search(r'Nφ3W|N相|3\s*W|三相|3φ', s) else '1'  # Nφ3W or 1φ2W
+    if is_n5: unit = 6 if phase=='N' else 3
+    elif re.search(r'250\s*A', s): unit=7
+    elif re.search(r'120\s*A', s): unit=5 if phase=='N' else 2
+    elif re.search(r'30\s*A', s): unit=4 if phase=='N' else 1
+    else: unit = 4 if phase=='N' else 1                       # 容量不明→30A既定(要確認)
+    tens = 3 if re.search(r'通信.{0,3}(未検|無検)', s) else 2 if re.search(r'通信', s) \
+           else 1 if re.search(r'未検|無検', s) else 0        # 既定=検付
+    code='703%d%d'%(tens,unit)
+    if code not in byCode:
+        # 欠番(例:Nφ3W N/5A検付=70306)は未検→SP(7039x)→30A既定の順でフォールバック
+        for alt in ['703%d%d'%(1,unit),'7039%d'%unit,'70301']:
+            if alt in byCode: code=alt; break
+    if code not in byCode: return None
+    note='WHM %s %s%s'%('Nφ3W' if phase=='N' else '1φ2W','N/5A' if is_n5 else ('容量要確認' if unit in(1,4) and not re.search(r'30\s*A',s) else ''),'・検定/容量要確認')
+    return code,'○',note.strip()
 def _pro_map(name):
     s=unicodedata.normalize('NFKC',str(name))
     v=_vmc_code(name)
     if v: return v
     sc=_scott_code(name)
     if sc: return sc
+    wh=_whm_code(name)
+    if wh: return wh
     # 高圧避雷器LA: 8.4kV 3P。標準/引出型/断路型/10KAの変種は図面から読めないことが多く、
     # 放電電流(2.5kA等)は変種選定に使えない→標準(43461)を○(変種要確認)で確定し△を解消。
     if re.search(r'(?<![A-Za-z])LA(?![A-Za-z])|避雷器', s) and re.search(r'\d\.?\d*\s*kv', s, re.I):
@@ -2470,6 +2499,12 @@ def select_from_extracted(data):
                                      raw='(MCTT DT付随 18-100)',qty='1',load_detail=False,feed='',
                                      candidates=_cands,spec_gate=True))
         for r in rows: r.pop('_mctt',None)   # 内部タグ除去
+        # コード表p41: N/5A(CT動作型)のWHMはCTを拾う。同一盤にCTが無ければCT計上が必要→明示(変流比要確認)。
+        _n5=[r for r in rows if str(r.get('code','')) in ('70303','70313','70323','70333','70306','70316','70326','70336','70393','70396')]
+        _hasct=any((str(r.get('code',''))[:2]=='72') or (str(r.get('code','')).startswith('44') and 'CT' in byCode.get(str(r.get('code','')),{}).get('name','')) for r in rows)
+        if _n5 and not _hasct:
+            rows.append(dict(code='',name='',conf='△',note='N/5A WHMのCTを拾う(コード表p41)・変流比要確認',
+                             raw='(N/5A WHM付随CT)',qty=str(len(_n5)),load_detail=False,feed=''))
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
 
