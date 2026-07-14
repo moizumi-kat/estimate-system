@@ -836,17 +836,37 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
     if meta['main']=='CT' and meta['ratio']:
         r=int(meta['ratio'])
         lv={'10':'72000','15':'72001','100':'72002','200':'72003','300':'72004','400':'72005','500':'72006','600':'72007'}
+        # 44系 低圧CT(受変電低圧配電盤の主計器用・全変流比)。600A超は44系のみ(72系は600Aまで)。
+        lv44=[(300,'44141'),(400,'44142'),(500,'44143'),(600,'44144'),(800,'44145'),(1000,'44146'),
+              (1200,'44147'),(1500,'44148'),(2000,'44149'),(3000,'44150'),(4000,'44151'),(5000,'44152')]
+        def _lv44(rr):
+            for a,c in lv44:
+                if rr<=a and c in byCode: return c
+            return ''
         _hvc='44121' if r<=40 else '44122' if r<=75 else '44123' if r<=200 else ''
+        # 受変電低圧配電盤(電灯盤/動力盤=haiden)の計器CTは44系(実見積書:城山/六本木の電灯・動力盤)。
+        _pn=norm(panel)
+        _is_haiden_lv = bool(re.search(r'電灯盤|動力盤', _pn)) and not re.search(r'制御|分電', _pn)
         if vb=='HV':
             if _hvc: return R(_hvc,'○',f'高圧CT 変流比{meta["ratio"]}/5A')
             return R('','△','高圧CT 変流比範囲外・要確認')
         if vb in('200V','400V','100V'):
+            if r>600 or (_is_haiden_lv and r>=300):
+                c44=_lv44(r)
+                if c44: return R(c44,'○',f'低圧CT {meta["ratio"]}/5A(44系)')
             if meta['ratio'] in lv and lv[meta['ratio']] in byCode: return R(lv[meta['ratio']],'○',f'低圧CT {meta["ratio"]}/5A')
+            c44=_lv44(r)
+            if c44: return R(c44,'○',f'低圧CT {meta["ratio"]}/5A(44系)')
         # 電圧帯不明→盤種で最善推定(受変電/高圧盤=高圧CT / それ以外=低圧CT)。行き止まり△を無くす。
         if re.search(r'受電|受変電|高圧|饋電|コンデンサ', str(panel)):
             if _hvc: return R(_hvc,'○',f'CT 変流比{meta["ratio"]}/5A(受変電→高圧CT・電圧帯要確認)')
-        elif meta['ratio'] in lv and lv[meta['ratio']] in byCode:
-            return R(lv[meta['ratio']],'○',f'CT 変流比{meta["ratio"]}/5A(低圧CT・電圧帯要確認)')
+        if r>600 or (_is_haiden_lv and r>=300):
+            c44=_lv44(r)
+            if c44: return R(c44,'○',f'CT 変流比{meta["ratio"]}/5A(低圧44系・電圧帯要確認)')
+        if meta['ratio'] in lv and lv[meta['ratio']] in byCode:
+            return R(lv[meta['ratio']],'○',f'CT 変流比{meta["ratio"]}/5A(低圧72系・電圧帯要確認)')
+        c44=_lv44(r)
+        if c44: return R(c44,'○',f'CT 変流比{meta["ratio"]}/5A(低圧44系・電圧帯要確認)')
         if _hvc: return R(_hvc,'○',f'CT 変流比{meta["ratio"]}/5A(高圧CT最善推定・電圧帯要確認)')
         return R('','△','CT 電圧帯不明・要確認')
 
