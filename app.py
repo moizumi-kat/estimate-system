@@ -186,7 +186,8 @@ VMCやSRが抜け落ちやすいので、PFとSCだけでなくVMC・SRも必ず
 - LCユニット: L%/電圧(V)/容量(kvar)
 《遮断器・開閉器（低圧）》
 - B)MCB/ELB/MCCB(分岐): 極数(2P/3P/4P)/AF/AT(定格電流)
-- M)MCB/LUG(主幹): 極数/定格電流/欠相保護有無
+- M)MCB(負荷主幹・遮断器): 極数/定格電流/欠相保護有無 ※頭に「MCCB/MCB」表記＋遮断器記号
+- M)LUG(主幹端子・断路のみ): 極数/定格電流 ※頭に断路スイッチ記号はあるが「MCCB/MCB」表記が無い＝端子受け
 - ACB: 極数/AF/AT
 - MCB(汎用)/MCCB: 極数/定格電流
 - MCTT: 極数/定格電流/交流直流
@@ -202,6 +203,11 @@ VMCやSRが抜け落ちやすいので、PFとSCだけでなくVMC・SRも必ず
 - 保安器函/接地端子盤: 極数(P)
 - 函体: 種別(屋内/屋外/標準)・寸法増し有無
 - SPD: クラス(I/II)/極数/遮断容量(kA)
+  ※SPDや計器が入力(系統)の母線から分岐する箇所の「頭」を必ず見る:
+    ・頭に断路スイッチ記号(×)があり「MCCB/MCB」表記が無い → その頭を『M)LUG [極数]P [系統主幹容量]A』として1件計上(端子受け)。
+    ・頭にスイッチ自体が無い(直結) → M)LUGは計上しない。
+    ・頭に「MCCB/MCB」表記＋遮断器記号がある(負荷側主幹) → 従来どおりM)MCBで拾う。
+  ※SPD用分離器(セパレータ)はMCCBではない。分離器は分離器として別項目で出す(遮断器に誤読しない)。
 - 継電器(OCR/DGR/RPR/OVGR等): 形式(静止型/方向性等)
 - TV機器: 種別(分配器/増幅器/混合器)・ポート数
 - コンセント: 極数/定格電流/E付・プラグ付
@@ -814,8 +820,16 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
             return R('','△','SPD用MCCB 容量表記なし→要確認(目安: 低圧分電盤クラスII=2P/3P 20〜50A, 主幹近く=3P 50〜100A)')
         # 容量表記があれば通常のMCBとして選定(下のMCBロジックへ)
 
+    # --- M)LUG(主幹端子): SPD等の分岐頭に断路スイッチのみ(MCCB表記なし)=端子受け。
+    #     負荷頭の遮断器(M)MCB)とは別物。端子台系統(40/50/60)×容量(切上)でLUGコードを計上(○)。
+    #     スイッチ無し(直結)の場合は抽出側でM)LUGを出さない方針(茂泉様確定)。---
+    if meta['main'] in ('M)LUG','LUG') or norm(name).startswith(('m)lug','lug')):
+        lc=_lug_code(name, panel, meta)
+        if lc: return R(lc,'○','主幹LUG(SPD分岐頭・断路のみ/端子受け・%s)'%byCode.get(lc,{}).get('name','')[:16])
+        return R('','△','M)LUG 容量・盤種別要確認')
+
     # --- 主幹/分岐 MCB・ELB（MCBが主部品。M)=主幹, B)=分岐）---
-    if meta['main'] in ('M)MCB','M)LUG','M)ELB','B)MCB','B)ELB','MCB','ELB'):
+    if meta['main'] in ('M)MCB','M)ELB','B)MCB','B)ELB','MCB','ELB'):
         # 分電盤の最終分岐(負荷VA表記+MCB/ELB明示・遮断器枠なし)はコンパクト分岐を優先判定。
         # ※_mcb_codeより先に判定(「280VA」等のVA数値をAF枠と誤解して誤コードを出すのを防ぐ)。
         cb=_compact_branch(name, panel)
@@ -1596,6 +1610,24 @@ def _compact_branch(name, panel):
     if code not in byCode: return None
     return code, '◎', 'コンパクト分岐(2P50AF・%s)実見積書4案件で確定'%('ELB' if is_elb else 'MCB')
 
+def _panel_kind(panel):
+    """盤種別→端子台系統: 制御盤=ctrl(50系)/分電盤=bunden(60系)/受変電低圧配電盤=haiden(40系)。
+    判別語は「分電/制御があるか」。無地の「電灯盤/動力盤」は配電盤スケルトン上の低圧配電盤=40系。
+      ① 制御盤(制御/自立/M・P番号・動力制御盤) = 端子台付き50系
+      ② 分電盤(分電/照明分電/L・J・S番号)     = 端子台なし60系
+      ③ 無印の電灯盤・動力盤(一般/低圧/非常/保安) = 上流の低圧配電盤40系
+    ※_mcb_code/_lug_code で共用(挙動を一致させるため単一定義)。"""
+    pn=norm(panel)
+    _mp=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[mｍpｐ][ｰ\-－]?\d', pn)   # 1M-1,1P-1,M1(制御盤)
+    _lj=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?\d', pn)  # 1L-1,1S-1(分電盤)
+    if '制御' in pn or '自立' in pn: return 'ctrl'
+    if '分電' in pn: return 'bunden'
+    if _mp and not ('電灯' in pn or '照明' in pn): return 'ctrl'
+    if _lj: return 'bunden'
+    if any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): return 'haiden'
+    if '電灯' in pn or '動力' in pn or '照明' in pn: return 'haiden'
+    return 'bunden'
+
 def _mcb_code(name, panel, meta):
     n=norm(name); pn=norm(panel)
     is_main = n.startswith('m)') or ('主幹' in name) or ('主開閉器' in name) or (meta.get('main','').startswith('M)'))
@@ -1633,16 +1665,7 @@ def _mcb_code(name, panel, meta):
     #  ① 制御盤(制御/自立/M・P番号・動力制御盤) = 端子台付き50系
     #  ② 分電盤(分電/照明分電/L・J・S番号)     = 端子台なし60系
     #  ③ 無印の電灯盤・動力盤(一般/低圧/非常/保安) = 上流の低圧配電盤40系(AX付=41系)
-    _mp=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[mｍpｐ][ｰ\-－]?\d', pn)   # 1M-1,1P-1,M1(制御盤)
-    _lj=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?\d', pn)  # 1L-1,1S-1(分電盤)
-    if '制御' in pn or '自立' in pn: kind='ctrl'          # 動力制御盤/自立盤=50系
-    elif '分電' in pn: kind='bunden'                      # 照明分電盤/電灯分電盤=60系
-    elif _mp and not ('電灯' in pn or '照明' in pn): kind='ctrl'   # M/P番号=制御盤50系
-    elif _lj: kind='bunden'                               # L/S番号=分電盤60系
-    elif any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): kind='haiden'
-    # 無地の電灯盤/動力盤(制御・分電・番号のいずれも無い)=配電盤スケルトン上の低圧配電盤40系
-    elif '電灯' in pn or '動力' in pn or '照明' in pn: kind='haiden'
-    else: kind='bunden'  # 既定は分電盤
+    kind=_panel_kind(panel)
     # 主幹MCB 3P
     afmap_main={
       'ctrl':{'50':'50503','100':'50103','225':'50203','200':'50203','400':'50403','600':'50603','800':'50803'},
@@ -1670,6 +1693,40 @@ def _mcb_code(name, panel, meta):
         for cand in _branch_candidates(pole, af, is_elb, kind):
             if cand in byCode: return _ax(cand)
     return ''
+
+# --- M)LUG(主幹端子)コード: DB実在コードから (系統,極数)→[(容量,コード)] を構築 ---
+# LUG容量枠は連続でない(50/100/225/400/600/800/1000…)ため、名称を切上げでDB枠に丸める。
+# コード体系(例 40609=M)LUG 3P600A)は系統2桁+容量2桁+極尾で不規則→DBを正として直引き。
+_LUG_MAP={}
+_KIND_SERIES={'ctrl':'50','bunden':'60','haiden':'40'}
+def _build_lug_map():
+    for c,v in byCode.items():
+        m=re.match(r'\s*M\)LUG\s+(\d)P\s+(\d+)A', str(v.get('name','')))
+        if m and len(c)==5:
+            _LUG_MAP.setdefault((c[:2],m.group(1)),[]).append((int(m.group(2)),c))
+    for k in _LUG_MAP: _LUG_MAP[k].sort()
+_build_lug_map()
+
+def _lug_code(name, panel, meta):
+    """M)LUG(SPD等の分岐頭・断路スイッチのみでMCCB表記なし=端子受け)→系統(端子台)×容量(切上)。
+    系統は_panel_kind(制御50/分電60/配電40)。容量は名称のA値をDBのLUG枠へ最近傍上位で丸める
+    (例『M)LUG 3P200A』は200A枠が無く225A枠→xx209)。読めなければNone(安全側で呼出側が△)。"""
+    n=norm(name)
+    if not ('lug' in n or str(meta.get('main',''))=='M)LUG'): return None
+    pole=_pole(n) or '3'
+    af,at=_amp_af(n)
+    amp=None
+    for v in (af,at):
+        if v:
+            try: amp=int(v); break
+            except: pass
+    if not amp: return None
+    series=_KIND_SERIES.get(_panel_kind(panel),'60')
+    lst=_LUG_MAP.get((series,pole)) or _LUG_MAP.get((series,'3'))
+    if not lst: return None
+    for a,code in lst:
+        if a>=amp: return code
+    return lst[-1][1]
 
 def _main_elb_code(name, panel, meta):
     """主幹ELB(『ELB付 主幹』等)の最善推定コード。M)ELB=base+AF桁+極数尾(3P=06/4P=07/2P=05)。
