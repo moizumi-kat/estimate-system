@@ -2499,12 +2499,35 @@ def select_from_extracted(data):
                                      raw='(MCTT DT付随 18-100)',qty='1',load_detail=False,feed='',
                                      candidates=_cands,spec_gate=True))
         for r in rows: r.pop('_mctt',None)   # 内部タグ除去
-        # コード表p41: N/5A(CT動作型)のWHMはCTを拾う。同一盤にCTが無ければCT計上が必要→明示(変流比要確認)。
+        # コード表p41: N/5A(CT動作型)のWHMはCTを拾う。CTは高圧→44系/低圧→72系、変流比は主幹電流に合わせる(茂泉様)。
         _n5=[r for r in rows if str(r.get('code','')) in ('70303','70313','70323','70333','70306','70316','70326','70336','70393','70396')]
         _hasct=any((str(r.get('code',''))[:2]=='72') or (str(r.get('code','')).startswith('44') and 'CT' in byCode.get(str(r.get('code','')),{}).get('name','')) for r in rows)
         if _n5 and not _hasct:
-            rows.append(dict(code='',name='',conf='△',note='N/5A WHMのCTを拾う(コード表p41)・変流比要確認',
-                             raw='(N/5A WHM付随CT)',qty=str(len(_n5)),load_detail=False,feed=''))
+            # 主幹電流を取得(M)コード名 M)MCB/ELB 3P NNА、または主幹rawのAT)。
+            _amps=[]
+            for r in rows:
+                _mn=byCode.get(str(r.get('code','')),{}).get('name','')
+                _mm=re.search(r'3P\s*(\d+)A', _mn)
+                if _mn.startswith('M)') and _mm: _amps.append(int(_mm.group(1)))
+                _rr=re.search(r'主(幹|開閉器).{0,20}?(\d{2,4})\s*A[TF]?', str(r.get('raw','')))
+                if _rr: _amps.append(int(_rr.group(2)))
+            _amp=max(_amps) if _amps else None
+            _is_hv=bool(re.search(r'受電|受変電|高圧|饋電', norm(p.get('panel',''))))
+            _ct=''
+            if _amp is not None:
+                if _is_hv:
+                    _ct='44121' if _amp<=40 else '44122' if _amp<=75 else '44123'
+                else:
+                    for a,c in [(10,'72000'),(15,'72001'),(100,'72002'),(200,'72003'),(300,'72004'),(400,'72005'),(500,'72006'),(600,'72007')]:
+                        if _amp<=a: _ct=c; break
+                    _ct=_ct or '72007'
+            if _ct and _ct in byCode:
+                rows.append(dict(code=_ct,name=byCode[_ct].get('name',''),conf='○',
+                                 note='N/5A WHMのCTを拾う(コード表p41)・主幹%dA相当(%s)'%(_amp,'高圧44系' if _is_hv else '低圧72系'),
+                                 raw='(N/5A WHM付随CT)',qty=str(len(_n5)),load_detail=False,feed=''))
+            else:
+                rows.append(dict(code='',name='',conf='△',note='N/5A WHMのCTを拾う(コード表p41)・主幹電流不明→変流比要確認',
+                                 raw='(N/5A WHM付随CT)',qty=str(len(_n5)),load_detail=False,feed=''))
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
 
