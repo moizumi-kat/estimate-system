@@ -570,7 +570,7 @@ _PARTS = [
     {'name':'伝送','aliases':['伝送'],'prefix':True},
     {'name':'R.RY','aliases':['リモコンリレー'],'prefix':False},
     {'name':'R.TR','aliases':['リモコントランス'],'prefix':False},
-    {'name':'TB','aliases':['端子台'],'prefix':True},
+    {'name':'TB','aliases':['端子台','m)tb','b)tb'],'prefix':True},
 ]
 
 def _detect_main(main_str):
