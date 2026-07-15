@@ -1618,8 +1618,9 @@ def _panel_kind(panel):
       ③ 無印の電灯盤・動力盤(一般/低圧/非常/保安) = 上流の低圧配電盤40系
     ※_mcb_code/_lug_code で共用(挙動を一致させるため単一定義)。"""
     pn=norm(panel)
-    _mp=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[mｍpｐ][ｰ\-－]?\d', pn)   # 1M-1,1P-1,M1(制御盤)
-    _lj=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?\d', pn)  # 1L-1,1S-1(分電盤)
+    # 型文字(P/M=制御, L/J/S=分電)の後に「-T1」等の端子台付き接尾辞(文字+数字)が付く形も許容する。
+    _mp=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[mｍpｐ][ｰ\-－]?(?:[a-zａ-ｚ][ｰ\-－]?)?\d', pn)   # 1M-1,1P-1,1P-T1,M1(制御盤)
+    _lj=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?(?:[a-zａ-ｚ][ｰ\-－]?)?\d', pn)  # 1L-1,1L-T1,1S-1(分電盤)
     if '制御' in pn or '自立' in pn: return 'ctrl'
     if '分電' in pn: return 'bunden'
     if _mp and not ('電灯' in pn or '照明' in pn): return 'ctrl'
@@ -2614,6 +2615,24 @@ def select_from_extracted(data):
             else:
                 rows.append(dict(code='',name='',conf='△',note='N/5A WHMのCTを拾う(コード表p41)・主幹電流不明→変流比要確認',
                                  raw='(N/5A WHM付随CT)',qty=str(len(_n5)),load_detail=False,feed=''))
+        # 分電盤(60系)・制御盤(50系): 各系統の主幹(M)MCB/M)ELB)ごとに、盤頭のM)LUGをペア計上。
+        # M)LUG=盤頭の主幹端子(茂泉様確定)。容量=主幹のFA枠、系統=盤種。1系統=主幹1+M)LUG1。
+        # ※TR盤(受変電40系)はM)LUGが低圧セット(17系)のexpandに内包されるので対象外(二重計上防止)。
+        _kind=_panel_kind(p.get('panel',''))
+        if _kind in ('ctrl','bunden'):
+            _add=[]
+            for r in rows:
+                if r.get('load_detail'): continue
+                cnm=str(byCode.get(str(r.get('code','')),{}).get('name',''))
+                if re.match(r'M\)(MCB|ELB)', cnm):   # 主幹遮断器の行
+                    fa=re.search(r'(\d{2,4})\s*A', cnm)
+                    if fa:
+                        lc=_lug_code('M)LUG 3P %sA'%fa.group(1), p.get('panel',''), {'main':'M)LUG'})
+                        if lc: _add.append((lc, fa.group(1)))
+            for lc,fa in _add:
+                rows.append(dict(code=lc,name=byCode[lc].get('name',''),conf='○',
+                                 note='盤頭の主幹端子M)LUG(主幹%sA・系統=盤種%s系)'%(fa,lc[:2]),
+                                 raw='(盤頭 M)LUG)',qty='1',load_detail=False,feed=''))
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
 
