@@ -1729,6 +1729,32 @@ def _lug_code(name, panel, meta):
         if a>=amp: return code
     return lst[-1][1]
 
+def _tr_lug_from_names(panel, names):
+    """配電盤(受変電低圧40系・個別化時)のTR二次主幹端子M)LUG。TR二次は端子(LUG)受け。
+    容量=TR二次電流(210V)切上: 1φ=kVA×1000/210, 3φ=÷√3, Scott=半容量1φ扱い, 発電機G=3φ扱い。
+    手本(城山)で40609/40770/40409/40209を再現。返り値 code or None。names=盤内の元抽出品名。"""
+    import math
+    if _panel_kind(panel)!='haiden': return None
+    pn=norm(panel)
+    if not re.search(r'電灯|動力|低圧|変圧|scott|ｽｺｯﾄ|発電', pn+' '+' '.join(names).lower()): return None
+    best=None
+    for raw in names:
+        n=norm(str(raw))
+        if re.search(r'kvar|ﾘｱｸﾄﾙ|リアクトル|ｺﾝﾃﾞﾝｻ|コンデンサ|(^|[^a-z])s[rc](?![a-z])', n): continue
+        mk=re.search(r'(\d+)\s*kva', n)
+        if not mk: continue
+        is_scott='scott' in n or 'ｽｺｯﾄ' in str(raw) or 'スコット' in str(raw)
+        is_gen=bool(re.search(r'発電|generator', n)) or bool(re.search(r'(^|[^a-z])g\b', n))
+        if not (re.search(r'(^|[^a-z])t\b|t\s*[:：]', n) or '変圧器' in str(raw) or is_scott or is_gen): continue
+        kva=int(mk.group(1))
+        mp=re.search(r'([13])\s*[φΦ相]', str(raw)) or re.search(r'([13])φ', n)
+        phase='1' if is_scott else (mp.group(1) if mp else '3')
+        k=kva/2 if is_scott else kva
+        I=k*1000/210 if phase=='1' else k*1000/(math.sqrt(3)*210)
+        code=_lug_code('M)LUG 3P %dA'%math.ceil(I), panel, {'main':'M)LUG'})
+        if code and (best is None or kva>best[1]): best=(code, kva)
+    return best[0] if best else None
+
 def _main_elb_code(name, panel, meta):
     """主幹ELB(『ELB付 主幹』等)の最善推定コード。M)ELB=base+AF桁+極数尾(3P=06/4P=07/2P=05)。
     実見積書(表参道)ではこの主幹が M)MCB(EL・中欠)(AX)=61系01 になる例があるが、EL/中欠/AXは
@@ -2283,7 +2309,10 @@ def select_from_extracted(data):
         # set_attrs があればセットコードを1行出力。セット内包品(計器/TR/LBS等)は個別計上せず抑制。
         # セットが確定した(code有)場合のみ内包品を抑制。未確定(vcb/op等が未確認)でも確認ゲート行は出す。
         _set_expand=set(); _set_meter=''; _set_row_ref=None
-        if p.get('set_attrs') and p['set_attrs'].get('settype'):
+        # 配電盤(受変電低圧40系)はセットだと過不足の差し引きが大変(プロ助言)→個別に拾う。
+        # ∴ settype='低圧'はセットパスを通さず個別選定に回す。制御盤(22-29系)・高圧受電(11/16系)は従来どおり。
+        _use_set = p.get('set_attrs') and p['set_attrs'].get('settype') and p['set_attrs'].get('settype')!='低圧'
+        if _use_set:
             _sc=sc_resolve(panel_nm, p['set_attrs'])
             if _sc:
                 if _sc.get('code'):
@@ -2633,6 +2662,16 @@ def select_from_extracted(data):
                 rows.append(dict(code=lc,name=byCode[lc].get('name',''),conf='○',
                                  note='盤頭の主幹端子M)LUG(主幹%sA・系統=盤種%s系)'%(fa,lc[:2]),
                                  raw='(盤頭 M)LUG)',qty='1',load_detail=False,feed=''))
+        elif _kind=='haiden' and not _use_set:
+            # 配電盤(受変電低圧40系・個別化): TR二次主幹端子M)LUG(TR二次容量→切上・40系)。
+            _haslug=any(str(byCode.get(str(r.get('code','')),{}).get('name','')).startswith('M)LUG') for r in rows)
+            if not _haslug:
+                _names=[str(it.get('name','')) for it in p.get('items',[])]
+                _tl=_tr_lug_from_names(p.get('panel',''), _names)
+                if _tl:
+                    rows.append(dict(code=_tl,name=byCode[_tl].get('name',''),conf='○',
+                                     note='TR二次主幹端子M)LUG(配電盤個別化・TR二次容量→切上)',
+                                     raw='(TR二次 M)LUG)',qty='1',load_detail=False,feed=''))
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
 
