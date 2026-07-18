@@ -1701,12 +1701,14 @@ def _panel_kind(panel):
     _lj=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?(?:[a-zａ-ｚ][ｰ\-－]?)?\d', pn)  # 1L-1,1L-T1,1S-1(分電盤)
     if '制御' in pn: return 'ctrl'
     if '分電' in pn: return 'bunden'
+    # 高圧・受変電系は型文字判定(_mp/_lj)より先にhaidenへ。「高圧コンデンサ盤 SC-1」の"SC-1"を
+    # 分電盤のS番号と誤読して60系(M)LUG誤付与)になるのを防ぐ。コンデンサ/SC/SR盤も含める。
+    if any(k in pn for k in ['配電','受電','受変電','高圧','コンデンサ','ｺﾝﾃﾞﾝｻ','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): return 'haiden'
     if _mp and not ('電灯' in pn or '照明' in pn): return 'ctrl'
     if _lj: return 'bunden'
     # 「自立(型)」は筐体種別(自立/壁掛)であり盤種でない。L/P番号や制御/分電の後に判定し、
     # 番号も種別語も無い「自立盤」のみ制御盤とみなす(分電盤も自立型があるため優先しない)。
     if '自立' in pn: return 'ctrl'
-    if any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): return 'haiden'
     if '電灯' in pn or '動力' in pn or '照明' in pn: return 'haiden'
     return 'bunden'
 
