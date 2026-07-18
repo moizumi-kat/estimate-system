@@ -1586,10 +1586,9 @@ def _compact_branch(name, panel):
     # 盤種: 制御盤(50系端子台)・受変電低圧配電盤(40系)以外=分電系(60系コンパクト)。
     #  ※norm はハイフン/括弧を除去するためL番号検出が外れる盤名(AC-GC(LG-201)/共用盤/専用盤等)がある。
     #    そこで「制御/受変電でなければ分電系」と広く判定(実見積書4案件で2P50AF分岐は全てコンパクト)。
-    _mp=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[mｍpｐ][ｰ\-－]?\d', pn)
-    is_ctrl = ('制御' in pn) or ('自立' in pn) or (bool(_mp) and not ('電灯' in pn or '照明' in pn))
-    is_haiden = any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ','変圧器盤'])
-    if is_ctrl or is_haiden: return None
+    # 盤種は_panel_kindで統一判定(制御50/配電40はコンパクト対象外・分電60のみコンパクト)。
+    # ※「自立型」は筐体種別でありL/P番号を優先(5L-1(自立型)は分電盤)。
+    if _panel_kind(panel)!='bunden': return None
     # 3P/4P明示や大枠(100AF以上)は通常分岐(60系)へ委ねる。50AFのみコンパクト。
     if re.search(r'3\s*p|4\s*p', n): return None
     # VA(負荷容量)の数値はAF枠ではない。明示のAF枠(NNNAF)または枠/トリップ対(NNN/NNN)のみを枠とみなし、
@@ -1625,10 +1624,13 @@ def _panel_kind(panel):
     # 型文字(P/M=制御, L/J/S=分電)の後に「-T1」等の端子台付き接尾辞(文字+数字)が付く形も許容する。
     _mp=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[mｍpｐ][ｰ\-－]?(?:[a-zａ-ｚ][ｰ\-－]?)?\d', pn)   # 1M-1,1P-1,1P-T1,M1(制御盤)
     _lj=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?(?:[a-zａ-ｚ][ｰ\-－]?)?\d', pn)  # 1L-1,1L-T1,1S-1(分電盤)
-    if '制御' in pn or '自立' in pn: return 'ctrl'
+    if '制御' in pn: return 'ctrl'
     if '分電' in pn: return 'bunden'
     if _mp and not ('電灯' in pn or '照明' in pn): return 'ctrl'
     if _lj: return 'bunden'
+    # 「自立(型)」は筐体種別(自立/壁掛)であり盤種でない。L/P番号や制御/分電の後に判定し、
+    # 番号も種別語も無い「自立盤」のみ制御盤とみなす(分電盤も自立型があるため優先しない)。
+    if '自立' in pn: return 'ctrl'
     if any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): return 'haiden'
     if '電灯' in pn or '動力' in pn or '照明' in pn: return 'haiden'
     return 'bunden'
