@@ -1104,7 +1104,8 @@ _REMOCON_MAP=[
 def _remocon_code(name):
     s=unicodedata.normalize('NFKC', str(name))   # 半角カナ→全角に正規化(ﾀｲﾏ→タイマ)
     if ('リモコン' in s and 'リレー' in s) or re.search(r'R[.\s]?RY|リモコンリレ', s, re.I):
-        return ('65002' if re.search(r'2\s*P', s) else '65001'),'○','リモコンリレー(65系)'
+        # 既定2P(65002)。実見積書(城山)でR.RYは2P。明示1P時のみ65001。
+        return ('65001' if re.search(r'1\s*P(?![.\d])', s) else '65002'),'○','リモコンリレー(65系・既定2P)'
     for pat,code in _REMOCON_MAP:
         if re.search(pat, s, re.I) and code in byCode:
             return code,'○','リモコン設備(65系)'
