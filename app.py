@@ -1441,12 +1441,16 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
             elif pole=='4':  # 配電盤の4P(DT)
                 for a,c in [(100,'47042'),(200,'47043'),(400,'47045'),(600,'47046'),(800,'47047')]:
                     if amp<=a and c in byCode: return R(c,('◎' if amp==a else '○'),'MCTT 4P-DT %dA%s'%(a,'' if amp==a else '(容量繰上)'))
-            else:  # 配電盤(haiden) 3P → 既定ST型(47020系)。盤内最大はpost-passでDT(47000系)へ昇格。
+            else:  # 配電盤(haiden) 3P。名称にDT明記(MC-DT等)→直接DT(47系ST-20)。無印は既定ST型(盤内最大をpost-passでDT昇格)。
                 _st=[(30,'47020'),(60,'47021'),(100,'47022'),(200,'47023'),(300,'47024'),(400,'47025'),(600,'47026'),(800,'47027'),(1000,'47028'),(1200,'47029'),(1600,'47030'),(2000,'47031')]
+                _explicit_dt=bool(re.search(r'(?<![a-z])dt(?![a-z])', _ns, re.I))  # MC-DT/○○DT等の明記
                 for a,c in _st:
                     if amp<=a and c in byCode:
+                        if _explicit_dt:
+                            dtc=str(int(c)-20)  # DT=47系ST-20(47025→47005)
+                            if dtc in byCode: return R(dtc,('◎' if amp==a else '○'),'MCTT 3P-DT %dA(DT明記)%s'%(a,'' if amp==a else '(容量繰上)'))
                         r=R(c,('◎' if amp==a else '○'),'MCTT 3P-ST %dA%s'%(a,'' if amp==a else '(容量繰上)'))
-                        r['_mctt']={'amp':a,'st':c,'dt':str(int(c)-20)}  # DT=47系ST-20(47024→47004)
+                        r['_mctt']={'amp':a,'st':c,'dt':str(int(c)-20)}
                         return r
         return R('47005','△','MCTT(電源切替器)・極数/容量要確認')
     # 手動電源切替器DT(68系): 極数×容量。極数/容量が読めれば確定、読めなければ△(既定3P60A提示)。
