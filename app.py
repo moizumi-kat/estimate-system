@@ -1175,6 +1175,20 @@ def _whm_code(name):
     if code not in byCode: return None
     note='WHM %s %s%s'%('Nφ3W' if phase=='N' else '1φ2W','N/5A' if is_n5 else ('容量要確認' if unit in(1,4) and not re.search(r'30\s*A',s) else ''),'・検定/容量要確認')
     return code,'○',note.strip()
+def _spd_code(name):
+    """SPD本体: クラスI→74131(1P25KA)/クラスII→74134(3P20KA)標準を既定。4P明記→74136。
+    SPD用分離器(74113/74123)・SPD用MCCBは別処理なので除外。67108(2種耐熱)等の特殊は明記時のみ。
+    数量規則: クラスI(1Pのみ)=極数分, クラスII(3P/4P)=1個(呼出側/レビューで数量調整)。"""
+    n=norm(name)
+    if 'spd' not in n and '避雷' not in n: return None
+    if re.search(r'分離|ｾﾊﾟﾚ|separat|mccb|mcb|用ﾋｭ|用ヒュ', n): return None  # 分離器/SPD用MCCBは別
+    if '2種耐熱' in n and '67108' in byCode: return ('67108','○','SPD(クラスII 2種耐熱)')
+    is_c1 = bool(re.search(r'ｸﾗｽ?\s*[i](?![i])|クラス\s*[iⅠ](?![iⅠ])|class[-\s]*1|(?<![a-z0-9])c[-\s]*1(?![0-9])|1種', n))
+    if is_c1 and '74131' in byCode: return ('74131','○','SPD本体 クラスI(1P25KA・数量=極数分)')
+    if re.search(r'4\s*p', n) and '74136' in byCode: return ('74136','○','SPD本体 クラスII(4P20KA)')
+    if '74134' in byCode: return ('74134','○','SPD本体 クラスII(3P20KA)標準・既定')
+    return None
+
 def _pro_map(name):
     s=unicodedata.normalize('NFKC',str(name))
     v=_vmc_code(name)
@@ -1188,6 +1202,8 @@ def _pro_map(name):
     if re.search(r'(?<![A-Za-z])LA(?![A-Za-z])|避雷器', s) and re.search(r'\d\.?\d*\s*kv', s, re.I):
         if re.search(r'10\s*kA', s, re.I) and '43464' in byCode: return '43464','○','LA避雷器8.4kV(10KA)'
         if '43461' in byCode: return '43461','○','LA避雷器8.4kV(標準)・変種(引出/断路/10KA)は要確認'
+    sp=_spd_code(name)
+    if sp: return sp
     for pat,code,note in _PRO_MAP:
         if re.search(pat, s) and code in byCode:
             return code,'○',note+'(プロ確定)'
