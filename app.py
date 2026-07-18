@@ -1177,6 +1177,12 @@ def _vmc_code(name):
         code = '43101' if '43101' in byCode else None
     if not code: return None
     _pfx = 'VMC→VCS' if _vmc else 'VCS変種確定'
+    # 変種指標(PF/引出/E)が読めた時のみ◎。素のVMC(変種未確認)は誤ると◎誤答なので○(要確認)＋候補提示。
+    if not pf:
+        _base = '43111' if amp400 else '43101'
+        _var  = '43113' if amp400 else '43103'
+        _cands=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in (_base,_var) if c in byCode]
+        return code,'○','%s(変種=素/PF付引出を確認ゲートで確定・既定=素)'%_pfx, _cands
     return code,'◎','%s(%s・御社実績で確定)'%(_pfx, byCode.get(code,{}).get('name','')[:20])
 def _whm_code(name):
     """WHM(電力量計・電子式コンパクト)→70系。相(1φ2W/Nφ3W)×容量(30A/120A/N-5A/250A)×検定(検付/未検/
@@ -1211,9 +1217,15 @@ def _spd_code(name):
     数量規則: クラスI(1Pのみ)=極数分, クラスII(3P/4P)=1個(呼出側/レビューで数量調整)。"""
     n=norm(name)
     if 'spd' not in n and '避雷' not in n: return None
-    if re.search(r'分離|ｾﾊﾟﾚ|separat|mccb|mcb|用ﾋｭ|用ヒュ', n): return None  # 分離器/SPD用MCCBは別
-    if '2種耐熱' in n and '67108' in byCode: return ('67108','○','SPD(クラスII 2種耐熱)')
+    if re.search(r'用ﾋｭ|用ヒュ', n): return None  # SPD用ヒューズは対象外
     is_c1 = bool(re.search(r'ｸﾗｽ?\s*[i](?![i])|クラス\s*[iⅠ](?![iⅠ])|class[-\s]*1|(?<![a-z0-9])c[-\s]*1(?![0-9])|1種', n))
+    # SPD用分離器(セパレータ)の単独行 → 分離器コードを直接返す(クラス別3P)。
+    # ※本体+分離器が同一行(例「SPD CLASS-1 MCCB 3P225」)の場合は本体を返し、分離器はselect側で自動ペア計上。
+    if re.search(r'分離|ｾﾊﾟﾚ|separat', n):
+        if is_c1 and '74113' in byCode: return ('74113','○','SPD用分離器(クラスI)3P')
+        if '74123' in byCode: return ('74123','○','SPD用分離器(クラスII)3P')
+        return None
+    if '2種耐熱' in n and '67108' in byCode: return ('67108','○','SPD(クラスII 2種耐熱)')
     if is_c1 and '74131' in byCode: return ('74131','○','SPD本体 クラスI(1P25KA・数量=極数分)')
     if re.search(r'4\s*p', n) and '74136' in byCode: return ('74136','○','SPD本体 クラスII(4P20KA)')
     if '74134' in byCode: return ('74134','○','SPD本体 クラスII(3P20KA)標準・既定')
@@ -1446,7 +1458,10 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     if _rc: return R(_rc[0],_rc[1],_rc[2])
     # 社内プロのフィードバック由来の直引き(計器盤/DA/27R/UV/EL/接地端子/TM/監視盤/VMC万能ヒューズ)
     _pm=_pro_map(name)
-    if _pm: return R(_pm[0],_pm[1],_pm[2])
+    if _pm:
+        _r=R(_pm[0],_pm[1],_pm[2])
+        if len(_pm)>3 and _pm[3]: _r['candidates']=_pm[3]
+        return _r
     # 盤内制御小物(PL/BZ/COS/CS/AUX-RY/T-RY/27X/TM-SW/FL-10W/PBS)を個別コードで拾う。
     # (見積システムへの入力コード。セット盤ではset側が内包→呼出側で抑制)
     _cp=_ctrl_part_code(name)
@@ -2757,6 +2772,23 @@ def select_from_extracted(data):
                     rows.append(dict(code=_tl,name=byCode[_tl].get('name',''),conf='○',
                                      note='TR二次主幹端子M)LUG(配電盤個別化・TR二次容量→切上)',
                                      raw='(TR二次 M)LUG)',qty='1',load_detail=False,feed=''))
+        # SPD用分離器の自動計上(茂泉様確定): SPD本体の頭には必ず分離器が付く(見積で拾われる)。
+        # クラスI本体74131 → 分離器74113(3P)・本体は極数分(3)。クラスII本体74134/74136 → 分離器74123(3P)。
+        # 系統(=SPD出現)ごとに本体1グループ+分離器1。本体行を検出して分離器をペア追加する。
+        _SPD_SEP={'74131':'74113','74134':'74123','74136':'74123'}
+        _sepadd=[]
+        for r in rows:
+            if r.get('load_detail'): continue
+            bc=str(r.get('code',''))
+            sep=_SPD_SEP.get(bc)
+            if not sep: continue
+            if bc=='74131':   # クラスI本体は1P型→3P系統では極数分(既定3)
+                if str(r.get('qty','')).strip() in ('','1'): r['qty']='3'
+            if sep in byCode: _sepadd.append(sep)
+        for sep in _sepadd:
+            rows.append(dict(code=sep,name=byCode[sep].get('name',''),conf='○',
+                             note='SPD用分離器(SPD本体の頭に付く分離器・系統ごと1)',
+                             raw='(SPD用分離器)',qty='1',load_detail=False,feed=''))
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
 
