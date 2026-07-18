@@ -1234,6 +1234,10 @@ def _pro_map(name):
         if '43461' in byCode: return '43461','○','LA避雷器8.4kV(標準)・変種(引出/断路/10KA)は要確認'
     sp=_spd_code(name)
     if sp: return sp
+    # マルチ指示計(マルチメータ): 型式(42075-88)は単線図から確定困難→既定を○で出し型式は確認ゲート。
+    # 行き止まり△を無くす(確定率向上)。候補はgen_candidatesが42xxxを提示。誤ると◎になるので○止め。
+    if re.search(r'マルチ\s*(指示計|メ|ﾒ)', s) and not re.search(r't/d|ﾏﾙﾁt|マルチt', s, re.I):
+        if '42083' in byCode: return '42083','○','マルチ指示計(型式を確認ゲートで最終確定・既定ME110GF系)'
     for pat,code,note in _PRO_MAP:
         if re.search(pat, s) and code in byCode:
             return code,'○',note+'(プロ確定)'
@@ -2631,8 +2635,10 @@ def select_from_extracted(data):
             # 受電盤等でマルチ指示計(42075-42088)が出たら型を記憶。型式は図面で確定困難なため△。
             if sel.get('code','')[:3]=='420' and 'マルチ指示計' in byCode.get(sel['code'],{}).get('name',''):
                 multi_meter_code=sel['code']
-                sel['conf']='△'
-                sel['note']='マルチ指示計(MDA)・型式要確認(' + byCode.get(sel['code'],{}).get('name','')[:18] + ')'
+                # 型式は図面から確定困難だが、既定型式を出し確認ゲートで最終確定→○(行き止まり△を無くす)。
+                sel['conf']='○'
+                sel['note']='マルチ指示計・型式を確認ゲートで最終確定(既定' + byCode.get(sel['code'],{}).get('name','')[:16] + ')'
+                sel['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in ('42081','42082','42083','42084','42086','42087','42088') if c in byCode]
             # 上位にMDA(マルチ指示計)がある場合、以降のどの盤の計器(電圧計V/電流計A/
             # 切換スイッチTHR=VS/AS)もMDAに統一する(盤またぎ・型式要確認△)。
             # ただしTR・変圧器・SC・SR等の明確な機器は継承対象にしない(誤統一を防ぐ)。
@@ -2640,8 +2646,8 @@ def select_from_extracted(data):
                     sel.get('code','') in ('71001','71002','98802','98803','42001','42002','42003','42014','74275','74276')
                     or re.fullmatch(r'(thr|vs|as|v/s|a/s|切換スイッチ|切換sw|vm|am|vm/am|v|a|電圧計|電流計|計器\(?[va/]+\)?)', nn)):
                 mm=byCode.get(multi_meter_code,{}).get('name','')
-                sel=dict(code=multi_meter_code, name=mm, conf='△',
-                         note=f'上位MDA(マルチ指示計)に統一・型式要確認({mm[:18]})')
+                sel=dict(code=multi_meter_code, name=mm, conf='○',
+                         note=f'上位MDA(マルチ指示計)に統一・型式を確認ゲートで最終確定({mm[:16]})',candidates=[])
 
             prev_is_main = bool(re.search(r'm\)?(mcb|lug)', nn)) and ('tb' not in nn[:3])
             if it.get('unclear') and sel['conf']!='△':
