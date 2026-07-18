@@ -987,6 +987,13 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
                 mm=re.search(r'(\d+\.?\d*)\s*kva[r]?', d['name'], re.I)
                 if mm: pool.append((float(mm.group(1)), d['code']))
             if pool:
+                # SC/SR(支給品)は銘板実測値(7020V時31.9kvar等)が公称値(30)より僅かに大きいだけなので、
+                # 切上げず「最近傍」で丸める(31.9→30, 1.91→1.8, 53.2→50)。TRは負荷以上が必須なので切上げ。
+                if grp_name in ('SC','SR'):
+                    v0,c0=min(pool, key=lambda vc:(abs(vc[0]-want), vc[0]))
+                    if abs(v0-want)<1e-6:
+                        return R(c0,'◎',f'{grp_name}容量一致({v0:g}{unit}・{kbn_label})')
+                    return R(c0,'○',f'{grp_name}容量最近傍(銘板{want:g}→公称{v0:g}{unit}・{kbn_label})')
                 ge=sorted([(v,c) for v,c in pool if v>=want-1e-6])
                 if ge:
                     v0,c0=ge[0]
