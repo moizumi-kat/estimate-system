@@ -1018,9 +1018,13 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
         # 追加計器(IWM無効電力計/PFM力率計)は計器種別(普通角/広角)でコード確定。
         _emc=_extra_meter_code(name)
         if _emc: return R(_emc,'◎',byCode.get(_emc,{}).get('name',''))
+        # 分電盤は「1負荷=1分岐回路」(社内方式・実見積書で確認)。遮断器記号が無い裸のVA負荷でも、
+        # 分電盤ならコンパクト分岐(60012/60014)で確定できる。湿式・接触注意負荷はELB、乾式はMCB。
+        _bl=_bunden_load_branch(name, panel)
+        if _bl: return R(_bl,'○','分電盤の負荷回路→コンパクト分岐(1負荷=1回路・%s)'%('ELB' if _bl=='60014' else 'MCB'))
         # 注: 遮断器記号(MCB/ELB等)が付く分岐は _compact_branch がコンパクトで確定する(上流で処理)。
         # ここに来るのは遮断器種別が全く無い「裸のVA負荷/機器名」=分岐か否かも図面から判別不能。
-        # 負荷ごとに勝手に分岐を立てると過剰計上になるため割当てはせず安全側△(人が確認)。
+        # 分電盤以外(制御盤/配電盤)では負荷ごとに勝手に分岐を立てると過剰計上になるため安全側△(人が確認)。
         if cands:
             hint=cands[0]['code']
             return R('','△',f'機器未特定・要確認(参考候補{len(cands)}件: 先頭={hint})')
@@ -1684,6 +1688,21 @@ def _panel_kind(panel):
     if any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): return 'haiden'
     if '電灯' in pn or '動力' in pn or '照明' in pn: return 'haiden'
     return 'bunden'
+
+def _bunden_load_branch(name, panel):
+    """分電盤(bunden)は「1負荷=1分岐回路」(社内方式・実見積書で確認)。遮断器記号が無い裸のVA負荷でも
+    分電盤ならコンパクト分岐で確定。湿式・接触注意負荷(コンセント/洗濯/給湯/浴室/温水等)=ELB(60014)、
+    乾式(電灯等)=MCB(60012)。3P/3φ明示や遮断器枠(AF)明示・盤見出し/合計/機器名は対象外(通常選定へ)。"""
+    if _panel_kind(panel)!='bunden': return None
+    n=norm(name)
+    if not re.search(r'\d+\s*va', n): return None                          # VA負荷であること
+    if re.search(r'合計|盤$|受電|変圧器|コンデンサ|ｺﾝﾃﾞﾝｻ', n): return None      # 盤見出し/機器でない
+    if re.search(r'3\s*p|3φ|\d{2,4}\s*af', n): return None                 # 3P/枠明示は通常分岐へ
+    if re.match(r'^\s*(予備|スペース|ｽﾍﾟｰｽ|sp)\b', n): return None            # 予備/空きは別処理
+    # 非負荷(計器/継電器/SPD/変成器/盤付属品)は負荷回路でない→対象外(VA=計器負担等の誤読を防ぐ)
+    if re.search(r'ﾏﾙﾁ|マルチ|計器|ﾒｰﾀ|メータ|指示計|継電器|ﾘﾚｰ|リレー|r[.]?ry|spd|避雷|換気扇|ﾋｰﾀ|ヒータ|ﾌﾞｻﾞ|ブザ|表示灯|(?<![a-z])pl(?![a-z])|(?<![a-z])bz(?![a-z])|(?<![a-z])aux|(?<![a-z])[cv]t(?![a-z])|zct', n): return None
+    code='60014' if _WET_ELB.search(name) else '60012'
+    return code if code in byCode else None
 
 def _mcb_code(name, panel, meta):
     n=norm(name); pn=norm(panel)
