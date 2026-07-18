@@ -2365,9 +2365,10 @@ def select_from_extracted(data):
         # set_attrs があればセットコードを1行出力。セット内包品(計器/TR/LBS等)は個別計上せず抑制。
         # セットが確定した(code有)場合のみ内包品を抑制。未確定(vcb/op等が未確認)でも確認ゲート行は出す。
         _set_expand=set(); _set_meter=''; _set_row_ref=None
-        # 配電盤(受変電低圧40系)はセットだと過不足の差し引きが大変(プロ助言)→個別に拾う。
-        # ∴ settype='低圧'はセットパスを通さず個別選定に回す。制御盤(22-29系)・高圧受電(11/16系)は従来どおり。
-        _use_set = p.get('set_attrs') and p['set_attrs'].get('settype') and p['set_attrs'].get('settype')!='低圧'
+        # 配電盤(受変電: 低圧17系/高圧11系/段積16系)は全て個別で拾う(プロ助言・茂泉様確定)。
+        # セットだと過不足の差し引きが大変。個別なら段積みか単独かの判別も不要になる。
+        # ∴ settype付き(低圧/高圧/段積)はセットパスを通さず個別選定に回す。制御盤の分岐は22-29系(別経路)。
+        _use_set = False
         if _use_set:
             _sc=sc_resolve(panel_nm, p['set_attrs'])
             if _sc:
