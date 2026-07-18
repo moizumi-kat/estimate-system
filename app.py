@@ -1581,7 +1581,7 @@ def _compact_branch(name, panel):
     真の空きスロット(遮断器種別が付かない=本関数に到達しない)のみ通常選定へ委ねる。"""
     n=norm(name); pn=norm(panel)
     if 'mcb' not in n and 'elb' not in n and 'mccb' not in n and 'elcb' not in n: return None  # 遮断器種別が必要
-    if _pole(n) not in ('2',''):    # 2P分岐のみ対象(3P/4P主幹・動力分岐は通常選定へ)
+    if _pole(n) not in ('1','2',''):    # 単相分岐(1P/2P)が対象。3P/4P主幹・動力分岐は通常選定へ
         return None
     # 盤種: 制御盤(50系端子台)・受変電低圧配電盤(40系)以外=分電系(60系コンパクト)。
     #  ※norm はハイフン/括弧を除去するためL番号検出が外れる盤名(AC-GC(LG-201)/共用盤/専用盤等)がある。
@@ -1592,11 +1592,15 @@ def _compact_branch(name, panel):
     if is_ctrl or is_haiden: return None
     # 3P/4P明示や大枠(100AF以上)は通常分岐(60系)へ委ねる。50AFのみコンパクト。
     if re.search(r'3\s*p|4\s*p', n): return None
-    af,_at=_amp_af(n)
-    if af and af not in ('50','30','20'):   # 100AF以上の明示枠はコンパクト対象外
-        try:
-            if int(af) >= 100: return None
-        except: pass
+    # VA(負荷容量)の数値はAF枠ではない。明示のAF枠(NNNAF)または枠/トリップ対(NNN/NNN)のみを枠とみなし、
+    # 100AF以上の明示枠だけコンパクト対象外にする。「NNNVA MCB1P」等の負荷表記はコンパクト分岐(50AF)。
+    _has_frame = bool(re.search(r'\d{2,4}\s*af', n) or re.search(r'\d{2,4}\s*/\s*\d{2,4}(?![\d.]|\s*va)', n))
+    if _has_frame:
+        af,_at=_amp_af(n)
+        if af and af not in ('50','30','20'):   # 100AF以上の明示枠はコンパクト対象外
+            try:
+                if int(af) >= 100: return None
+            except: pass
     # コンセント/温水洗浄便座/給湯/浴室等の湿式・接触注意負荷は漏電遮断器(ELB)が電気規定上必須。
     # 単線図の分岐開閉器列(1P/2P/ELB)は列が近接しVisionが2P⇔ELBを誤読しやすいため、負荷種別で補正する
     # (実見積書でも客室のコンセント・温水洗浄便座は全てELB=60014)。
