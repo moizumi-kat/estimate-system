@@ -2375,7 +2375,10 @@ def select_from_extracted(data):
         _panel_ctrl = bool(p.get('legend')) or any(it.get('symbol') for it in p.get('items',[])) \
                       or ('自立' in panel_nm and not re.search(r'低圧|受電|配電|電灯盤|分電', panel_nm))
         _panel_nm_for_sel = panel_nm
-        if _panel_ctrl and not re.search(r'制御|動力|分電', panel_nm):
+        # 記号/凡例で_panel_ctrlがTrueでも、L/S番号(分電盤)の盤には「制御盤」を付加しない
+        # (5L-1(自立型)等が制御盤50系扱いになり分岐がコンパクト化されず△になるのを防ぐ)。
+        _is_Lpanel = bool(re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?(?:[a-zａ-ｚ][ｰ\-－]?)?\d', norm(panel_nm)))
+        if _panel_ctrl and not re.search(r'制御|動力|分電', panel_nm) and not _is_Lpanel:
             _panel_nm_for_sel = panel_nm + ' 制御盤'   # _mcb_code等の盤種判定をctrl(50系)へ寄せる
         # 盤内コンデンサSCのkvarを先に把握(同一盤の直列リアクトルSRの容量算定に使う)
         _panel_sc_kvar=None
