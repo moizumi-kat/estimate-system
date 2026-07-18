@@ -986,13 +986,19 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
                 mm=re.search(r'(\d+\.?\d*)\s*kva[r]?', d['name'], re.I)
                 if mm: pool.append((float(mm.group(1)), d['code']))
             if pool:
-                # SC/SR(支給品)は銘板実測値(7020V時31.9kvar等)が公称値(30)より僅かに大きいだけなので、
-                # 切上げず「最近傍」で丸める(31.9→30, 1.91→1.8, 53.2→50)。TRは負荷以上が必須なので切上げ。
+                # SC/SR(支給品)は銘板実測値(7020V時31.9kvar等)が公称値の前後になり、切下/切上のどちらを
+                # 採るかは案件で異なる(茂泉様)→前後の公称値を候補に確認ゲート化。既定=切下(公称値に近い)。
                 if grp_name in ('SC','SR'):
-                    v0,c0=min(pool, key=lambda vc:(abs(vc[0]-want), vc[0]))
-                    if abs(v0-want)<1e-6:
-                        return R(c0,'◎',f'{grp_name}容量一致({v0:g}{unit}・{kbn_label})')
-                    return R(c0,'○',f'{grp_name}容量最近傍(銘板{want:g}→公称{v0:g}{unit}・{kbn_label})')
+                    exact=[c for v,c in pool if abs(v-want)<1e-6]
+                    if exact: return R(exact[0],'◎',f'{grp_name}容量一致({want:g}{unit}・{kbn_label})')
+                    below=sorted([(v,c) for v,c in pool if v<=want+1e-6], key=lambda x:-x[0])
+                    above=sorted([(v,c) for v,c in pool if v>=want-1e-6])
+                    fl=below[0] if below else None; ce=above[0] if above else None
+                    if fl or ce:
+                        d=(fl or ce)
+                        _r=R(d[1],'○',f'{grp_name}容量 銘板{want:g}{unit}→切下/切上を確認ゲートで選択(既定=切下{d[0]:g}{unit}・{kbn_label})')
+                        _r['_round_gate']=[x[1] for x in (fl,ce) if x and x[1] in byCode]
+                        return _r
                 ge=sorted([(v,c) for v,c in pool if v>=want-1e-6])
                 if ge:
                     v0,c0=ge[0]
@@ -1527,6 +1533,10 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
         meta['main']='SC'
     sel=refine(meta,cands,name,panel,prev_is_main,volt)
     sel['candidates']=[{'code':c['code'],'name':c['name'],'volt':c['volt']} for c in cands[:5]]
+    # SC/SR容量の丸め(切下/切上)は確認ゲート: 前後の公称値を候補に提示(既定=切下)。
+    if sel.get('_round_gate'):
+        sel['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in sel['_round_gate']]
+        sel.pop('_round_gate',None)
     # 動力/電灯/制御盤の3P分岐: AX付(補助接点付)は図面特記が無ければ盤種単位で要確認(既定=非AX)。
     _ag=_ax_gate(sel.get('code',''), name, panel)
     if _ag:
