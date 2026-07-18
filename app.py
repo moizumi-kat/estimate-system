@@ -1268,10 +1268,12 @@ def _lbs_code(name, panel=''):
     if not re.search(r'(?<![A-Za-z])LBS(?![A-Za-z])', n, re.I): return None
     # 3P200A枠以外(例:400A)はDBに無い→従来処理へ委ねる
     if re.search(r'(\d{3,4})\s*A', n) and not re.search(r'200\s*A', n): return None
-    # PF定格(G感度)表記ゆれ対応: PF=20A / PF(G)20A / PF G20A / PF T40A / PF=20A(T) 等。
-    # PFの直後に (G)/(T)/G/T が入る図面がある(実物件: 西新宿・城山・表参道)。
-    mpf=re.search(r'PF\s*[=＝]?\s*(?:\(?[GＧTＴ]\)?\s*)?[=＝]?\s*(\d+)\s*A', n, re.I)
-    pf=int(mpf.group(1)) if mpf else None
+    # G感度バンドは【明示的なG表記(G100A/感度100A/(G)100A)がある時のみ】確定に使う。
+    # PFヒューズ定格(PF T87A 等)は G感度の代理にならない(実物件城山: PF T87A でも G75A以下=43321)。
+    # ∴ 明示Gが読めた時だけ band 確定(◎可)。無ければ band は未確定として盤種の定番(75以下)を○で出す。
+    mg=re.search(r'(?:感度|[GＧ])\s*[=＝(（]?\s*(\d+)\s*A', n, re.I)
+    gexplicit=bool(mg)
+    pf=int(mg.group(1)) if mg else None
     if pf is None: band=None
     elif pf<=75: band='75'
     elif pf<=100: band='100'
@@ -1929,7 +1931,7 @@ def _ax_gate(code, name, panel):
     戻り値: (AX付コード, 盤種ラベル) / None。"""
     if not code or len(code)!=5 or code[:2] not in ('40','50','60'): return None
     nm=byCode.get(code,{}).get('name','')
-    if not re.search(r'^[BM]\)', nm) or not re.search(r'3\s*[PＰ]', nm): return None  # 3P主幹(M)/分岐(B)
+    if not re.search(r'^[BM]\)', nm) or not re.search(r'[23]\s*[PＰ]', nm): return None  # 2P/3P 主幹(M)/分岐(B)
     if code[1]!='0': return None                                   # 既にAX(41/51/61)なら対象外
     if re.search(r'AX|欠相|中欠|補助接点', str(name)): return None    # 図面にAX特記あり→確定
     axc=code[0]+'1'+code[2:]
@@ -2341,6 +2343,7 @@ def terminal_select(name):
     n=re.sub(r'[（）]',lambda m:'(' if m.group()=='（' else ')',str(name))
     if _TERM_EXCLUDE.search(n) and not re.search(r'端子|MDF|保安器',n): return None
     p=_term_poles(n)
+    p_explicit = p is not None   # 端子数(P)が名称に明示されているか。既定値なら◎にしない(端子数要確認)。
     # 極数表記が無くても「端子盤/保安器/接地端子」と分かれば既定極数で選定(プロは10P端子無で計上)。
     if p is None:
         if not _TERM_POS.search(n): return None
@@ -2366,7 +2369,10 @@ def terminal_select(name):
     pick=next((c for pp,c in cand if pp>=p),(cand[-1][1] if cand else None))
     if not pick: return None
     gp=_term_poles(byCode[pick]['name'])
-    return pick,('◎' if gp==p else '○'),('' if gp==p else '極数切上%dP→%dP'%(p,gp))
+    # 端子数が明示され、かつ在庫極数と一致した時のみ◎。既定極数(未明示)や切上は○(端子数要確認)。
+    if p_explicit and gp==p: return pick,'◎',''
+    _note='端子数(P)が図面から未確定→既定%dP・要確認'%p if not p_explicit else '極数切上%dP→%dP'%(p,gp)
+    return pick,'○',_note
 
 def select_from_extracted(data):
     out=[]
