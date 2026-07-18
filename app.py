@@ -624,6 +624,12 @@ def _detect_main(main_str):
             if len(nk)<=2:
                 # 短い別名(as/vs/am/vm/ct/vt等)は単語境界でのみマッチ
                 if _re.search(r'(?<![a-z])'+_re.escape(nk)+r'(?![a-z])', n):
+                    # 計器別名(vm/am/vs/as)は、負荷行(電灯/照明/コンセント等の頭+VA負荷)の
+                    # 回路名に含まれる文字と誤マッチしやすい→負荷行では計器と見なさない。
+                    if nk in ('vm','am','vs','as') \
+                       and _re.match(r'(電灯|照明|ｺﾝｾﾝﾄ|コンセント|動力|非常|ev|給湯|ﾎﾟﾝﾌﾟ|ポンプ|換気|空調|ﾗﾝﾄﾞﾘ|ランドリ)', n) \
+                       and _re.search(r'\d+\s*va', n):
+                        continue
                     # DB照合には別名でなく正式名(part['name'])を返す。
                     # (例: VMCで検出→DB品名は'VCS'始まりなので'VCS'で照合する)
                     return part['name'], part['name'], part['prefix']
