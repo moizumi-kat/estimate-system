@@ -713,6 +713,10 @@ def _normalize_type(t):
     if re.search(r'スタ[ー\-]?デルタ|ｽﾀ[ｰ\-]?ﾃﾞﾙﾀ|STAR|[YTΥ][ー\-]?Δ|Δ始動',u+s):
         return 'INV(スターデルタ)' if 'INV' in u else 'スターデルタ'
     if 'INV' in u or 'インバータ' in s: return 'INV'
+    # 「電源送り/電源供給/送り/操作電源」はモーター始動回路でなく単なる遮断器(電源送り)。
+    # 電流計付(B=電源送り(MCCB,電流計付))でも送りは送り→MCCB扱い(電流計でL-S誤判定しないよう先に判定)。
+    if re.search(r'電源送り|電源供給|(?<![直])送り|操作電源|操作用電源', s) and not re.search(r'始動|直入|L[ー\-]?S(?![a-z])', s+u):
+        return 'MCCB'
     if re.search(r'直入|電流計|[0-9０-９]回路|[0-9０-９]台|L[ー\-]?S',s+u): return 'L-S(AM付)'
     if re.search(r'MCCB|ELB|遮断器',u) and 'のみ' in s: return 'MCCB'   # 直接遮断器=電源/コンセント回路
     return str(t or '').strip()
@@ -1469,6 +1473,10 @@ def _relay_code(name, panel=''):
 
 # 統合: 1機器を選定
 def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', group='', legend=None, breaker=''):
+    # 「E3P50/20」等の "E"＋極数 は ELB(漏電遮断器)の略記(動力制御盤の負荷分岐に多い)。
+    # ELB略記を明示化して B)MCB と誤認しないようにする(手本: 六本木E3P50→B)ELB 51536)。
+    if isinstance(name,str):
+        name=re.sub(r'(?<![A-Za-zＡ-Ｚ])[EＥ](?=\s*[２-４2-4]\s*[PＰ])', 'ELB', name)
     # リモコン設備(65系)は名称直引き(数値属性が無く候補生成に乗らないため)
     _rc=_remocon_code(name)
     if _rc: return R(_rc[0],_rc[1],_rc[2])
@@ -2445,6 +2453,14 @@ def select_from_extracted(data):
     out=[]
     # 受変電部で上段に出たマルチ指示計のコードを記憶し、下段のV/電流計に継承する。
     multi_meter_code=None
+    # 動力制御盤の「標準図/パターン集」の凡例をマスター凡例として抽出。各盤の局所凡例より権威
+    # (茂泉様確定): 標準図が記号A〜Lの正しい定義。局所凡例の誤取得(例: 六本木でA=電源送りを
+    # A=直入L-Sと誤読)を是正し、記号の機器構成(電源送りMCCB か L-S始動 か)を正しく判定する。
+    _master_legend={}
+    for _p in data.get('panels',[]):
+        if re.search(r'標準図|パターン集|パターン図|標準回路|回路図集', str(_p.get('panel',''))) and _p.get('legend'):
+            for _k,_v in _p['legend'].items():
+                _master_legend[str(_k).upper().strip()]=_v
     for p in data.get('panels',[]):
         # 図面種別ヒントを盤ごとにセット(_panel_kindが名前判定できない盤のフォールバック)。
         _dk=p.get('_drawing_kind')
@@ -2459,6 +2475,11 @@ def select_from_extracted(data):
         rows=[]
         prev_is_main=False
         panel_nm=p.get('panel','')
+        # 有効凡例=局所凡例にマスター凡例(標準図)を上書き。標準図の記号定義を権威とし、
+        # 局所凡例の誤取得を是正(記号A=電源送りMCCB等を正しく解決→電源送りは個別遮断器で拾う)。
+        _eff_legend=dict(p.get('legend') or {})
+        for _mk,_mv in _master_legend.items():
+            _eff_legend[_mk]=_mv
         # 動力制御盤の「標準図/パターン集」は各負荷盤が参照する主回路パターンの凡例定義シート。
         # それ自体は積算対象でない(構成部品MC/2E/MMCB等は各分岐回路コードに内包)。各負荷盤は
         # 自前のlegendを持つので、この参照シートは盤ごとスキップする(誤△の大量発生を防ぐ)。
@@ -2689,7 +2710,7 @@ def select_from_extracted(data):
                 if not any(str(byCode.get(str(r.get('code','')),{}).get('name','')).startswith('M)') for r in rows if not r.get('load_detail')):
                     _base_nm='主幹 '+_base_nm
             sel=select_one(_base_nm, _panel_nm_for_sel, prev_is_main, it.get('volt',''), it.get('symbol',''), it.get('kw',''), it.get('group',''),
-                           legend=p.get('legend'), breaker=it.get('breaker',''))
+                           legend=_eff_legend, breaker=it.get('breaker',''))
             # 弱電端子盤の救済: 未選定/△、または明らかに端子盤系(端子盤/保安器/接地端子/MDF)なら
             # terminal_select(極数P＋端子指標、既定=端子無)を優先。遮断器/コンセントは除外済。
             # (プロ確定: 端子盤T-x=62001端子無、保安器収納盤=62895保安器函)
