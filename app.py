@@ -1707,7 +1707,9 @@ def _panel_kind(panel):
     if '分電' in pn: return 'bunden'
     # 高圧・受変電系は型文字判定(_mp/_lj)より先にhaidenへ。「高圧コンデンサ盤 SC-1」の"SC-1"を
     # 分電盤のS番号と誤読して60系(M)LUG誤付与)になるのを防ぐ。コンデンサ/SC/SR盤も含める。
-    if any(k in pn for k in ['配電','受電','受変電','高圧','コンデンサ','ｺﾝﾃﾞﾝｻ','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ']): return 'haiden'
+    # 「電灯盤/動力盤」(複合語)は受変電低圧配電盤(haiden)。盤名の(GL2)等のL番号で_ljが誤発火する前に確定
+    # (例「保安電灯盤(GL2)」の"L2"で分電盤誤分類を防ぐ)。分電盤(1L-1等)は"電灯盤/動力盤"を含まない。
+    if any(k in pn for k in ['配電','受電','受変電','高圧','コンデンサ','ｺﾝﾃﾞﾝｻ','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電','き電','スコット','ｽｺｯﾄ','電灯盤','動力盤']): return 'haiden'
     if _mp and not ('電灯' in pn or '照明' in pn): return 'ctrl'
     if _lj: return 'bunden'
     # 「自立(型)」は筐体種別(自立/壁掛)であり盤種でない。L/P番号や制御/分電の後に判定し、
@@ -2817,6 +2819,34 @@ def select_from_extracted(data):
                                  note='制御盤の制御一式(主幹選定に付随・BZ/AUX-RY/PBS/T-RY内包)。T-RY無し=21309を確認ゲートで選択',
                                  raw='(制御盤 制御一式)',qty='1',is_setcode=True,candidates=_cands,
                                  set_attrs={},load_detail=False,feed='',deviations=[]))
+        # 予備スペース(SP)分岐(茂泉様確定): 予備/スペースの分岐は実配線が無く端子台不要→系統は
+        # 受変電(haiden)=40系/その他(制御盤・分電盤)=60系に強制し、SPコード(4桁目→9)へ変換。
+        # 実見積書: 受変電 予備→40193/40293、制御盤 予備→60593(MCB)/60596(ELB) で確認。
+        _sp_series = '40' if _kind=='haiden' else '60'
+        for r in rows:
+            if r.get('load_detail'): continue
+            _rawn = str(r.get('raw','')) + '|' + str(r.get('name',''))
+            # SP(空きスペース)は「スペース」明記のみ。裸の「予備」は実装済スペアブレーカー(通常コード)
+            # の場合があり(例「予備 MCCB 3P225 定格電流可調整型」)、SPに誤変換しない。
+            if not re.search(r'スペース|\(SP\)', _rawn): continue
+            if 'SPD' in _rawn.upper(): continue          # SPDは対象外
+            _c=str(r.get('code',''))
+            _cnm=byCode.get(_c,{}).get('name','')
+            _is_elb=('ELB' in _cnm)
+            # 分電盤のコンパクト分岐(2P50A系=60012/60014)の予備 → コンパクトSP(MCB=60028/ELB=60029)。
+            if _kind=='bunden' and (_cnm.startswith('B)MCB(コンパクト') or _cnm.startswith('B)ELB(コンパクト')
+                                    or re.search(r'2P\s*50', _cnm)):
+                _spc='60029' if _is_elb else '60028'
+                if _spc in byCode:
+                    r['code']=_spc; r['name']=byCode[_spc]['name']; r['conf']='○'
+                    r['note']='予備スペース分岐(分電盤コンパクトSP)'
+                continue
+            if not (_cnm.startswith('B)MCB') or _cnm.startswith('B)ELB')): continue  # 分岐MCB/ELBのみ
+            if len(_c)!=5 or _c[3] not in ('2','3','4'): continue     # 標準構造のみ(400xx系は除外)
+            _spc=_sp_series+_c[2:3]+'9'+_c[4]                          # 系統強制+4桁目→9
+            if _spc in byCode:
+                r['code']=_spc; r['name']=byCode[_spc]['name']; r['conf']='○'
+                r['note']='予備スペース分岐(端子台なし→%s系SP)'%_sp_series
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
 
