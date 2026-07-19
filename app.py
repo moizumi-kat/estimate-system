@@ -11,7 +11,7 @@
   pip install flask anthropic pdf2image openpyxl pillow
   python3 app.py        # → http://localhost:8000
 """
-import os, re, io, json, base64, unicodedata, datetime, zipfile, tempfile, hmac, secrets, functools
+import os, re, io, json, base64, unicodedata, datetime, zipfile, tempfile, hmac, secrets, functools, contextvars
 from flask import Flask, request, jsonify, send_file, Response
 from anthropic import Anthropic
 from openpyxl import Workbook
@@ -1692,13 +1692,31 @@ def _compact_branch(name, panel):
     if code not in byCode: return None
     return code, '◎', 'コンパクト分岐(2P50AF・%s)実見積書4案件で確定'%('ELB' if is_elb else 'MCB')
 
+# 図面種別ヒント(配電盤図=haiden/分電盤図=bunden/制御盤図=ctrl)。図面は種別ごとに分かれて
+# 描かれる(茂泉様確定)ので「どの図面に載るか」が盤種の最確実な信号。select_from_extractedが
+# 盤ごとにセットし、_panel_kindが名前判定より優先する。contextvarでスレッド安全に通す。
+_DRAWING_KIND = contextvars.ContextVar('drawing_kind', default=None)
+
 def _panel_kind(panel):
     """盤種別→端子台系統: 制御盤=ctrl(50系)/分電盤=bunden(60系)/受変電低圧配電盤=haiden(40系)。
-    判別語は「分電/制御があるか」。無地の「電灯盤/動力盤」は配電盤スケルトン上の低圧配電盤=40系。
+    図面種別ヒント(_DRAWING_KIND)があればそれを最優先(図面は種別ごとに分かれて描かれるため確実)。
+    無ければ盤名から判定。※_mcb_code/_lug_code で共用(挙動を一致させるため単一定義)。"""
+    _hint=_DRAWING_KIND.get()
+    _nb=_panel_kind_byname(panel, mark_default=True)
+    # 名前に明確な信号(制御/分電/高圧/L・P番号/電灯盤等)があればそれが最優先。
+    # 図面は必ずしも種別ごとに綺麗に分かれておらず(実例:西新宿の分電盤図に制御盤P/LPが混在し
+    # 手本では制御系51系が正)、明確な名前信号を図面種別で上書きすると誤るため。
+    # 図面種別ヒントは、名前で判定できない盤(_default)のフォールバックにのみ使う。
+    if _nb=='_default':
+        return _hint if _hint in ('haiden','bunden','ctrl') else 'bunden'
+    return _nb
+
+def _panel_kind_byname(panel, mark_default=False):
+    """盤名だけから盤種別を判定。mark_default=Trueなら、名前で判定できず既定に落ちる場合に
+    'bunden'でなく'_default'を返す(図面種別ヒントのフォールバック対象を識別するため)。
       ① 制御盤(制御/自立/M・P番号・動力制御盤) = 端子台付き50系
       ② 分電盤(分電/照明分電/L・J・S番号)     = 端子台なし60系
-      ③ 無印の電灯盤・動力盤(一般/低圧/非常/保安) = 上流の低圧配電盤40系
-    ※_mcb_code/_lug_code で共用(挙動を一致させるため単一定義)。"""
+      ③ 無印の電灯盤・動力盤(一般/低圧/非常/保安) = 上流の低圧配電盤40系"""
     pn=norm(panel)
     # 「GL＋数字」は地下階の位置コード(G=地下/Ground Level, GL2=地下2階)であり盤種でない。
     # 分類前に除去して、"GL2"の"L"を分電盤のL番号と誤読しないようにする(茂泉様確定)。
@@ -1721,7 +1739,23 @@ def _panel_kind(panel):
     # 番号も種別語も無い「自立盤」のみ制御盤とみなす(分電盤も自立型があるため優先しない)。
     if '自立' in pn: return 'ctrl'
     if '電灯' in pn or '動力' in pn or '照明' in pn: return 'haiden'
-    return 'bunden'
+    return '_default' if mark_default else 'bunden'
+
+def _infer_drawing_kind(panels):
+    """1図面(=1ファイル)の盤リストから図面種別を推定。図面は種別ごとに分かれて描かれるので、
+    載っている盤の名前判定の多数決で図面種別が決まる。参照シート(標準図/凡例/一覧)は除外。
+    明確な多数派(2件以上かつ過半数)のみ採用し、混在や不明瞭ならNone(=盤ごとの名前判定に委ねる)。"""
+    from collections import Counter
+    c=Counter()
+    for p in panels:
+        pn=p.get('panel','') if isinstance(p,dict) else str(p)
+        if not pn: continue
+        if re.search(r'標準|パターン|凡例|一覧|参考|負荷|設備配線|ダクト|標準結線|接地端子', norm(pn)): continue
+        c[_panel_kind_byname(pn)]+=1
+    if not c: return None
+    top,n=c.most_common(1)[0]
+    total=sum(c.values())
+    return top if (n>=2 and n/total>=0.6) else None
 
 def _bunden_load_branch(name, panel):
     """分電盤(bunden)は「1負荷=1分岐回路」(社内方式・実見積書で確認)。遮断器記号が無い裸のVA負荷でも
@@ -2156,6 +2190,11 @@ def extract_panels(fname, data_bytes):
         return _EXTRACT_CACHE[key]
     cli=client()
     res=extract_input(cli, fname, data_bytes)
+    # 図面種別を推定して各盤にタグ付け(1ファイル=1図面種別)。選定時の盤種判定の第一信号にする。
+    _dk=_infer_drawing_kind(res.get('panels',[]))
+    if _dk:
+        for p in res.get('panels',[]):
+            p.setdefault('_drawing_kind', _dk)
     _EXTRACT_CACHE[key]=res
     return res
 
@@ -2392,6 +2431,9 @@ def select_from_extracted(data):
     # 受変電部で上段に出たマルチ指示計のコードを記憶し、下段のV/電流計に継承する。
     multi_meter_code=None
     for p in data.get('panels',[]):
+        # 図面種別ヒントを盤ごとにセット(_panel_kindが名前判定より優先)。無ければNoneで名前判定。
+        _dk=p.get('_drawing_kind')
+        _DRAWING_KIND.set(_dk if _dk in ('haiden','bunden','ctrl') else None)
         rows=[]
         prev_is_main=False
         panel_nm=p.get('panel','')
@@ -2853,6 +2895,7 @@ def select_from_extracted(data):
                 r['code']=_spc; r['name']=byCode[_spc]['name']; r['conf']='○'
                 r['note']='予備スペース分岐(端子台なし→%s系SP)'%_sp_series
         out.append(dict(panel=p.get('panel',''),rows=rows))
+    _DRAWING_KIND.set(None)   # 後続処理へ図面種別ヒントを漏らさない
     return out
 
 def make_excel(panels):
