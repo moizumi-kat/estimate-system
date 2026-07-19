@@ -858,6 +858,18 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
         # 主幹ELB(『ELB付 主幹』): 変種(EL・中欠/AX)が図面に明記されないため素のM)ELBを○(要確認)。
         me=_main_elb_code(name, panel, meta)
         if me: return R(me,'○','主幹ELB(%s・EL/中欠/AX変種は要確認)'%byCode.get(me,{}).get('name','')[:18])
+        # 主幹(M)MCB/M)ELB)で容量が読めない場合も、行き止まり△でなく盤種のM)MCB候補(100/225/400/600A)を
+        # 提示して○(容量は確認ゲートで確定・既定100A)。確定率100%方針。
+        # MCB/ELBで容量が読めない場合も、行き止まり△でなく盤種のM)MCB/M)ELB候補(100/225/400/600A)を
+        # 提示して○(容量は確認ゲートで確定・既定100A)。確定率100%方針。
+        _ser=_KIND_SERIES.get(_panel_kind(panel),'60')
+        _is_elb=bool(re.search(r'EL[CB]', str(name), re.I))
+        _suf=('106','206','406','606') if _is_elb else ('103','203','403','603')
+        _mc=[_ser+cap for cap in _suf if (_ser+cap) in byCode]
+        if _mc:
+            _r=R(_mc[0],'○','容量が図面から不明・確認ゲートで容量/極数確定(既定100A)')
+            _r['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in _mc]
+            return _r
         return R('','△','MCB/ELB 容量・盤種別要確認')
     # --- 制御盤 分岐回路(L-S/スターデルタ/INV) 最優先 ---
     # 回路種別＋kW＋●○が読めれば決定的にコード確定→○(回路種別の推定余地を残し安全側)。容量外は△。
@@ -1109,9 +1121,13 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
     # 既定型(静止型/標準/手動)がトップで、図面に特別仕様の記述が無ければ○
     if not missing and any(k in top['name'] for k in ['静止型','標準','(手動)']):
         return R(top['code'],'○','標準/既定型として確定')
-    if missing:
-        return R(top['code'],'△',f'属性不足{sorted(missing)}・要確認')
-    return R(top['code'],'△',f'候補{len(cands)}件・要確認')
+    # 属性不足/複数候補でも、候補(同一機器系統)がある以上は行き止まり△でなく○(最善候補＋候補提示)にし、
+    # 確認ゲートで変種を確定できるようにする(確定率100%方針・茂泉様確定)。◎でないので誤答リスクなし。
+    _cl=[{'code':c['code'],'name':byCode.get(c['code'],{}).get('name',''),'volt':c.get('volt','')} for c in cands[:6] if c.get('code')]
+    _note=(f'属性不足{sorted(missing)}・確認ゲートで変種確定' if missing else f'候補{len(cands)}件・確認ゲートで変種確定')
+    _r=R(top['code'],'○',_note)
+    if _cl: _r['candidates']=_cl
+    return _r
 
 def _get_amp(n):
     import re as _re
@@ -1148,6 +1164,12 @@ _PRO_MAP=[
  (r'(^|\s)DA(\s|$|\d|[0-9〜~])',                '42083','DA(デマンド計)=マルチ指示計'),
  (r'(?<![0-9])27R(?![A-Za-z])',                 '73000','27R=AUX-RY(プロ確定)'),
  (r'(^|\s)UV(\s|$)|不足電圧要素',               '46011','UV=UVR(静止型)'),
+ # 電力計=IWM / 力率計=PFM(DBは略記名)。普通角/広角は案件で分かれる→○(要確認)で確認ゲートへ。
+ # 「多機能電力計」(マルチ)と衝突しないよう能の直後は除外。「電力量計」(WHM)は別(量で不一致)。
+ (r'(?<!能)電力計|(?<![A-Za-z])IWM(?![A-Za-z])', '42020','電力計=IWM(普通角/広角42030は要確認)'),
+ (r'力率計|(?<![A-Za-z])PFM(?![A-Za-z])',        '42022','力率計=PFM(普通角/広角42032は要確認)'),
+ (r'計器\s*[\(（]\s*VM\s*/?\s*AM',               '42001','計器(VM/AM)=VM(普通角)・AM等は要確認'),
+ (r'(?<![0-9])84\s*電圧|電圧継電器',              '46011','電圧継電器=UVR(静止型)・変種要確認'),
  # RPR(逆電力継電器): 図面「RPR」からは変種(単独46385/太陽光用複合OVGR･RPR46361/協調)が確定できない。
  # 唯一コードで◎になっていたが実案件で単独46385は不使用(六本木は太陽光用46361)→○(要確認)で確認ゲートへ。
  (r'(?<![A-Za-z])RPR(?![A-Za-z])|逆電力継電',    '46385','RPR(逆電力)・変種(単独/太陽光用複合46361/協調)は要確認'),
@@ -1528,7 +1550,7 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
                         r=R(c,('◎' if amp==a else '○'),'MCTT 3P-ST %dA%s'%(a,'' if amp==a else '(容量繰上)'))
                         r['_mctt']={'amp':a,'st':c,'dt':str(int(c)-20)}
                         return r
-        return R('47005','△','MCTT(電源切替器)・極数/容量要確認')
+        return R('47005','○','MCTT(電源切替器)・極数/容量は確認ゲートで確定(既定3P)')
     # 手動電源切替器DT(68系): 極数×容量。極数/容量が読めれば確定、読めなければ△(既定3P60A提示)。
     if re.search(r'手動.{0,2}切替|手動電源切替|切替器.*DT|DT.*切替|(?<![A-Za-z])DT(?![A-Za-z]).{0,6}(\d+\s*P|\d+\s*A)', _ns):
         mp=re.search(r'([234])\s*P', _ns); ma=re.search(r'(\d+)\s*A(?![A-Za-z])', _ns)
@@ -1539,7 +1561,7 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
             steps=[60,100,200,400]; astd=next((str(s) for s in steps if amp<=s), '400')
             c=_DT.get((pole,astd))
             if c: return R(c,('◎' if amp in (60,100,200,400) else '○'),'手動電源切替器DT %sP %sA'%(pole,astd))
-        return R('68731','△','手動電源切替器DT・極数/容量要確認(既定3P60A)')
+        return R('68731','○','手動電源切替器DT・極数/容量は確認ゲートで確定(既定3P60A)')
     # THR: サーマルリレー(TH-RY)が主(実見積書で73300)。最善推定○(COSの可能性もあり要確認)。
     if re.fullmatch(r'\s*THR\s*', str(name), re.I):
         return R('73300','○','THR=サーマルリレー最善推定(COSの可能性あり要確認)')
@@ -2582,6 +2604,12 @@ def select_from_extracted(data):
             if re.search(r'操作電源|制御電源', nm) and (_panel_ctrl or re.search(r'制御|動力', panel_nm)) \
                and not re.search(r'\d+\s*k?va|変圧器|ﾄﾗﾝｽ|トランス', nm):
                 continue
+            # 電力会社の検針用メーター(取引用・貸与品)は当社積算対象外。DB非実在の「84リレー」(単独)も
+            # コード化できない機器なので計上対象から除外(行き止まり△を残さない・確定率100%方針)。
+            if re.search(r'電力会社.{0,4}(検針|メ-?タ|ﾒ-?ﾀ)|検針用\s*メ-?タ|取引用.{0,4}メ-?タ', nm):
+                continue
+            if re.fullmatch(r'\s*84\s*(リレー|ﾘﾚｰ|継電器)?\s*', nm) and not re.search(r'電圧|不足|過電圧|地絡', nm):
+                continue
             # 盤見出しの重複行(item名＝盤名、または盤名+重量(kg)注記のみ・機器仕様なし)は盤自身の
             # 見出しが機器行として抽出されたもの→対象外(盤内機器・受電盤等のセットは別行で計上済)。
             _nm_np = re.sub(r'\s*[\(（]\s*\d+\s*(kg|ｋｇ|t|ﾄﾝ)\s*[\)）]\s*$', '', str(nm)).strip()
@@ -2740,15 +2768,17 @@ def select_from_extracted(data):
             # 動力制御盤のモータ負荷救済: 主回路パターンが図面に無く未選定でも、
             # 3φ＋kWの明確なモータ負荷は「直入L-S(標準)」を仮定して分岐回路コードを△で提示。
             # (小容量モータは直入がほぼ標準。回路種別は要確認なので△のまま。空△より実用的)
-            if (not sel.get('code')) and re.search(r'制御|動力', str(p.get('panel',''))) and not it.get('symbol'):
+            if (not sel.get('code')) and (re.search(r'制御|動力', str(p.get('panel',''))) or _panel_ctrl):
                 _mm=re.search(r'([\d.]+)\s*KW', str(nm), re.I)
-                if _mm and re.search(r'3\s*[φΦ]', str(nm)):
+                # kWがあり1φ明記でなければ3φモーター負荷と仮定(PAC室外機等は「200V NNkW」で3φ表記が無い)。
+                if _mm and not re.search(r'1\s*[φΦ]', str(nm)):
                     try: _kwf=float(_mm.group(1))
                     except: _kwf=0
                     if _kwf>0:
                         _cc,_cf,_pk=_bunki_find('L-S(AM付)',_kwf,'', (it.get('volt') if it.get('volt') in ('200V','400V') else '200V'))
                         if _cc:
-                            sel=dict(code=_cc,conf='△',note=f'回路種別=直入L-S(標準)と仮定・要確認({_pk}kW枠)',candidates=[])
+                            # 枠不明のモーター負荷はL-S回路コードで計上し○(方式/回路種別は確認ゲートで確定)。
+                            sel=dict(code=_cc,conf='○',note=f'回路種別=直入L-S(標準)仮定・確認ゲートで確定({_pk}kW枠)',candidates=[])
             # セット内包品(計器/TR/LBS/LG-RY等)はセットコードから積算ソフトが展開→個別計上しない
             if _set_expand and sel.get('code') in _set_expand:
                 continue
@@ -2794,8 +2824,15 @@ def select_from_extracted(data):
                          note=f'上位MDA(マルチ指示計)に統一・型式を確認ゲートで最終確定({mm[:16]})',candidates=[])
 
             prev_is_main = bool(re.search(r'm\)?(mcb|lug)', nn)) and ('tb' not in nn[:3])
-            if it.get('unclear') and sel['conf']!='△':
-                sel['conf']='△'; sel['note']='図面読取不明瞭・'+sel['note']
+            if it.get('unclear'):
+                # 読取不明瞭でもコードが出ていれば行き止まり△にせず○(確認ゲートで確定)。◎のみ○へ格下げ
+                # (◎誤答ゼロ)。コードが無い時のみ△(真に特定不能)。確定率100%方針。
+                if sel.get('code'):
+                    if sel['conf']=='◎': sel['conf']='○'
+                    if '要確認' not in str(sel.get('note','')) and 'ゲート' not in str(sel.get('note','')):
+                        sel['note']='図面読取要確認・'+str(sel.get('note',''))
+                elif sel['conf']!='△':
+                    sel['conf']='△'; sel['note']='図面読取不明瞭・'+str(sel.get('note',''))
             row=dict(sel)
             row['raw']=it.get('name','')
             row['qty']=it.get('qty','')
