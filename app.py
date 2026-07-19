@@ -864,7 +864,8 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
         # 提示して○(容量は確認ゲートで確定・既定100A)。確定率100%方針。
         _ser=_KIND_SERIES.get(_panel_kind(panel),'60')
         _is_elb=bool(re.search(r'EL[CB]', str(name), re.I))
-        _suf=('106','206','406','606') if _is_elb else ('103','203','403','603')
+        # ELBはM)ELB(x06)優先だが、系統にM)ELBが無ければM)MCB(x03)へフォールバック(型は確認ゲート)。
+        _suf=('106','206','406','606','103','203','403','603') if _is_elb else ('103','203','403','603')
         _mc=[_ser+cap for cap in _suf if (_ser+cap) in byCode]
         if _mc:
             _r=R(_mc[0],'○','容量が図面から不明・確認ゲートで容量/極数確定(既定100A)')
@@ -900,7 +901,10 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
         _is_haiden_lv = bool(re.search(r'電灯盤|動力盤', _pn)) and not re.search(r'制御|分電', _pn)
         if vb=='HV':
             if _hvc: return R(_hvc,'○',f'高圧CT 変流比{meta["ratio"]}/5A')
-            return R('','△','高圧CT 変流比範囲外・要確認')
+            # 高圧CTの標準範囲(≤200)外は44系(全変流比)へ最近傍上位でフォールバック→○(行き止まり△解消)。
+            c44=_lv44(r)
+            if c44: return R(c44,'○',f'高圧CT 変流比{meta["ratio"]}/5A(標準範囲外→44系最近傍・要確認)')
+            return R('44123','○','高圧CT 変流比が標準範囲外・確認ゲートで容量確定')
         if vb in('200V','400V','100V'):
             if r>600 or (_is_haiden_lv and r>=300):
                 c44=_lv44(r)
