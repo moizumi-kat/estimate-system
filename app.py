@@ -1558,7 +1558,16 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     # 動力盤: 主回路記号があれば記号方式を最優先。
     # ただし名称に明示のMCCB分岐仕様(NP＋NNNAF/MMAT)があれば、記号方式より分岐遮断器選定を優先
     # (記号A/Cが主回路パターンでなく負荷分類タグの図面があり、記号方式では解けないため)。
-    _has_afat=bool(re.search(r'[1-4]\s*[pP].{0,5}\d+\s*AF', str(name)))
+    # 明示ブレーカー仕様(NP＋NNNAF、または NP NNN/MMM=枠/トリップ)を持つ負荷は、記号が始動回路でも
+    # 「その遮断器で個別に拾う」(当社セット=MMCB+MC+2E等 と 図面=単なる遮断器 が違う→個別。茂泉様確定)。
+    # 負荷側がパッケージ機器(自前で制御)の場合、盤はその遮断器だけを持つ。
+    _has_afat=bool(re.search(r'[1-4]\s*[pP].{0,5}\d+\s*AF', str(name)) or re.search(r'[1-4]\s*[pPＰ]\s*\d{2,4}\s*/\s*\d{2,4}', str(name)))
+    # 記号付き(動力制御盤の分岐負荷)で明示ブレーカー付きの場合のみ、機器ID(PAC-01-04等の数字)が
+    # ブレーカー解析(極数/容量)を汚染するので、ブレーカー仕様部分だけで個別選定する
+    # (手本: 六本木のPAC室外機E3P225→B)ELB 3P225)。主幹/個別盤の名前は削らない(記号なしは対象外)。
+    if _has_afat and symbol:
+        _bkm=re.search(r'(?:ELB|ELCB|MCCB|MCB)\s*[234]\s*[PＰ]\s*\d{2,4}\s*(?:/\s*\d{2,4}|AF\s*/?\s*\d*|AF)', str(name), re.I)
+        if _bkm: name=_bkm.group(0)
     if symbol and not _has_afat:
         shikyu=('支給' in str(name))
         kwv = kw or (_get_kw(norm(name)) or '')
