@@ -1268,13 +1268,14 @@ def _lbs_code(name, panel=''):
     if not re.search(r'(?<![A-Za-z])LBS(?![A-Za-z])', n, re.I): return None
     # 3P200A枠以外(例:400A)はDBに無い→従来処理へ委ねる
     if re.search(r'(\d{3,4})\s*A', n) and not re.search(r'200\s*A', n): return None
-    # G感度バンドは【明示的なG表記(G100A/感度100A/(G)100A)がある時のみ】確定に使う。
+    # G感度バンドは【明示的なG表記(G100A/感度100A/(G)100A)がある時のみ】数値確定。
     # PFヒューズ定格(PF T87A 等)は G感度の代理にならない(実物件城山: PF T87A でも G75A以下=43321)。
-    # ∴ 明示Gが読めた時だけ band 確定(◎可)。無ければ band は未確定として盤種の定番(75以下)を○で出す。
+    # ∴ 明示Gが無ければ band は御社標準の「75A以下」を既定にする(八戸/城山とも真値75以下)。
+    #   Noneにするとエネセーバ等の変種が拾えず取りこぼす(八戸43327)ため、必ず75既定へ。
     mg=re.search(r'(?:感度|[GＧ])\s*[=＝(（]?\s*(\d+)\s*A', n, re.I)
     gexplicit=bool(mg)
     pf=int(mg.group(1)) if mg else None
-    if pf is None: band=None
+    if pf is None: band='75'          # 明示G無し→御社標準の75A以下を既定
     elif pf<=75: band='75'
     elif pf<=100: band='100'
     else: band='200'
@@ -1313,7 +1314,10 @@ def _lbs_code(name, panel=''):
     # PF/AL判別不能(受電盤等・変種語なし)→最善推定の基本形を○で提示(行き止まり△を無くす・要確認)。
     if ambiguous:
         return code,'○','高圧LBS 3P200A G%s(最善推定・AL/TC/電動等のオプション要確認)'%gtxt
-    # 定格バンドとオプションが確定→◎。ただしエネセーバは名称解釈が入るので○(安全側)。
+    # ◎は【明示的なG感度表記があり】かつ変種も確定した時のみ。G感度が既定(75)の場合や
+    # エネセーバ(名称解釈)は○(要確認)。既定75は多数派だが誤ると◎誤答になるため安全側。
+    if not gexplicit:
+        return code,'○','高圧LBS 3P200A G%s(既定・G感度要確認) %s'%(gtxt, vnote)
     conf='○' if variant=='エネセーバ' else '◎'
     return code,conf,'高圧LBS 3P200A G%s %s'%(gtxt, vnote)
 
