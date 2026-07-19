@@ -2614,6 +2614,13 @@ def select_from_extracted(data):
                 continue
             if re.fullmatch(r'\s*84\s*(リレー|ﾘﾚｰ|継電器)?\s*', nm) and not re.search(r'電圧|不足|過電圧|地絡', nm):
                 continue
+            # 盤リストの要約行(負荷名＋盤参照P-nのみで、電気的仕様が全く無い)は積算対象の機器行でなく
+            # 盤の参照→除外(詳細機器は別明細で計上/未抽出なら再抽出=品質ゲート)。行き止まり△を残さない。
+            # 仕様(kW/A/AF/V/VA/遮断器/計器/継電器/端子/函/PL等)を一切含まない負荷名のみが対象。
+            if not re.search(r'\d+\s*(kw|kva|kvar|va|af|at|[av]\b|φ|kv)|MCB|MCCB|ELB|ELCB|LBS|VCB|VCS|LUG|(?<![A-Za-z])TB|継電器|ﾘﾚｰ|リレー|(?<![A-Za-z])RY|計器|SPD|(?<![A-Za-z])CT|(?<![A-Za-z])VT|(?<![A-Za-z])PF|端子|BOX|函|(?<![A-Za-z])PL|(?<![A-Za-z])BZ|COS|kg|セット|一式', nm, re.I) \
+               and re.search(r'(制御盤|電源盤|動力盤)\s*[A-ZＡ-Ｚ]?P?[-ｰ]?\d', panel_nm) \
+               and re.search(r'[A-ZＡ-Ｚ]?P[-ｰ]?\d\s*$|空調|ﾎﾟﾝﾌﾟ|ポンプ|ﾌｧﾝ|ファン|ボイラー|洗浄|炊飯|煮炊|検収|コンテナ', nm):
+                continue
             # 盤見出しの重複行(item名＝盤名、または盤名+重量(kg)注記のみ・機器仕様なし)は盤自身の
             # 見出しが機器行として抽出されたもの→対象外(盤内機器・受電盤等のセットは別行で計上済)。
             _nm_np = re.sub(r'\s*[\(（]\s*\d+\s*(kg|ｋｇ|t|ﾄﾝ)\s*[\)）]\s*$', '', str(nm)).strip()
