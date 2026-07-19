@@ -2801,6 +2801,22 @@ def select_from_extracted(data):
             rows.append(dict(code=sep,name=byCode[sep].get('name',''),conf='○',
                              note='SPD用分離器(SPD本体の頭に付く分離器・系統ごと1)',
                              raw='(SPD用分離器)',qty='1',load_detail=False,feed=''))
+        # 制御盤の制御一式セット(茂泉様確定): 制御盤で主幹(M)MCB/M)ELB)またはM)LUGが選定されたら、
+        # 付随の制御一式セット(既定21310=BZ/AUX-RY/PBS/T-RY内包)を自動計上。個別部品は拾わずセットに内包。
+        # T-RY無し=21309を候補提示(確認ゲート)。制御内器具は主幹に付随=常にセットとして拾われる。
+        if _kind=='ctrl' and '21310' in byCode:
+            _has_main = any(re.match(r'M\)(MCB|ELB|LUG)', str(byCode.get(str(r.get('code','')),{}).get('name','')))
+                            for r in rows if not r.get('load_detail'))
+            _has_set = any(str(r.get('code','')) in ('21309','21310') for r in rows)
+            if _has_main and not _has_set:
+                # セットに内包される個別部品(BZ/AUX-RY/PBS/T-RY)が個別抽出されていれば抑制(二重計上防止)。
+                _incl={'74001','73000','73001','71041','73220'}
+                rows=[r for r in rows if str(r.get('code','')) not in _incl or r.get('load_detail')]
+                _cands=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in ('21310','21309') if c in byCode]
+                rows.append(dict(code='21310',name=byCode['21310'].get('name',''),conf='○',
+                                 note='制御盤の制御一式(主幹選定に付随・BZ/AUX-RY/PBS/T-RY内包)。T-RY無し=21309を確認ゲートで選択',
+                                 raw='(制御盤 制御一式)',qty='1',is_setcode=True,candidates=_cands,
+                                 set_attrs={},load_detail=False,feed='',deviations=[]))
         out.append(dict(panel=p.get('panel',''),rows=rows))
     return out
 
