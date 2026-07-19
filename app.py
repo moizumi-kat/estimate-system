@@ -2678,7 +2678,17 @@ def select_from_extracted(data):
             cleaned, qsuf = split_qty_suffix(nm)
             # 品名に「×N」がある場合はそれを数量の正とする(抽出側の数量より優先)
             if qsuf: it['qty']=qsuf
-            sel=select_one(cleaned if qsuf else nm, _panel_nm_for_sel, prev_is_main, it.get('volt',''), it.get('symbol',''), it.get('kw',''), it.get('group',''),
+            # 動力制御盤(記号/凡例あり)の主幹認識(茂泉様確定): 記号を持たない3P遮断器(AF枠付・
+            # 操作電源/予備でない)は盤の頭=主幹(主開閉器)。「主幹」を冠して M)MCB/M)ELB として拾い、
+            # M)LUG・制御一式(最低必要部品セット)を同時計上する。主幹は盤に1つ(既出なら対象外)。
+            _base_nm = cleaned if qsuf else nm
+            _nn=norm(nm)
+            if _panel_ctrl and not it.get('symbol') and not re.match(r'\s*(主幹|主開閉|主)', _base_nm) \
+               and re.search(r'(mccb|mcb|elcb|elb)', _nn) and re.search(r'\d{2,4}\s*af', _nn) \
+               and re.search(r'3\s*[pφ]', _nn) and not re.search(r'操作|制御電源|予備|ｽﾍﾟｰｽ|スペース', _nn):
+                if not any(str(byCode.get(str(r.get('code','')),{}).get('name','')).startswith('M)') for r in rows if not r.get('load_detail')):
+                    _base_nm='主幹 '+_base_nm
+            sel=select_one(_base_nm, _panel_nm_for_sel, prev_is_main, it.get('volt',''), it.get('symbol',''), it.get('kw',''), it.get('group',''),
                            legend=p.get('legend'), breaker=it.get('breaker',''))
             # 弱電端子盤の救済: 未選定/△、または明らかに端子盤系(端子盤/保安器/接地端子/MDF)なら
             # terminal_select(極数P＋端子指標、既定=端子無)を優先。遮断器/コンセントは除外済。
