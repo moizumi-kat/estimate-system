@@ -1344,7 +1344,9 @@ def _lbs_code(name, panel=''):
         elif 'コンデンサ' in pn or '饋電' in pn or 'き電' in pn:
             variant,vnote='PF','PF付(饋電/コンデンサ側)'
         else:
-            variant,vnote,ambiguous='PF','PF付',True
+            # 受電盤/変圧器盤等のTR側LBSは、変種語が無くてもAL付(43321)が御社定番(実測:西新宿の
+            # 受電盤・変圧器盤LBS正解=43321)。素PF(43320)はコンデンサ/饋電側のみ。ambiguousで○止め+PF候補提示。
+            variant,vnote,ambiguous='AL','アラーム接点(受電/変圧器盤=TR側LBSの定番・最善推定)',True
     if band is None:
         # G感度バンド不明。盤種でAL/PFが決まる場合は基本形を△で提示、そうでなければ従来処理へ。
         base='43321' if (variant=='AL' and '43321' in byCode) else ('43320' if '43320' in byCode else None)
@@ -1358,7 +1360,9 @@ def _lbs_code(name, panel=''):
     gtxt='75A以下' if band=='75' else band+'A'
     # PF/AL判別不能(受電盤等・変種語なし)→最善推定の基本形を○で提示(行き止まり△を無くす・要確認)。
     if ambiguous:
-        return code,'○','高圧LBS 3P200A G%s(最善推定・AL/TC/電動等のオプション要確認)'%gtxt
+        _alt=_LBS_MAP.get((band,'PF')) if variant=='AL' else _LBS_MAP.get((band,'AL'))
+        _cl=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in (code,_alt) if c and c in byCode]
+        return code,'○','高圧LBS 3P200A G%s %s(AL/PF/TC/電動等のオプションは確認ゲート)'%(gtxt,vnote), _cl
     # ◎は【明示的なG感度表記があり】かつ変種も確定した時のみ。G感度が既定(75)の場合や
     # エネセーバ(名称解釈)は○(要確認)。既定75は多数派だが誤ると◎誤答になるため安全側。
     if not gexplicit:
@@ -1592,7 +1596,10 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     if _rk: return R(_rk[0],_rk[1],_rk[2])
     # 高圧LBS(43320系): PFヒューズ定格→G感度バンドで確定(PF=30/50/75Aは同一枠)
     _lb=_lbs_code(name, panel)
-    if _lb: return R(_lb[0],_lb[1],_lb[2])
+    if _lb:
+        _rl=R(_lb[0],_lb[1],_lb[2])
+        if len(_lb)>3 and _lb[3]: _rl['candidates']=_lb[3]
+        return _rl
     # 動力盤: 主回路記号があれば記号方式を最優先。
     # ただし名称に明示のMCCB分岐仕様(NP＋NNNAF/MMAT)があれば、記号方式より分岐遮断器選定を優先
     # (記号A/Cが主回路パターンでなく負荷分類タグの図面があり、記号方式では解けないため)。
@@ -2882,6 +2889,13 @@ def select_from_extracted(data):
             mfeed=re.match(r'\s*(\d+[A-Za-z]+\d*)', it.get('name','') or '')
             row['feed']=mfeed.group(1) if mfeed else ''
             rows.append(row)
+            # 相間バリア(43392): 標準高圧LBS(43321=AL付)には必ず1台オプションで付随(実見積書4案件で
+            # 43392件数=43321件数と厳密一致。エネセーバ43347には付かない=六本木で43392=43321数のみ)。
+            # 決定的な同時計上(取りこぼし解消)。エネセーバ/素PF等の他変種は付随実績が無いので対象外。
+            if row.get('code')=='43321' and '43392' in byCode:
+                rows.append(dict(code='43392',name=byCode['43392'].get('name',''),conf='○',
+                                 note='高圧LBS(43321)に付随の相間バリア(標準オプション・同時計上)',
+                                 raw=it.get('name',''),qty=it.get('qty',''),load_detail=False,feed=row.get('feed','')))
         # 付属品の親吸収(二重計上防止): 盤内で確定後にまとめて適用
         rows=absorb_accessories(rows)
         # 各行の表示名「部品名＋仕様 〈幹線〉(負荷名称)」を組み立てる
