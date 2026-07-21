@@ -1091,7 +1091,9 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
     # VMC(真空電磁接触器)→VCS(43系)。御社の実見積書で確定した規則で変種を決める(PF/引出=43103, 素=43101)。◎。
     v=_vmc_code(name)
     if v:
-        return R(v[0],v[1],v[2])
+        _rv=R(v[0],v[1],v[2])
+        if len(v)>3 and v[3]: _rv['candidates']=v[3]
+        return _rv
     if len(cands)==1:
         return R(cands[0]['code'],'◎','属性一致(単一候補)')
     # 複数候補の最終判定
@@ -1220,13 +1222,13 @@ def _vmc_code(name):
         code = '43101' if '43101' in byCode else None
     if not code: return None
     _pfx = 'VMC→VCS' if _vmc else 'VCS変種確定'
-    # 変種指標(PF/引出/E)が読めた時のみ◎。素のVMC(変種未確認)は誤ると◎誤答なので○(要確認)＋候補提示。
-    if not pf:
-        _base = '43111' if amp400 else '43101'
-        _var  = '43113' if amp400 else '43103'
-        _cands=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in (_base,_var) if c in byCode]
-        return code,'○','%s(変種=素/PF付引出を確認ゲートで確定・既定=素)'%_pfx, _cands
-    return code,'◎','%s(%s・御社実績で確定)'%(_pfx, byCode.get(code,{}).get('name','')[:20])
+    # VCS素(43101)/電磁引出PF付(43103)の別は図面から確実に読めない(実測:西新宿は"PF(G)20A"表記でも
+    # 正解43101=素、城山/表参道/六本木は素表記でも正解43103=引出PF付)。PF/引出の文字は回路のヒューズ定格を
+    # 指すことがあり変種の確定根拠にならない。誤ると◎誤答なので常に○(要確認)＋両候補提示で確認ゲートへ委ねる。
+    _base = '43111' if amp400 else '43101'
+    _var  = '43113' if amp400 else '43103'
+    _cands=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in (_base,_var) if c in byCode]
+    return code,'○','%s(変種=素/PF付引出を確認ゲートで確定・既定=%s)'%(_pfx, byCode.get(code,{}).get('name','')[:16]), _cands
 def _whm_code(name):
     """WHM(電力量計・電子式コンパクト)→70系。相(1φ2W/Nφ3W)×容量(30A/120A/N-5A/250A)×検定(検付/未検/
     通信付)で選定。N/5A(CT動作型)はコード表p13/41の注記でCTを別途拾う(呼出側でco-selection)。
@@ -1441,7 +1443,11 @@ def _pf_code(name):
     ge=sorted([(v,c) for v,c in pool if v>=want])
     if not ge: return None
     v0,c0=ge[0]
-    return c0,('◎' if v0==want else '○'),'限流ヒューズPF %dA%s'%(v0,'' if v0==want else '(仕様%d→%dA繰上)'%(want,v0))
+    # 単体PFは常に○(要確認)。図面のPF行はSC(コンデンサ)直列ヒューズ等で支給品SC組込=別計上しない
+    # ケースが多く(実測:表参道 PF×3 G10A→SC2系統は見積書に単体計上なし)、◎にすると◎誤答となる。
+    # 単体計上要否と定格は確認ゲートで確定。候補として当該PFコードを提示。
+    _cd={'code':c0,'name':byCode.get(c0,{}).get('name',''),'volt':''}
+    return c0,'○','限流ヒューズPF %dA%s(単体計上要否は確認ゲート)'%(v0,'' if v0==want else '(仕様%d→%dA繰上)'%(want,v0)), [_cd]
 
 # 直列リアクトルSRの容量は、同一盤のコンデンサSCとペアで決まる(SR kvar = L% × SC kvar)。
 # SR単独では容量表記が無く△になるため、盤内SCのkvarから算定して45系SRコードを確定する。
@@ -1574,7 +1580,10 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     if _sk: return R(_sk[0],_sk[1],_sk[2])
     # 限流ヒューズPF単体(43622-43631)
     _pf=_pf_code(name)
-    if _pf: return R(_pf[0],_pf[1],_pf[2])
+    if _pf:
+        _rpf=R(_pf[0],_pf[1],_pf[2])
+        if len(_pf)>3 and _pf[3]: _rpf['candidates']=_pf[3]
+        return _rpf
     # 警報盤の函体(56000 BOX)。警報点(◯◯異常/接点)は別処理で除外するのでここは盤本体のみ。
     if re.fullmatch(r'\s*警報盤\s*', str(name)) and '56000' in byCode:
         return R('56000','◎','警報盤 函体(BOX)')
@@ -1605,8 +1614,12 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
         first=parts[0]
         code=first[0]; note=first[2]; qty=first[1]
         if code:   # 記号方式で解けた場合のみ確定。空なら通常選定へフォールバック
-            conf = '◎' if len(parts)==1 else '○'
-            sel=R(code,conf,f'[動力記号{symbol}] '+note)
+            # 記号→凡例→回路種別で22-29系セットに変換したが、これは凡例を信頼した変換で、当社セットの機器構成
+            # (MMCB+MC+ACL+2E等)と図面に実描画された部品リストの一致を検証したわけではない。分岐をセット(22-29)で
+            # 拾うか個別遮断器で拾うかは「セット構成 vs 図面構成」の比較で決まる確認ゲート事項(茂泉様確定)。
+            # 実測:六本木は全分岐が個別(22系なし)だが凡例①"直入起動(INV)"→22043を◎誤答していた。よって○止め。
+            conf = '○'
+            sel=R(code,conf,f'[動力記号{symbol}] '+note+' / 分岐をセット(22-29)/個別のどちらで拾うかは図面部品構成と照合し確認ゲートで確定')
             sel['parts']=[{'code':c,'qty':q,'note':nt,'name':byCode.get(c,{}).get('name','') if c else ''} for c,q,nt in parts]
             sel['set_qty']=qty
             return sel
@@ -1622,6 +1635,23 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     if sel.get('_round_gate'):
         sel['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in sel['_round_gate']]
         sel.pop('_round_gate',None)
+    # TR(支給品・45系高圧変圧器)は◎にしない→○(要確認)。支給品は客先支給の変圧器で、単線図の容量表記は
+    # 変圧器盤と電灯盤で食い違うことがあり(実測:六本木 T-L1=変圧器盤100kVA vs 電灯盤300kVA、正解300kVA/45008)、
+    # 容量誤読が◎誤答に直結する。容量・支給/購入の別は確認ゲートで確定。前後容量ステップを候補提示。
+    # ※SC/SR/スコットTRは容量がkvar/明示で安定して読めるため対象外(実測で正解一致)。
+    _scd=sel.get('code','')
+    if sel.get('conf')=='◎' and _scd and byCode.get(_scd,{}).get('name','').startswith('TR(支給品)'):
+        _tm=re.match(r'TR\(支給品\)\s*(\S+)\s*([\d.]+)KVA', byCode[_scd]['name'])
+        if _tm:
+            _ph,_kv=_tm.group(1),float(_tm.group(2))
+            _steps=sorted({float(m.group(2)) for d in DB
+                           if (m:=re.match(r'TR\(支給品\)\s*(\S+)\s*([\d.]+)KVA', d['name'])) and m.group(1)==_ph})
+            _i=_steps.index(_kv) if _kv in _steps else -1
+            _near=[_kv]+([_steps[_i+1]] if 0<=_i<len(_steps)-1 else [])+([_steps[_i-1]] if _i>0 else [])
+            _tc=[c for v in _near for d in DB if (m:=re.match(r'TR\(支給品\)\s*(\S+)\s*([\d.]+)KVA', d['name'])) and m.group(1)==_ph and float(m.group(2))==v for c in [d['code']]]
+            sel['conf']='○'
+            sel['note']='TR支給品(容量%s %gkVA)は確認ゲートで容量・支給区分を確定(単線図で容量表記が食い違う例あり) / %s'%(_ph,_kv,sel.get('note',''))
+            sel['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in _tc] or sel.get('candidates')
     # 動力/電灯/制御盤の3P分岐: AX付(補助接点付)は図面特記が無ければ盤種単位で要確認(既定=非AX)。
     _ag=_ax_gate(sel.get('code',''), name, panel)
     if _ag:
