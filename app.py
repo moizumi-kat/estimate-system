@@ -848,13 +848,40 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
         return R('','△','M)LUG 容量・盤種別要確認')
 
     # --- 主幹/分岐 MCB・ELB（MCBが主部品。M)=主幹, B)=分岐）---
+    # 盤頭の主幹だが遮断器型が非定型でmeta未検出のもの(実測:東部P-5/P-6「主幹 EM-CET200 3φ3W 200V」等)。
+    # 盤頭のM)遮断器として容量を最近傍上位で丸め、M)MCB/ELB/LUG候補を○提示(型・容量は確認ゲート)。行き止まり△解消。
+    if re.search(r'主幹|主開閉器', str(name)) \
+       and meta.get('main') not in ('M)MCB','M)ELB','B)MCB','B)ELB','MCB','ELB','M)LUG') \
+       and _panel_kind(panel) in ('ctrl','haiden','bunden'):
+        _am=re.search(r'(?:CET|CB|EA|EM|CS|CE)[\s\-]?(\d{2,4})', str(name), re.I) or re.search(r'(\d{2,4})\s*A(?![A-Za-z])', norm(name))
+        if _am:
+            _at=int(_am.group(1)); _FD=[(100,'1'),(225,'2'),(400,'4'),(600,'6'),(800,'8')]
+            _fd=next((d for a,d in _FD if a>=_at), '8')
+            _ser=_KIND_SERIES.get(_panel_kind(panel),'50')
+            _mc=[_ser+_fd+s for s in ('03','06','09') if (_ser+_fd+s) in byCode]
+            if _mc:
+                _r=R(_mc[0],'○','盤頭の主幹(型式非定型)→M)遮断器候補・型/容量は確認ゲート(既定=%s)'%byCode.get(_mc[0],{}).get('name','')[:16])
+                _r['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in _mc]
+                return _r
     if meta['main'] in ('M)MCB','M)ELB','B)MCB','B)ELB','MCB','ELB'):
         # 分電盤の最終分岐(負荷VA表記+MCB/ELB明示・遮断器枠なし)はコンパクト分岐を優先判定。
         # ※_mcb_codeより先に判定(「280VA」等のVA数値をAF枠と誤解して誤コードを出すのを防ぐ)。
         cb=_compact_branch(name, panel)
         if cb: return R(cb[0],cb[1],cb[2])
         code=_mcb_code(name, panel, meta)
-        if code: return R(code,'◎' if code in byCode else '△', _mcb_note(name,panel))
+        if code:
+            if code not in byCode: return R('','△', _mcb_note(name,panel))
+            # 制御盤(50/51系)でAXを「警報付」から推定した個別遮断器は、AX付の有無・主幹/分岐・極数の変種に
+            # 誤りが混じり得る(実測:東部で225AF主幹をB)分岐、600A/2P等の取り違え)。◎誤答ゼロのため○止め+
+            # AX/非AX両候補を提示し確認ゲートへ委ねる(コード自体は保持=一致率は不変)。明示AX/非AXの遮断器は従来◎。
+            _soft_ax = (_panel_kind(panel)=='ctrl'
+                        and bool(re.search(r'警報付|警報出力', str(name)))
+                        and not re.search(r'AX付?|(?<![A-Za-z])AX(?![A-Za-z])|中欠|欠相|補助接点', str(name)))
+            _r=R(code,'○' if _soft_ax else '◎', _mcb_note(name,panel)+('（警報付→AX付と推定・AX有無/主幹分岐は確認ゲート）' if _soft_ax else ''))
+            if _soft_ax and len(code)==5 and code[1]=='1':
+                _nax=code[0]+'0'+code[2:]
+                _r['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in (code,_nax) if c in byCode]
+            return _r
         # 主幹ELB(『ELB付 主幹』): 変種(EL・中欠/AX)が図面に明記されないため素のM)ELBを○(要確認)。
         me=_main_elb_code(name, panel, meta)
         if me: return R(me,'○','主幹ELB(%s・EL/中欠/AX変種は要確認)'%byCode.get(me,{}).get('name','')[:18])
@@ -1590,7 +1617,12 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
         return _rpf
     # 警報盤の函体(56000 BOX)。警報点(◯◯異常/接点)は別処理で除外するのでここは盤本体のみ。
     if re.fullmatch(r'\s*警報盤\s*', str(name)) and '56000' in byCode:
-        return R('56000','◎','警報盤 函体(BOX)')
+        # 警報盤の函体は寸法でコードが分かれる(実見積書=東部は56011/56012等のサイズ別BOX)。
+        # 汎用56000で◎にすると◎誤答になるため○(サイズは確認ゲート)。サイズ別BOX候補を提示。
+        _bx=[c for c in ('56000','56011','56012','56013','56014') if c in byCode]
+        _r=R('56000','○','警報盤 函体(BOX)・寸法別コードは確認ゲート(既定=汎用56000)')
+        _r['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in _bx]
+        return _r
     # AC/DCリアクトル(52系): INV分岐の付随品。容量kW→最近傍上位(電圧既定200V)
     _rk=_reactor_code(name)
     if _rk: return R(_rk[0],_rk[1],_rk[2])
@@ -2644,6 +2676,17 @@ def select_from_extracted(data):
             # ただし独立した操作用変圧器(kVA明記)は別計上のため除外しない。
             if re.search(r'操作電源|制御電源', nm) and (_panel_ctrl or re.search(r'制御|動力', panel_nm)) \
                and not re.search(r'\d+\s*k?va|変圧器|ﾄﾗﾝｽ|トランス', nm):
+                continue
+            # 制御回路の計装小物(電極棒/電動弁MV/温度センサー/フロート/電磁弁/インターロックリレー等)は
+            # DBに個別コードが無く制御一式・盤製作費に内包(実見積書に単体計上なし・東部の給水タンク制御フロー等)。
+            # 遮断器/容量(AF/AT/kW)を伴わない計装小物のみ対象→対象外(行き止まり△を残さない・確定率100%)。
+            if re.search(r'電極棒|電動弁|(?<![A-Za-z])MV(?![A-Za-z])|温度セ[ンﾝ]ｻ?[ーｰ]?|温度調節|ｻｰﾓｽﾀｯﾄ|サーモスタット|フロ[ーｰ]ト|ﾌﾛｰﾄ|電磁弁|(?<![A-Za-z])リレー\s*[\(（]?\s*(インターロック|ｲﾝﾀｰﾛｯｸ)|センサ[ー-]\s*[TＴ]?\s*[\(（]', nm) \
+               and (_panel_ctrl or re.search(r'制御|動力|フロー', panel_nm)) \
+               and not re.search(r'\d+\s*(AF|AT|kVA|kW)|MCCB|MCB|ELB|ELCB|継電器\d', nm, re.I):
+                continue
+            # 盤本体の函体(屋内自立型函体/盤製作の筐体そのもの)は盤製作費で、選定コード対象外
+            # (小型の警報盤BOX 56系は「警報盤」で別途計上)。「屋内自立型函体」等の筐体行を除外。
+            if re.search(r'自立型?函体|盤\s*函体|筐体|ｷｮｳﾀｲ', nm) and not re.fullmatch(r'\s*警報盤\s*', nm):
                 continue
             # 電力会社の検針用メーター(取引用・貸与品)は当社積算対象外。DB非実在の「84リレー」(単独)も
             # コード化できない機器なので計上対象から除外(行き止まり△を残さない・確定率100%方針)。
