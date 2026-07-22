@@ -3098,6 +3098,22 @@ def select_from_extracted(data):
                 r['code']=_spc; r['name']=byCode[_spc]['name']; r['conf']='○'
                 r['note']='予備スペース分岐(端子台なし→%s系SP)'%_sp_series
         out.append(dict(panel=p.get('panel',''),rows=rows))
+    # 受変電(高圧)図面の標準付属品(1図面に各1): テストプラグ98800・CH取付金具79030。
+    # 実見積書7案件すべての受変電で計上(テストプラグ=全7案件×1、CH取付金具=×1〜2)。決定的な同時計上。
+    # 高圧受電機器(VCB/VCS/DS/高圧LBS/LA=43系の受変電コード)が1つでもあれば受変電図面と判定し、
+    # 未計上なら各1を○で追加(取りこぼし解消)。低圧分電/制御盤のみの図面では発火しない。
+    _allcodes=set(); _hv_panel=None
+    for _pp in out:
+        for _rr in _pp['rows']:
+            _cc=str(_rr.get('code',''))
+            if _cc: _allcodes.add(_cc)
+            if _hv_panel is None and re.match(r'43(01\d|10\d|11\d|32\d|347|42\d|46\d)$', _cc):
+                _hv_panel=_pp
+    if _hv_panel is not None:
+        for _acc in ('98800','79030'):
+            if _acc in byCode and _acc not in _allcodes:
+                _hv_panel['rows'].append(dict(code=_acc,name=byCode[_acc].get('name',''),conf='○',
+                    note='受変電図面の標準付属品(1図面各1・実見積書7案件で計上)',load_detail=False))
     _DRAWING_KIND.set(None)   # 後続処理へ図面種別ヒントを漏らさない
     return out
 
