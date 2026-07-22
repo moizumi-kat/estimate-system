@@ -858,9 +858,11 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
             _at=int(_am.group(1)); _FD=[(100,'1'),(225,'2'),(400,'4'),(600,'6'),(800,'8')]
             _fd=next((d for a,d in _FD if a>=_at), '8')
             _ser=_KIND_SERIES.get(_panel_kind(panel),'50')
-            _mc=[_ser+_fd+s for s in ('03','06','09') if (_ser+_fd+s) in byCode]
+            # 既定はM)LUG(盤頭端子受け・x09)。実見積書=東部の制御盤主幹は全てM)LUG(50109/50209/50409で20件、
+            # 非AXのM)MCBは0件)。型式非定型の主幹は端子受け扱いが定番。M)MCB/ELBは候補提示で確認ゲート。
+            _mc=[_ser+_fd+s for s in ('09','03','06') if (_ser+_fd+s) in byCode]
             if _mc:
-                _r=R(_mc[0],'○','盤頭の主幹(型式非定型)→M)遮断器候補・型/容量は確認ゲート(既定=%s)'%byCode.get(_mc[0],{}).get('name','')[:16])
+                _r=R(_mc[0],'○','盤頭の主幹(型式非定型)→M)端子/遮断器候補・型/容量は確認ゲート(既定=%s)'%byCode.get(_mc[0],{}).get('name','')[:16])
                 _r['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in _mc]
                 return _r
     if meta['main'] in ('M)MCB','M)ELB','B)MCB','B)ELB','MCB','ELB'):
@@ -2690,7 +2692,8 @@ def select_from_extracted(data):
                 continue
             # 電力会社の検針用メーター(取引用・貸与品)は当社積算対象外。DB非実在の「84リレー」(単独)も
             # コード化できない機器なので計上対象から除外(行き止まり△を残さない・確定率100%方針)。
-            if re.search(r'電力会社.{0,4}(検針|メ-?タ|ﾒ-?ﾀ)|検針用\s*メ-?タ|取引用.{0,4}メ-?タ', nm):
+            if re.search(r'電力会社.{0,4}(検針|メ-?タ|ﾒ-?ﾀ)|検針用\s*メ-?タ|取引用.{0,4}メ-?タ', nm) \
+               or (re.search(r'電力契約メ-?タ|契約用メ-?タ', nm) and re.search(r'電力会社|取付|貸与', nm)):
                 continue
             if re.fullmatch(r'\s*84\s*(リレー|ﾘﾚｰ|継電器)?\s*', nm) and not re.search(r'電圧|不足|過電圧|地絡', nm):
                 continue
