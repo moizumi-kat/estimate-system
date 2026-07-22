@@ -2562,6 +2562,29 @@ def terminal_select(name):
     _note='端子数(P)が図面から未確定→既定%dP・要確認'%p if not p_explicit else '極数切上%dP→%dP'%(p,gp)
     return pick,'○',_note
 
+# 盤面ごとの標準付属品(茂泉様確定:盤一面あたり換気扇1・盤内照明1が既定)。単線図には員数・種別が
+# 描かれない艤装品なので、抽出値でなく確認ゲートで人が盤面ごとに員数・種別を確定する(自動計上しない)。
+# 種別: 換気扇=屋内/屋外/制御盤用/COS、照明=FL(ドアSW付有無)、任意でサーモスタット/スペースヒーター。
+_ACC_FAN=[('74100','換気扇(TH付)COS'),('74103','換気扇(制御盤用 小型)'),('74101','換気扇(TH付 屋内型)'),('74102','換気扇(TH付 屋外型)')]
+_ACC_LIGHT=[('71093','FL-10W'),('71091','FL-10W(ドアSW付)')]
+def accessory_gate(panel_name, confirmed=None):
+    """盤面の標準付属品確認ゲートを返す(物理盤らしき盤のみ)。[{spec,options,default:{code,qty}}]。
+    既定=換気扇1・照明1(茂泉様ルール)。サーモ/ヒーターは既定0(任意)。非物理盤(装柱/引込/凡例/フロー)は None。
+    confirmed(=人が確定済みの[{code,qty}])があれば、その値を既定に反映して往復表示する。"""
+    pn=str(panel_name)
+    if re.search(r'凡例|一覧|標準図|参考|装柱|接地試験|配線図|制御フロー|フロー図|系統図$', pn): return None
+    if not re.search(r'盤|ｷｭ-?ﾋﾞｸﾙ|キュービクル|(?<![A-Za-z])P-?\d|LP-?\d|(?<![A-Za-z])QB|(?<![A-Za-z])CB(?![A-Za-z])', pn): return None
+    conf={str(c.get('code','')):int(c.get('qty',0) or 0) for c in (confirmed or [])}
+    def _mk(spec, opts, base_qty):
+        oo=[{'code':c,'label':'%s（%s）'%(c,n)} for c,n in opts if c in byCode]
+        if not oo: return None
+        d=next(({'code':o['code'],'qty':conf[o['code']]} for o in oo if o['code'] in conf), {'code':oo[0]['code'],'qty':base_qty})
+        return {'spec':spec,'options':oo,'default':d}
+    gate=[g for g in (_mk('換気扇',_ACC_FAN,1), _mk('盤内照明',_ACC_LIGHT,1),
+                      _mk('サーモスタット',[('74107','サーモスタット')],0),
+                      _mk('スペースヒーター',[('74106','スペースヒーター')],0)) if g]
+    return gate or None
+
 def select_from_extracted(data):
     out=[]
     # 受変電部で上段に出たマルチ指示計のコードを記憶し、下段のV/電流計に継承する。
@@ -3102,7 +3125,17 @@ def select_from_extracted(data):
             if _spc in byCode:
                 r['code']=_spc; r['name']=byCode[_spc]['name']; r['conf']='○'
                 r['note']='予備スペース分岐(端子台なし→%s系SP)'%_sp_series
-        out.append(dict(panel=p.get('panel',''),rows=rows))
+        # 盤面の標準付属品(換気扇/照明/サーモ/ヒーター)は確認ゲートで人が員数確定。既定は自動計上しない
+        # (電気盤数>物理盤面数のため自動1個ずつは過剰計上になる)。人が確定した acc_confirmed のみコード計上。
+        for _ac in (p.get('acc_confirmed') or []):
+            _acc=str(_ac.get('code','')); _aq=int(_ac.get('qty',0) or 0)
+            if _acc in byCode and _aq>0:
+                rows.append(dict(code=_acc,name=byCode[_acc].get('name',''),conf='◎',qty=str(_aq),
+                    note='盤面の標準付属品(確認ゲートで員数確定)',load_detail=False))
+        _og=dict(panel=p.get('panel',''),rows=rows)
+        _ag=accessory_gate(p.get('panel',''), p.get('acc_confirmed'))
+        if _ag: _og['acc_gate']=_ag
+        out.append(_og)
     # 受変電(高圧)図面の標準付属品(1図面に各1): テストプラグ98800・CH取付金具79030。
     # 実見積書7案件すべての受変電で計上(テストプラグ=全7案件×1、CH取付金具=×1〜2)。決定的な同時計上。
     # 高圧受電機器(VCB/VCS/DS/高圧LBS/LA=43系の受変電コード)が1つでもあれば受変電図面と判定し、

@@ -267,13 +267,28 @@ function render(d,filter){
   const bdg={'◎':'<span class="badge b-ok">◎</span>','○':'<span class="badge b-warn">○</span>','△':'<span class="badge b-chk">△</span>'};
   let h='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+
     '<button id="allbtn" onclick="toggleAll()" style="background:#305496;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">全行を一括チェック</button>'+
-    '<span style="font-size:12px;color:#888">もう一度押すと全解除</span></div>';
+    '<span style="font-size:12px;color:#888">もう一度押すと全解除</span>'+
+    '<button id="accApply" onclick="applyAccessories()" style="display:none;margin-left:auto;background:#2a7;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">盤付属品を反映して再選定</button></div>';
   h+='<table><thead><tr><th>部品名＋仕様〈幹線〉(負荷名称)</th><th>数量</th><th>提示</th><th>判定</th><th>最終選択コード</th><th>品名</th><th>確認</th></tr></thead><tbody>';
   let gid=0;
   for(const p of d.panels){
     const rows=p.rows.filter(r=>!r.load_detail&&(filter==='all'||r.conf===filter));
     if(!rows.length)continue;
     h+='<tr class="pnl"><td colspan="7">'+esc(p.panel)+'</td></tr>';
+    if(p.acc_gate&&p.acc_gate.length){
+      let ac='<tr class="accg"><td colspan="7" style="background:#f2f8ff;padding:6px 10px;font-size:12px;color:#2a5">'+
+        '■ 盤面の標準付属品（既定＝換気扇1・照明1／面。不要な盤は員数を0に、面数分は員数を増やしてください）：';
+      p.acc_gate.forEach((g,gi)=>{
+        const key=pi+'_'+gi; let os;
+        if(g.options.length>1){
+          os='<select data-pi="'+pi+'" onchange="accChange('+pi+')">'+
+            g.options.map(o=>'<option value="'+esc(o.code)+'"'+(o.code===g.default.code?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select>';
+        }else{os='<input type="hidden" value="'+esc(g.options[0].code)+'">'+esc(g.options[0].label);}
+        ac+='<label style="margin:0 10px;white-space:nowrap">'+esc(g.spec)+'：'+os+
+          ' ×<input type="number" min="0" value="'+g.default.qty+'" data-pi="'+pi+'" onchange="accChange('+pi+')" style="width:42px;text-align:center;padding:2px;border:1px solid #bbb;border-radius:4px"></label>';
+      });
+      ac+='</td></tr>'; h+=ac;
+    }
     for(const r of rows){
       const id=gid++;
       // プルダウン候補(コード（品名）)。確定コードを先頭に含め、重複排除。
@@ -306,6 +321,27 @@ function render(d,filter){
      '</div>';
   $('out').innerHTML=h;
   window._rtotal=gid;
+}
+// 盤面の標準付属品(換気扇/照明/サーモ/ヒーター)の員数をゲートから集めて acc_confirmed に反映。
+function accChange(pi){
+  if(!extracted||!extracted[pi])return;
+  const row=[...document.querySelectorAll('#out tr.accg')].find(tr=>tr.querySelector('[data-pi="'+pi+'"]'));
+  if(!row)return;
+  const conf=[];
+  row.querySelectorAll('label').forEach(l=>{
+    const codeEl=l.querySelector('select,input[type=hidden]');
+    const qtyEl=l.querySelector('input[type=number]');
+    if(codeEl&&qtyEl){const q=parseInt(qtyEl.value||'0',10); if(codeEl.value&&q>0)conf.push({code:codeEl.value,qty:q});}
+  });
+  extracted[pi].acc_confirmed=conf;
+  const b=$('accApply'); if(b)b.style.display='inline-block';
+}
+// 全盤の付属品ゲートの現在値を acc_confirmed に確定し、再選定して結果に反映。
+function applyAccessories(){
+  document.querySelectorAll('#out tr.accg').forEach(tr=>{
+    const el=tr.querySelector('[data-pi]'); if(el)accChange(parseInt(el.getAttribute('data-pi'),10));
+  });
+  $('goSelect').click();
 }
 function onSel(id,sel){
   const m=document.getElementById('m'+id);
