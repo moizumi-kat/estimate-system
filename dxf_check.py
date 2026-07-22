@@ -155,7 +155,8 @@ def classify(kind_raw, dwgno=''):
 
 # ========== 属性ヘルパ ==========
 def _amp_pair(spec):
-    """'3P100/150AT' → (frame=100, trip=150, pole=3)。無ければ None。"""
+    """'3P100/150AT' → (frame=100, trip=150, pole=3)。無ければ None。
+    トリップ(第2要素)を主幹/分岐容量比較の基準値として使う。"""
     if not spec:
         return None
     s = spec.upper().replace(' ', '')
@@ -163,16 +164,35 @@ def _amp_pair(spec):
     mp = re.search(r'(\d)P', s)
     if mp:
         pole = int(mp.group(1))
-    # 100/150AT や 225/200 形式
-    m = re.search(r'(\d+)\s*/\s*(\d+)', s)
+    # 極数表記(3P/2P/4P)を除去してから電流値を拾う(3Pの'3'を誤読しない)
+    s_amp = re.sub(r'\dP', '', s)
+    # 100/150AT や 225/200 形式(枠/トリップ)
+    m = re.search(r'(\d+)\s*/\s*(\d+)', s_amp)
     if m:
         return (int(m.group(1)), int(m.group(2)), pole)
-    # 単一値(100AT 等)
-    m2 = re.search(r'(\d+)\s*A?T?', s)
-    if m2:
-        v = int(m2.group(1))
-        return (v, v, pole)
+    # 単一値: AT優先、無ければAF、無ければ最初の数値
+    for pat in (r'(\d+)\s*AT', r'(\d+)\s*AF', r'(\d+)'):
+        m2 = re.search(pat, s_amp)
+        if m2:
+            v = int(m2.group(1))
+            return (v, v, pole)
     return None
+
+
+def _trip(spec):
+    """定格電流(トリップ/AT)を返す。明示されている場合のみ。
+    '3P100/75AT'→75, '3P50/15AT'→15, '225AT'→225。
+    '3P100AF'(枠のみ)や裸の'100'は整定不明として None。"""
+    if not spec:
+        return None
+    s = re.sub(r'\dP', '', spec.upper().replace(' ', ''))
+    m = re.search(r'(\d+)\s*/\s*(\d+)', s)   # 枠/トリップ
+    if m:
+        return int(m.group(2))
+    m = re.search(r'(\d+)\s*AT', s)          # 単独AT表記
+    if m:
+        return int(m.group(1))
+    return None                              # AFのみ/裸値は不明
 
 
 def _volt_of(comp, sys_volt=''):
@@ -248,17 +268,20 @@ def _check_internal(d):
                 'フレーム容量(AF)≧定格電流(AT)になるよう型式/整定を見直してください。'))
 
     # --- 電気的整合性: 主幹 < 分岐 の容量逆転 ---
-    mains = [c for c in comps if _is_breaker(c) and _is_main(c)]
-    branches = [c for c in comps if _is_breaker(c) and not _is_main(c) and not _spare(c)]
-    if mains and branches:
-        m_at = max((_amp_pair(c['spec'])[1] for c in mains if _amp_pair(c['spec'])), default=0)
+    # トリップ(AT)が明示された遮断器同士のみ比較する(AFのみ=整定不明は対象外)。
+    sys_no = _sys_no_of(comps)
+    mains = [c for c in comps if _is_breaker(c) and _is_main(c, sys_no)]
+    branches = [c for c in comps if _is_breaker(c) and not _is_main(c, sys_no) and not _spare(c)]
+    main_trips = [(c, _trip(c['spec'])) for c in mains if _trip(c.get('spec', ''))]
+    if main_trips and branches:
+        m_main, m_at = max(main_trips, key=lambda t: t[1])
         for b in branches:
-            pr = _amp_pair(b.get('spec', ''))
-            if pr and m_at and pr[1] > m_at:
-                out.append(_f(SEV_WARN, CAT_ELEC, dwg,
+            bt = _trip(b.get('spec', ''))
+            if bt and bt > m_at:
+                out.append(_f(SEV_ERROR, CAT_ELEC, dwg,
                     _tgt(b),
-                    f'分岐{_tgt(b)}の定格{pr[1]}ATが主幹{m_at}ATを上回っています。',
-                    '主幹容量≧分岐容量になっているか、保護協調を確認してください。'))
+                    f'分岐 {_tgt(b)} の定格 {bt}AT が主幹 {_tgt(m_main)} の {m_at}AT を上回っています。',
+                    '主幹容量 ≧ 分岐容量になるよう、主幹/分岐のトリップ値と保護協調を確認してください。'))
 
     # --- 電気的整合性: 系統電圧と機器電圧の不一致 ---
     sv = _volt_norm(sys_volt)
@@ -341,15 +364,11 @@ def _check_load_termination(d, dwg, comps):
     一部の回路だけ付いていない場合、その回路を「記載漏れの可能性」として指摘する。
     ※全回路が別方式(ETバー等)で端末が無い図面では発火しない(誤検出防止)。"""
     out = []
-    branches = [c for c in comps if _is_breaker(c) and not _is_main(c) and not _spare(c)]
+    sys_no = _sys_no_of(comps)
+    branches = [c for c in comps if _is_breaker(c) and not _is_main(c, sys_no) and not _spare(c)]
     if len(branches) < 2:
         return out
     # 負荷側端末(圧着端子 or 系統番号でなく回路番号を持つTB)。上位の受端子台は除く。
-    sys_no = ''
-    for c in comps:
-        if c['parts'] == '系統情報':
-            sys_no = str(c.get('dno', ''))
-            break
     terms = []
     for c in comps:
         p = c.get('parts', '')
@@ -386,8 +405,24 @@ def _check_load_termination(d, dwg, comps):
     return out
 
 
-def _is_main(comp):
-    """主幹遮断器か。ブロック名/DEVICE等から判定。"""
+def _sys_no_of(comps):
+    """図面の系統番号(系統情報ブロックのDEVICE1)。無ければ ''。"""
+    for c in comps:
+        if c.get('parts') == '系統情報' and c.get('dno'):
+            return str(c['dno'])
+    return ''
+
+
+def _is_main(comp, sys_no=''):
+    """主幹遮断器か。回路番号(DEVICE1)が系統番号と一致=主幹、
+    系統番号+付番(例 系統2→201..207)=分岐、で判定する。"""
+    dn = str(comp.get('dno', '') or '')
+    if sys_no and dn:
+        if dn == str(sys_no):
+            return True
+        # 系統番号で始まる長い番号は分岐(201,205,301...)
+        if dn.startswith(str(sys_no)) and len(dn) > len(str(sys_no)):
+            return False
     b = (comp.get('block', '') + ' ' + comp.get('device', '')).upper()
     if 'MCB_1' in b or 'MAIN' in b or '主幹' in comp.get('device', ''):
         return True
