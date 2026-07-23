@@ -2567,6 +2567,32 @@ def terminal_select(name):
 # 種別: 換気扇=屋内/屋外/制御盤用/COS、照明=FL(ドアSW付有無)、任意でサーモスタット/スペースヒーター。
 _ACC_FAN=[('74100','換気扇(TH付)COS'),('74103','換気扇(制御盤用 小型)'),('74101','換気扇(TH付 屋内型)'),('74102','換気扇(TH付 屋外型)')]
 _ACC_LIGHT=[('71093','FL-10W'),('71091','FL-10W(ドアSW付)')]
+def _panel_is_real_face(rows):
+    """実盤面か(主幹M)/セット11-17/高圧43系機器を持つ)。予備品/接続費等の非盤行を除外。"""
+    for r in rows:
+        c=str(r.get('code','') or ''); n=byCode.get(c,{}).get('name','')
+        if n.startswith(('M)LUG','M)MCB','M)ELB')): return True
+        if c[:2] in ('11','16','17'): return True
+        if c.startswith('43') and c[:3]!='436': return True
+    return False
+
+def _std_accessories(panel_name, rows, cold=False):
+    """茂泉様の艤装ルールで盤面の標準付属品[(code,qty)]を返す(自動計上分)。
+      照明: 配電盤(受変電)一面に71091(FL-10WﾄﾞｱSW付)×1。制御盤/分電盤には付けない。
+      換気扇: 配電盤で TR≥500kVA が入る盤に 74102(屋外型)×1(外形図に描かれた換気扇は抽出側で別途計上)。
+      ヒータ+サーモ: 図面に寒冷地仕様がある場合のみ 74106+74107 を1組。"""
+    if _panel_kind(panel_name)!='haiden' or not _panel_is_real_face(rows): return []
+    out=[]
+    if '71091' in byCode: out.append(('71091',1))                 # 照明1/配電盤面
+    tr500=False
+    for r in rows:
+        s=(str(r.get('raw',''))+' '+byCode.get(str(r.get('code','') or ''),{}).get('name','')).upper()
+        for m in re.finditer(r'(\d{3,4})\s*KVA', s):
+            if int(m.group(1))>=500: tr500=True
+    if tr500 and '74102' in byCode: out.append(('74102',1))       # TR≥500kVA盤の換気扇(屋外型)
+    if cold and '74106' in byCode and '74107' in byCode: out+=[('74106',1),('74107',1)]  # 寒冷地=ヒータ+サーモ組
+    return out
+
 def accessory_gate(panel_name, confirmed=None):
     """盤面の標準付属品確認ゲートを返す(物理盤らしき盤のみ)。[{spec,options,default:{code,qty}}]。
     既定=換気扇1・照明1(茂泉様ルール)。サーモ/ヒーターは既定0(任意)。非物理盤(装柱/引込/凡例/フロー)は None。
@@ -2575,14 +2601,17 @@ def accessory_gate(panel_name, confirmed=None):
     if re.search(r'凡例|一覧|標準図|参考|装柱|接地試験|配線図|制御フロー|フロー図|系統図$', pn): return None
     if not re.search(r'盤|ｷｭ-?ﾋﾞｸﾙ|キュービクル|(?<![A-Za-z])P-?\d|LP-?\d|(?<![A-Za-z])QB|(?<![A-Za-z])CB(?![A-Za-z])', pn): return None
     conf={str(c.get('code','')):int(c.get('qty',0) or 0) for c in (confirmed or [])}
-    def _mk(spec, opts, base_qty):
+    # 換気扇の種別は盤種で既定を寄せる(配電盤=屋外型74102/制御盤=制御盤用74103)。
+    _kind=_panel_kind(pn)
+    _fan=_ACC_FAN if _kind!='haiden' else [('74102','換気扇(TH付 屋外型)'),('74100','換気扇(TH付)COS'),('74101','換気扇(TH付 屋内型)'),('74103','換気扇(制御盤用 小型)')]
+    def _mk(spec, opts):
         oo=[{'code':c,'label':'%s（%s）'%(c,n)} for c,n in opts if c in byCode]
         if not oo: return None
-        d=next(({'code':o['code'],'qty':conf[o['code']]} for o in oo if o['code'] in conf), {'code':oo[0]['code'],'qty':base_qty})
+        d=next(({'code':o['code'],'qty':conf[o['code']]} for o in oo if o['code'] in conf), {'code':oo[0]['code'],'qty':0})
         return {'spec':spec,'options':oo,'default':d}
-    gate=[g for g in (_mk('換気扇',_ACC_FAN,1), _mk('盤内照明',_ACC_LIGHT,1),
-                      _mk('サーモスタット',[('74107','サーモスタット')],0),
-                      _mk('スペースヒーター',[('74106','スペースヒーター')],0)) if g]
+    gate=[g for g in (_mk('換気扇',_fan), _mk('盤内照明',_ACC_LIGHT),
+                      _mk('サーモスタット',[('74107','サーモスタット')]),
+                      _mk('スペースヒーター',[('74106','スペースヒーター')])) if g]
     return gate or None
 
 def select_from_extracted(data):
@@ -2597,6 +2626,13 @@ def select_from_extracted(data):
         if re.search(r'標準図|パターン集|パターン図|標準回路|回路図集', str(_p.get('panel',''))) and _p.get('legend'):
             for _k,_v in _p['legend'].items():
                 _master_legend[str(_k).upper().strip()]=_v
+    # 寒冷地仕様フラグ(図面全体で1回判定): 図面に「寒冷地(仕様)」等の盤仕様が明記された場合のみ
+    # 配電盤面にヒータ+サーモを自動計上(茂泉様ルール)。無ければヒータ/サーモは計上しない(既定=無)。
+    # ※「凍結防止ヒーター/スペースヒータ」等は負荷・機器名であり盤仕様でない→誤検出防止のため対象外。
+    _cold_spec=False
+    for _p in data.get('panels',[]):
+        _txt=str(_p.get('panel',''))+' '+' '.join(str(it.get('name','')) for it in _p.get('items',[]))
+        if re.search(r'寒冷地', _txt): _cold_spec=True; break
     for p in data.get('panels',[]):
         # 図面種別ヒントを盤ごとにセット(_panel_kindが名前判定できない盤のフォールバック)。
         _dk=p.get('_drawing_kind')
@@ -3125,15 +3161,21 @@ def select_from_extracted(data):
             if _spc in byCode:
                 r['code']=_spc; r['name']=byCode[_spc]['name']; r['conf']='○'
                 r['note']='予備スペース分岐(端子台なし→%s系SP)'%_sp_series
-        # 盤面の標準付属品(換気扇/照明/サーモ/ヒーター)は確認ゲートで人が員数確定。既定は自動計上しない
-        # (電気盤数>物理盤面数のため自動1個ずつは過剰計上になる)。人が確定した acc_confirmed のみコード計上。
-        for _ac in (p.get('acc_confirmed') or []):
-            _acc=str(_ac.get('code','')); _aq=int(_ac.get('qty',0) or 0)
+        # 盤面の標準付属品(茂泉様の艤装ルール)。人がゲートで確定(acc_confirmed)していればそれを優先(◎)、
+        # 無ければルールで自動計上(○: 照明1/配電盤面・TR≥500kVA盤の換気扇・寒冷地のヒータ+サーモ組)。
+        _manual=p.get('acc_confirmed')
+        if _manual is not None:
+            _acc_src=[(str(a.get('code','')),int(a.get('qty',0) or 0)) for a in _manual]; _acc_conf='◎'
+            _acc_note='盤面の標準付属品(確認ゲートで員数確定)'
+        else:
+            _acc_src=_std_accessories(p.get('panel',''), rows, _cold_spec); _acc_conf='○'
+            _acc_note='盤面の標準付属品(艤装ルール自動計上・員数/種別は確認ゲートで調整)'
+        for _acc,_aq in _acc_src:
             if _acc in byCode and _aq>0:
-                rows.append(dict(code=_acc,name=byCode[_acc].get('name',''),conf='◎',qty=str(_aq),
-                    note='盤面の標準付属品(確認ゲートで員数確定)',load_detail=False))
+                rows.append(dict(code=_acc,name=byCode[_acc].get('name',''),conf=_acc_conf,qty=str(_aq),
+                    note=_acc_note,load_detail=False))
         _og=dict(panel=p.get('panel',''),rows=rows)
-        _ag=accessory_gate(p.get('panel',''), p.get('acc_confirmed'))
+        _ag=accessory_gate(p.get('panel',''), [{'code':c,'qty':q} for c,q in _acc_src])
         if _ag: _og['acc_gate']=_ag
         out.append(_og)
     # 受変電(高圧)図面の標準付属品(1図面に各1): テストプラグ98800・CH取付金具79030。
