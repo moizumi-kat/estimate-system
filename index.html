@@ -274,7 +274,9 @@ function render(d,filter){
   for(const p of d.panels){
     const rows=p.rows.filter(r=>!r.load_detail&&(filter==='all'||r.conf===filter));
     if(!rows.length)continue;
-    h+='<tr class="pnl"><td colspan="7">'+esc(p.panel)+'</td></tr>';
+    h+='<tr class="pnl"><td colspan="7">'+esc(p.panel)+
+       (p.outline_note?'<span style="margin-left:12px;font-size:12px;color:#357;font-weight:500">📐 '+esc(p.outline_note)+'</span>':'')+
+       '</td></tr>';
     if(p.acc_gate&&p.acc_gate.length){
       let ac='<tr class="accg"><td colspan="7" style="background:#f2f8ff;padding:6px 10px;font-size:12px;color:#2a5">'+
         '■ 盤面の標準付属品（既定＝換気扇1・照明1／面。不要な盤は員数を0に、面数分は員数を増やしてください）：';
