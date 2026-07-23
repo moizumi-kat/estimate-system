@@ -150,14 +150,22 @@ $('goExtract').onclick=async()=>{
 function renderExtracted(d){
   renderPreGate(d);   // 抽出後・選定前の仕様確認ゲート
   let h='<table><thead><tr><th>盤</th><th>抽出された部品（図面表記）</th><th>数量</th></tr></thead><tbody>';
+  const xb={dual:'<span title="Claude・Gemini両方が検出＝二重検証済" style="color:#2a7;font-weight:700">✓✓</span> ',
+            gemini:'<span title="Geminiのみ検出＝Claudeの取りこぼし候補・要確認" style="color:#e08000;font-weight:700">＋G</span> ',
+            claude:''};
   for(const p of d.panels){
     h+='<tr class="pnl"><td colspan="3">'+esc(p.panel)+'</td></tr>';
     for(const it of p.items){
-      h+='<tr><td></td><td>'+esc(it.name)+(it.unclear?' <span style="color:#c0504d">（読取不明瞭）</span>':'')+'</td><td class="qty">'+esc(it.qty||'')+'</td></tr>';
+      h+='<tr><td></td><td>'+(xb[it.cross]||'')+esc(it.name)+(it.unclear?' <span style="color:#c0504d">（要確認）</span>':'')+'</td><td class="qty">'+esc(it.qty||'')+'</td></tr>';
     }
   }
   h+='</tbody></table>';
-  $('out').innerHTML='<div style="margin:10px 0;font-size:13px"><span class="hl">抽出：'+d.npanels+'盤 / '+d.count+'部品</span></div>'+h;
+  let vh='';
+  if(d.vision){
+    vh='<span class="hl">抽出：'+d.npanels+'盤 / '+d.count+'部品</span>　<span style="font-size:12px;color:#456">🔍 '+esc(d.vision)+'</span>';
+    if(d.dual){vh+='<div style="font-size:12px;color:#567;margin-top:3px">二重Vision突合: <b style="color:#2a7">✓✓二重検証 '+d.dual.dual+'</b> / Claude単独 '+d.dual.claude_only+' / <b style="color:#e08000">＋G(取りこぼし候補) '+d.dual.gemini_only+'</b></div>';}
+  }else{vh='<span class="hl">抽出：'+d.npanels+'盤 / '+d.count+'部品</span>';}
+  $('out').innerHTML='<div style="margin:10px 0;font-size:13px">'+vh+'</div>'+h;
 }
 // 抽出後・選定前の仕様確認ゲート: 配電盤セット盤の計器種別/VCB操作方式など(図面に明記されず
 // 特記仕様・客先打合せで決まる仕様)を、コード選定の前に確定する。既定のまま選定すると誤◎になるため。

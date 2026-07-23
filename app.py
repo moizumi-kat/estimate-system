@@ -367,8 +367,8 @@ def extract_dxf(cli, data_bytes):
 def extract_one(cli, fname, data_bytes):
     low=fname.lower()
     if low.endswith(".pdf"):  return extract_pdf_hires(cli, data_bytes)
-    if low.endswith(".png"):  return extract(cli, data_bytes, "image/png")
-    if low.endswith((".jpg",".jpeg")): return extract(cli, data_bytes, "image/jpeg")
+    if low.endswith(".png"):  return _extract_vision(cli, data_bytes, "image/png")
+    if low.endswith((".jpg",".jpeg")): return _extract_vision(cli, data_bytes, "image/jpeg")
     if low.endswith(".dxf"):  return extract_dxf(cli, data_bytes)
     return None  # 未対応はスキップ
 
@@ -380,14 +380,14 @@ def extract_pdf_hires(cli, data_bytes):
         import fitz  # PyMuPDF
     except ImportError:
         # PyMuPDF未導入なら従来方式(PDFそのまま)にフォールバック
-        return extract(cli, data_bytes, "application/pdf")
+        return _extract_vision(cli, data_bytes, "application/pdf")
     all_panels=[]
     doc=fitz.open(stream=data_bytes, filetype="pdf")
     for page in doc:
         # 3倍解像度でレンダリング(細部の文字が潰れないように)
         pix=page.get_pixmap(matrix=fitz.Matrix(3,3))
         png=pix.tobytes("png")
-        res=extract(cli, png, "image/png")
+        res=_extract_vision(cli, png, "image/png")
         for p in res.get("panels",[]):
             all_panels.append(p)
     return {"panels":all_panels}
@@ -436,6 +436,115 @@ def extract(cli, data_bytes, media):
         if getattr(msg,'stop_reason',None)=='max_tokens':
             raise RuntimeError('図面の機器数が多く抽出結果が出力上限を超えました。盤を分割して投入してください。')
         raise RuntimeError('抽出JSON解析失敗')
+
+# ===== 二重Vision(Claude + Gemini 2.5 Pro): 抽出を2モデルで独立に読み突合(CLAUDE.md 4.5) =====
+# 目的=◎の誤答ゼロ。両モデル一致=二重検証済(信頼)。片側のみ=要確認へ(黙って落とさない=安全に失敗)。
+# Geminiキーはリポジトリ外(.gemini_key・gitignore)。SDK/キーが無ければ自動でClaude単独にフォールバック(止めない)。
+_GEMINI_CLIENT=False   # False=未初期化, None=無効, それ以外=クライアント
+def _gemini_client():
+    global _GEMINI_CLIENT
+    if _GEMINI_CLIENT is not False: return _GEMINI_CLIENT
+    _GEMINI_CLIENT=None
+    try:
+        kf=os.environ.get('GEMINI_KEY_FILE') or os.path.join(HERE,'.gemini_key')
+        key=os.environ.get('GEMINI_API_KEY') or (open(kf).read().strip() if os.path.exists(kf) else '')
+        if key:
+            from google import genai
+            _GEMINI_CLIENT=genai.Client(api_key=key)
+    except Exception:
+        _GEMINI_CLIENT=None
+    return _GEMINI_CLIENT
+
+def gemini_extract(data_bytes, media):
+    """Gemini 2.5 Pro で EXTRACT_PROMPT を実行し {panels:[...]} を返す(Claudeと同じスキーマ)。"""
+    gc=_gemini_client()
+    if gc is None: return None
+    from google.genai import types
+    img=types.Part.from_bytes(data=data_bytes, mime_type=media)
+    r=gc.models.generate_content(model='gemini-2.5-pro', contents=[EXTRACT_PROMPT, img],
+        config=types.GenerateContentConfig(response_mime_type='application/json'))
+    t=re.sub(r'^```(json)?|```$','',(r.text or '').strip(),flags=re.M).strip()
+    try: d=json.loads(t)
+    except Exception:
+        m=re.search(r'\{.*\}',t,re.S); d=json.loads(m.group(0)) if m else {'panels':[]}
+    if isinstance(d,list): d={'panels':d}
+    return d if isinstance(d,dict) and 'panels' in d else {'panels':d.get('panels',[]) if isinstance(d,dict) else []}
+
+# 突合ヘルパ(cross_check_juhen由来): 機器コード集合＋数値集合の一致で表記ゆれを吸収。
+_XALIAS={'TR':'T','SRX':'SR','VCS':'VMC'}
+def _xdn(s): return re.sub(r'[\s　()（）・]','',str(s or '')).upper()
+def _xtoks(name):
+    n=_xdn(name)
+    return ({_XALIAS.get(c,c) for c in re.findall(r'[A-Z]{1,6}',n)}, set(re.findall(r'\d+\.?\d*',n)))
+def _xscore(a,b):
+    import difflib
+    ca,na=_xtoks(a); cb,nb=_xtoks(b)
+    base=difflib.SequenceMatcher(None,_xdn(a),_xdn(b)).ratio()
+    codej=len(ca&cb)/len(ca|cb) if (ca|cb) else 0
+    numj=len(na&nb)/len(na|nb) if (na|nb) else 1.0
+    return max(base, 0.6*codej+0.4*numj)
+
+def dual_extract(cli, data_bytes, media):
+    """Claude(主)とGemini(第2)で独立抽出し機器単位で突合。
+      一致→ it['cross']='dual'(二重検証済)。Claude単独→'claude'(主読み・保持)。
+      Gemini単独(Claude取りこぼし)→機器を追加し'gemini'+unclear(要確認で選定は○/ゲートへ)。
+    Gemini無効/失敗時はClaude単独にフォールバック(システムを止めない)。"""
+    cres=extract(cli, data_bytes, media)
+    try:
+        gres=gemini_extract(data_bytes, media)
+    except Exception:
+        gres=None
+    if not gres or not gres.get('panels'):
+        return cres
+    import difflib
+    from collections import defaultdict
+    G=defaultdict(list)
+    for p in gres['panels']:
+        for it in p.get('items',[]):
+            if it.get('load_detail') or it.get('cable'): continue
+            G[_xdn(p.get('panel',''))].append(it.get('name',''))
+    gkeys=list(G)
+    def _match_panel(cp):
+        best=-1;bk=None
+        for k in gkeys:
+            s=difflib.SequenceMatcher(None,_xdn(cp),k).ratio()
+            if s>best:best=s;bk=k
+        return bk if best>=0.5 else None
+    THRESH=0.55; used=defaultdict(set); ndual=nsingle=0
+    ckey2panel={}
+    for p in cres.get('panels',[]):
+        _pk=_match_panel(p.get('panel',''))
+        ckey2panel.setdefault(_pk, p)
+        cand=G.get(_pk,[]) if _pk else []
+        for it in p.get('items',[]):
+            if it.get('load_detail') or it.get('cable'): continue
+            best=-1;bj=None
+            for j,gn in enumerate(cand):
+                if j in used[_pk]: continue
+                s=_xscore(it.get('name',''),gn)
+                if s>best:best=s;bj=j
+            if bj is not None and best>=THRESH:
+                used[_pk].add(bj); it['cross']='dual'; ndual+=1
+            else:
+                it['cross']='claude'; nsingle+=1
+    gadd=0
+    for pk in gkeys:
+        tgt=ckey2panel.get(pk) or (cres['panels'][0] if cres.get('panels') else None)
+        if tgt is None: continue
+        for j,gn in enumerate(G[pk]):
+            if j in used[pk]: continue
+            tgt.setdefault('items',[]).append({'name':gn,'qty':'','cross':'gemini','unclear':True})
+            gadd+=1
+    cres['_dual']={'dual':ndual,'claude_only':nsingle,'gemini_only':gadd}
+    return cres
+
+_DUAL_VISION=os.environ.get('DUAL_VISION','1')!='0'   # 既定ON: Geminiキーがあれば二重Vision(環境変数DUAL_VISION=0で無効)
+def _extract_vision(cli, data_bytes, media):
+    """抽出の入口: 二重Vision(Claude+Gemini)が有効かつGemini利用可なら二重、そうでなければClaude単独。"""
+    if _DUAL_VISION and _gemini_client() is not None:
+        try: return dual_extract(cli, data_bytes, media)
+        except Exception: pass   # 二重Visionで失敗してもClaude単独で継続(システムを止めない)
+    return extract(cli, data_bytes, media)
 
 # ===== フェーズ2: 属性方式 選定エンジン（候補生成→ルール絞り込み）=====
 def R(code,conf,note): return dict(code=code,name=byCode.get(code,{}).get('name','') if code else '',conf=conf,note=note)
@@ -3044,6 +3153,7 @@ def select_from_extracted(data):
             row['raw']=it.get('name','')
             row['qty']=it.get('qty','')
             row['load_detail']=False
+            if it.get('cross'): row['cross']=it['cross']   # 二重Vision突合状態(dual/claude/gemini)
             # 幹線番号(1L1,2M1,1EM2等)を抽出し、表示用に〈〉でくくる
             mfeed=re.match(r'\s*(\d+[A-Za-z]+\d*)', it.get('name','') or '')
             row['feed']=mfeed.group(1) if mfeed else ''
@@ -3351,7 +3461,7 @@ def api_extract():
         files=[f] if f else []
     if not files:
         return jsonify(error='ファイルがありません'),400
-    all_panels=[]; errors=[]; nfiles=0
+    all_panels=[]; errors=[]; nfiles=0; dual={'dual':0,'claude_only':0,'gemini_only':0}; _dual_used=False
     for f in files:
         if not f or not f.filename: continue
         fname=f.filename; raw=f.read(); low=fname.lower()
@@ -3363,6 +3473,9 @@ def api_extract():
             for p in data.get('panels',[]):
                 # どのファイル由来か分かるよう、盤名にファイル名を付記(任意)
                 all_panels.append(p)
+            if data.get('_dual'):
+                _dual_used=True
+                for k in dual: dual[k]+=data['_dual'].get(k,0)
             nfiles+=1
         except Exception as e:
             errors.append(f'{fname}: {e}')
@@ -3382,7 +3495,9 @@ def api_extract():
     nitems=sum(len(p.get('items',[])) for p in all_panels)
     nset=sum(1 for p in all_panels if p.get('sc_gate'))
     return jsonify(panels=all_panels, count=nitems, npanels=len(all_panels),
-                   nfiles=nfiles, warnings=errors, nset=nset)
+                   nfiles=nfiles, warnings=errors, nset=nset,
+                   dual=(dual if _dual_used else None),
+                   vision=('Claude+Gemini(二重Vision)' if _dual_used else 'Claude'))
 
 # 【段階2】選定：抽出済みの盤・機器リスト→コード選定（◎○△）
 @app.route('/api/select', methods=['POST'])
