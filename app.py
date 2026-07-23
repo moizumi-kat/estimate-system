@@ -2668,6 +2668,18 @@ def select_from_extracted(data):
     for _p in data.get('panels',[]):
         _txt=str(_p.get('panel',''))+' '+' '.join(str(it.get('name','')) for it in _p.get('items',[]))
         if re.search(r'寒冷地', _txt): _cold_spec=True; break
+    # 配電盤 外形図(機器外形図)があれば、面数・換気扇数を配電盤の照明/換気扇の権威値とする(茂泉様提案)。
+    # outline に sections(各面) を持つ盤=外形図。照明=面数・換気扇=外形図で換気扇ありの面数、を一括計上し、
+    # 電気盤(単線図)ごとの照明/換気扇の自動計上は抑制(電気盤数>物理面数の過剰計上を解消)。
+    _gaikei=None
+    for _p in data.get('panels',[]):
+        _ol=_p.get('outline')
+        if isinstance(_ol,dict) and _ol.get('sections'):
+            _secs=_ol.get('sections') or []
+            _gaikei={'faces':int(_ol.get('faces') or len(_secs) or 0),
+                     'fans':sum(1 for s in _secs if s.get('fan')),
+                     'w':_ol.get('w'),'h':_ol.get('h'),'d':_ol.get('d')}
+            break
     for p in data.get('panels',[]):
         # 図面種別ヒントを盤ごとにセット(_panel_kindが名前判定できない盤のフォールバック)。
         _dk=p.get('_drawing_kind')
@@ -3203,8 +3215,13 @@ def select_from_extracted(data):
             _acc_src=[(str(a.get('code','')),int(a.get('qty',0) or 0)) for a in _manual]; _acc_conf='◎'
             _acc_note='盤面の標準付属品(確認ゲートで員数確定)'
         else:
+            # 外形図がある場合、配電盤の照明/換気扇/ヒータは外形図から一括計上するので個々の盤では出さない。
             _ol=p.get('outline') if isinstance(p.get('outline'),dict) else {}
-            _acc_src=_std_accessories(p.get('panel',''), rows, _cold_spec, _ol.get('faces') or 1); _acc_conf='○'
+            if _gaikei and _panel_kind(p.get('panel',''))=='haiden':
+                _acc_src=[]
+            else:
+                _acc_src=_std_accessories(p.get('panel',''), rows, _cold_spec, _ol.get('faces') or 1)
+            _acc_conf='○'
             _acc_note='盤面の標準付属品(艤装ルール自動計上・員数/種別は確認ゲートで調整)'
         for _acc,_aq in _acc_src:
             if _acc in byCode and _aq>0:
@@ -3236,6 +3253,18 @@ def select_from_extracted(data):
             if _acc in byCode and _acc not in _allcodes:
                 _hv_panel['rows'].append(dict(code=_acc,name=byCode[_acc].get('name',''),conf='○',
                     note='受変電図面の標準付属品(1図面各1・実見積書7案件で計上)',load_detail=False))
+    # 外形図がある場合、配電盤の照明(=面数)・換気扇(=外形図の換気扇数)・寒冷地ヒータ+サーモ(=面数)を一括計上。
+    if _gaikei and _gaikei.get('faces'):
+        _grows=[]
+        _nf=_gaikei['faces']; _nv=_gaikei.get('fans',0)
+        if '71091' in byCode: _grows.append(('71091',_nf,'配電盤 盤内照明(外形図の面数=%d面に各1)'%_nf))
+        if _nv>0 and '74102' in byCode: _grows.append(('74102',_nv,'配電盤 換気扇(外形図で換気扇ありの%d面に各1)'%_nv))
+        if _cold_spec and '74106' in byCode and '74107' in byCode:
+            _grows+=[('74106',_nf,'配電盤 スペースヒーター(寒冷地・面数分)'),('74107',_nf,'配電盤 サーモスタット(寒冷地・面数分)')]
+        _tgt=_hv_panel or (out[0] if out else None)
+        if _tgt is not None:
+            for _c,_q,_nt in _grows:
+                _tgt['rows'].append(dict(code=_c,name=byCode[_c].get('name',''),conf='○',qty=str(_q),note=_nt,load_detail=False))
     _DRAWING_KIND.set(None)   # 後続処理へ図面種別ヒントを漏らさない
     return out
 
