@@ -19,7 +19,7 @@
     msg  : 指摘内容
     suggest: 推奨対応
 """
-import re, io, tempfile, os
+import re, io, tempfile, os, unicodedata
 
 SEV_ERROR = '重大'
 SEV_WARN  = '警告'
@@ -345,6 +345,9 @@ def _check_internal(d):
     if d['kind'] == 'H':
         out += _check_load_termination(d, dwg, comps)
 
+    # --- 電気的整合性: 相数と負荷端子台の端子記号の整合(1φ3WはN、3φはV) ---
+    out += _check_phase_terminal(dwg, comps)
+
     # --- 電気的整合性: 結線図の回路番号(DEVICE1)の重複 ---
     if d['kind'] == 'H':
         dnos = {}
@@ -574,6 +577,58 @@ def _check_seq_layout_cross(drawings):
                     f'シーケンス図にある{label}「{name}」（{c.get("model","")}）が'
                     f'内部配置図に記載されていません。',
                     '内部配置図への記載漏れです。実装漏れ・手配漏れを防ぐため追記してください。'))
+    return out
+
+
+def _phase_of(text):
+    """電源種別テキストから相方式を返す。'1P3W'(単相3線) / '3P3W'(三相3線) / ''。"""
+    t = unicodedata.normalize('NFKC', str(text)).upper().replace(' ', '')
+    # φ(U+03C6)は upper で Φ(U+03A6) になる。両表記を許容。
+    if '1Φ3W' in t or '1P3W' in t or '1相3線' in t:
+        return '1P3W'
+    if '3Φ3W' in t or '3P3W' in t or '3Φ4W' in t or '3相' in t:
+        return '3P3W'
+    return ''
+
+
+def _check_phase_terminal(dwg, comps):
+    """系統の相方式と負荷端子台の端子記号の整合を確認。
+    1φ3W(単相3線)は中性線Nを持つべき(U,N,W)。負荷端子台の端子がV表記
+    (U,V,W = 三相表記)でNが無い場合、相数と端子の不一致として指摘する。"""
+    out = []
+    # 系統番号 → 相方式
+    phase = {}
+    for c in comps:
+        if c.get('parts') == '系統情報':
+            txt = c['attrs'].get('3.電源種別-2', '') + ' ' + c['attrs'].get('2.電源種別-1', '')
+            ph = _phase_of(txt)
+            if ph:
+                phase[str(c.get('dno', ''))] = ph
+    if not phase:
+        return out
+    sysnos = sorted(phase.keys(), key=len, reverse=True)  # 長い番号を優先(prefix一致)
+    seen = set()
+    for c in comps:
+        if c.get('parts') != 'TB':
+            continue
+        term = c['attrs'].get('TERMINAL', '')
+        if not term:
+            continue
+        dn = str(c.get('dno', ''))
+        sys = next((s for s in sysnos if dn == s or dn.startswith(s)), '')
+        if not sys or phase.get(sys) != '1P3W':
+            continue
+        labels = [t.strip().upper() for t in re.split(r'[,\s]', term) if t.strip()]
+        if 'V' in labels and 'N' not in labels:
+            key = (sys, dn)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(_f(SEV_WARN, CAT_ELEC, dwg,
+                f'TB 回路{dn}（系統{sys}）',
+                f'系統{sys}は1φ3W(単相3線)ですが、負荷端子台の端子が「{term}」と'
+                f'V表記(三相)で中性線Nがありません。',
+                '単相3線回路の端子はU,N,W(中性線N)です。端子記号/端子台の種別を確認してください。'))
     return out
 
 
