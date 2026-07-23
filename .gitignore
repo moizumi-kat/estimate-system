@@ -4,8 +4,12 @@ __pycache__/
 app.py.new
 
 # secrets / caches (experiments)
+.akey
+*.akey
 .gemini_key
 *.gemini_key
+venv/
+.venv/
 pc_cache.json
 cc_*.json
 adj_cache.json

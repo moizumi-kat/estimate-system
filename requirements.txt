@@ -1,7 +1,8 @@
-flask>=3.0
-anthropic>=0.40
-pdf2image>=1.17
-openpyxl>=3.1
-pillow>=10.0
-gunicorn>=21.0
-ezdxf>=1.1
+# 積算コード選定システム 依存パッケージ（Python 3.11 で検証）
+flask>=3.0            # Web サーバ
+anthropic>=0.40       # Claude Vision（抽出）・選定補助
+google-genai>=1.0     # Gemini 2.5 Pro（二重Visionの第2抽出）
+pymupdf>=1.24         # PDF高解像度レンダリング（import fitz）
+openpyxl>=3.1         # Excel 入出力（見積書パース・結果出力）
+gunicorn>=21.0        # 本番WSGI（任意・本番運用時）
+ezdxf>=1.1            # DXF入力対応（任意・DXF図面を扱う場合のみ）
