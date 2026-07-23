@@ -140,16 +140,25 @@ def parse_dxf(data, fallback_name=''):
 
 
 def classify(kind_raw, dwgno=''):
-    """図面種別を判定。結線図=H / 外形図・配置図=G。"""
+    """図面種別を判定。
+      H=結線図 / G=外形図 / D=内部配置図 / F=シーケンス(制御回路) /
+      E=スケルトン(単線図) / Z=社内確認表 / '?'=不明
+    図番サフィックス(033-D001 の D 等)を最優先し、TITLE2 の語で補完する。"""
     s = (kind_raw or '') + ' ' + (dwgno or '')
-    if '結線' in s:
+    m = re.search(r'-([A-Z])\d', dwgno or '', re.I)
+    suf = m.group(1).upper() if m else ''
+    if '結線' in s or suf == 'H':
         return 'H'
-    if any(k in s for k in ['外形', '配置', 'ロードセンター', '組立', 'キュービクル', '盤外形', '内部機器']):
+    if 'シーケンス' in s or suf == 'F':
+        return 'F'
+    if 'スケルトン' in s or '展開' in s or suf == 'E':
+        return 'E'
+    if '内部' in s or '配置' in s or suf == 'D':
+        return 'D'
+    if any(k in s for k in ['外形', 'ロードセンター', '組立', 'キュービクル', '盤外形', '内部機器']) or suf == 'G':
         return 'G'
-    # 図番の -H / -G サフィックスで補完
-    m = re.search(r'-([GH])\d', dwgno or '', re.I)
-    if m:
-        return m.group(1).upper()
+    if '確認表' in s or suf == 'Z':
+        return 'Z'
     return '?'
 
 
@@ -227,6 +236,7 @@ def run_checks(drawings):
     for d in drawings:
         findings += _check_internal(d)
     findings += _check_cross(drawings)
+    findings += _check_seq_layout_cross(drawings)
     # 完全に同一の指摘を排除
     uniq = []
     seen = set()
@@ -520,6 +530,50 @@ def _check_cross(drawings):
         # --- 電気的整合性: 系統番号の順序不一致(外形図の物理配置 ↔ 結線図番号) ---
         out += _check_sys_order(gs, hs, seiban)
 
+    return out
+
+
+# シーケンス図↔内部配置図で突合する制御機器クラス。
+# (DEVICE,DEVICE1)で図面間を一意にキーでき、両図に必ず現れるべき機器のみ。
+# ※MC/SL等は図面ごとに名称表記が異なる(MC↔MS等)ため対象外(誤検出防止)。
+_CONTROL_CLASSES = {'AXR': 'リレー', 'TM': 'タイマー', 'TLR': 'タイマー', 'X': 'リレー'}
+
+
+def _check_seq_layout_cross(drawings):
+    """シーケンス図(F)にある制御機器(リレー/タイマー)が内部配置図(D)に
+    記載されているかを突合する。シーケンスにあって内部配置図に無い機器は
+    「内部配置図の記載漏れ」= 実装漏れ・手配漏れの原因として指摘する。
+    機器の同定は (PARTS, DEVICE, DEVICE1) で行う(例: リレー52X-101)。"""
+    out = []
+    groups = {}
+    for d in drawings:
+        groups.setdefault(d.get('seiban', '') or '(製番不明)', []).append(d)
+    for seiban, ds in groups.items():
+        seqs = [d for d in ds if d['kind'] == 'F']
+        lays = [d for d in ds if d['kind'] == 'D']
+        if not seqs or not lays:
+            continue  # シーケンスと内部配置図が揃っていなければ判定不可
+        lay_keys = set()
+        for d in lays:
+            for c in d['components']:
+                if c['parts'] in _CONTROL_CLASSES:
+                    lay_keys.add((c['parts'], c.get('device', ''), str(c.get('dno', ''))))
+        seen = set()
+        for d in seqs:
+            for c in d['components']:
+                if c['parts'] not in _CONTROL_CLASSES:
+                    continue
+                key = (c['parts'], c.get('device', ''), str(c.get('dno', '')))
+                if key in lay_keys or key in seen:
+                    continue
+                seen.add(key)
+                label = _CONTROL_CLASSES[c['parts']]
+                name = '-'.join(x for x in [c.get('device', ''), str(c.get('dno', ''))] if x)
+                out.append(_f(SEV_ERROR, CAT_MISS, lays[0]['dwgno'],
+                    f'{label} {name}',
+                    f'シーケンス図にある{label}「{name}」（{c.get("model","")}）が'
+                    f'内部配置図に記載されていません。',
+                    '内部配置図への記載漏れです。実装漏れ・手配漏れを防ぐため追記してください。'))
     return out
 
 
