@@ -309,14 +309,19 @@ VMCやSRが抜け落ちやすいので、PFとSCだけでなくVMC・SRも必ず
 【配電盤(受変電)は盤単位の "set_attrs" も出す（セットコード選定用）】
 受電盤/饋電盤/低圧電灯盤/低圧動力盤/スコットトランス盤/段積 の盤には set_attrs を付ける。
 制御盤(動力)・分電盤・端子盤は set_attrs 省略(または settype:"")。
-- settype: "低圧"(TR二次の電灯/動力/スコット) / "高圧"(受電・饋電) / "段積" / ""
+- settype: "低圧"(TR二次の電灯/動力/スコット) / "高圧"(受電・饋電) / "段積"(段積み構造の受電・饋電) / "段積VCS"(段積みのコンデンサ盤) / ""
+- 【段積みの判定】受変電が「段積み構造」(VCBやTRが縦に複数段積まれる／外形図・盤姿図で1盤が2〜3段)の場合、
+  受電盤・饋電盤は settype="段積"、高圧コンデンサ盤は settype="段積VCS" とする。段積みでない(単段/LBS構成)なら
+  受電・饋電は "高圧"、コンデンサは ""(個別)。段積みか自信が無ければ "高圧"/"" のままにし unclear_specs に "settype"。
+- role(段積みの段数/役割): "受電盤"(受電) / "一段積"/"二段積"/"三段積"(饋電やコンデンサの段数) / "母線連絡"(母連盤)。
+  段数(何段積か)は外形図/盤姿図の段数で判断。読み切れなければ ""(空)にして unclear_specs に "role"(→人が確認ゲートで確定)。
 - meter(計器種別): 推測しない。器具表等で明確な時のみ "広角"/"普通角"/"マルチ"、単線図だけで確信が無ければ ""(空)。
 - phase: 1φ→"1φ3W" / 3φ→"3φ3W" / スコットTR→"スコット"
 - cap: 変圧器のKVA(数値+KVA)。読めなければ ""。
-- vcb: "8KA"/"12.5KA"(高圧のみ)。 op: "手動"/"電動"/"電動引出"(VCB上下に黒四角＋回転矢印記号なら電動引出)。
-- unclear_specs: 読み切れなかった仕様名の配列(例 ["meter","cap"])
+- vcb: "8KA"/"12.5KA"(高圧のみ)。 op: "手動"/"電動"/"電動引出"(VCB上下に黒四角＋回転矢印記号なら電動引出)。段積VCSは "電磁"/"電磁引出PF"。
+- unclear_specs: 読み切れなかった仕様名の配列(例 ["meter","role","settype"])
 出力は次のJSONのみ（説明文・マークダウン禁止）:
-{"panels":[{"panel":"盤名","set_attrs":{"settype":"","meter":"","phase":"","cap":"","vcb":"","op":"","unclear_specs":[]},"legend":{},"items":[{"name":"品名仕様","qty":"数量","volt":"HV|400V|200V|100V|","symbol":"A〜L|","kw":"容量数値|","breaker":"●|○|","group":"親リレー名|","load_detail":false,"parent":"","unclear":false}]}]}"""
+{"panels":[{"panel":"盤名","set_attrs":{"settype":"","role":"","meter":"","phase":"","cap":"","vcb":"","op":"","unclear_specs":[]},"legend":{},"items":[{"name":"品名仕様","qty":"数量","volt":"HV|400V|200V|100V|","symbol":"A〜L|","kw":"容量数値|","breaker":"●|○|","group":"親リレー名|","load_detail":false,"parent":"","unclear":false}]}]}"""
 
 # ===== DXF: 文字を座標つきで抽出し、Claudeで盤・機器に構造化 =====
 def extract_dxf(cli, data_bytes):
@@ -2653,12 +2658,20 @@ def sc_select(attrs):
         return (cs[0]['code'],'◎','') if len(cs)==1 else ('','△','VCS段積属性不一致→確認')
     return '','△','盤種セット対象外'
 
+_SC_DAN_ROLES={'段積':['受電盤','一段積','二段積','三段積','母線連絡','母線連絡+一段積'],
+               '段積VCS':['一段積','二段積','三段積']}
 def sc_resolve(panel_name, set_attrs=None):
     attrs=dict(sc_classify(panel_name))
     if set_attrs:
         for k,v in set_attrs.items():
             if v and k!='settype': attrs[k]=v
         if set_attrs.get('settype'): attrs['settype']=set_attrs['settype']
+    # 段積へ切替時のロール整合(茂泉様確定: 段積の段数=一/二/三段積は構造依存で誤読が◎誤答→確認ゲートで確定):
+    # 受電盤ロールはそのまま有効。饋電盤/コンデンサ等の非段数ロールは段数が必要→未確定にしてゲートで段数を聞く。
+    if attrs.get('settype') in _SC_DAN_ROLES:
+        _r=attrs.get('role')
+        if _r not in _SC_DAN_ROLES[attrs['settype']]:
+            attrs['role']=None   # 段数(一/二/三段積)をゲートで確定
     if not attrs.get('settype'): return None
     form=sc_confirm_form(attrs)
     code,conf,note=sc_select(sc_apply_defaults(attrs))
@@ -3508,6 +3521,9 @@ def api_extract():
         for k,v in sa.items():
             if v and k!='settype': attrs[k]=v
         if sa.get('settype'): attrs['settype']=sa['settype']
+        # 段積の段数ロール整合(sc_resolveと同じ): 段積で非段数ロールは未確定にしてゲートで段数を聞く。
+        if attrs.get('settype') in _SC_DAN_ROLES and attrs.get('role') not in _SC_DAN_ROLES[attrs['settype']]:
+            attrs['role']=None
         if attrs.get('settype'):
             p['sc_gate']=sc_confirm_form(attrs)
     nitems=sum(len(p.get('items',[])) for p in all_panels)
