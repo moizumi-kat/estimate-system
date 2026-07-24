@@ -381,7 +381,7 @@ def extract_pdf_hires(cli, data_bytes):
     except ImportError:
         # PyMuPDF未導入なら従来方式(PDFそのまま)にフォールバック
         return _extract_vision(cli, data_bytes, "application/pdf")
-    all_panels=[]
+    all_panels=[]; dual_sum=None
     doc=fitz.open(stream=data_bytes, filetype="pdf")
     for page in doc:
         # 3倍解像度でレンダリング(細部の文字が潰れないように)
@@ -390,7 +390,12 @@ def extract_pdf_hires(cli, data_bytes):
         res=_extract_vision(cli, png, "image/png")
         for p in res.get("panels",[]):
             all_panels.append(p)
-    return {"panels":all_panels}
+        if res.get('_dual'):   # 二重Vision突合サマリをページ横断で合算
+            if dual_sum is None: dual_sum={'dual':0,'claude_only':0,'gemini_only':0}
+            for k in dual_sum: dual_sum[k]+=res['_dual'].get(k,0)
+    out={"panels":all_panels}
+    if dual_sum is not None: out['_dual']=dual_sum
+    return out
 
 # ===== ZIP含む入力をまとめて抽出（複数図面を一括）=====
 def extract_input(cli, fname, data_bytes):
@@ -3511,7 +3516,7 @@ def api_select():
     except Exception as e:
         return jsonify(error=str(e)),500
     c={'◎':0,'○':0,'△':0}
-    ndetail=0
+    ndetail=0; gadd=0
     for p in panels:
         for r in p['rows']:
             r['official']=byCode.get(r['code'],{}).get('name','') if r['code'] else ''
@@ -3525,6 +3530,11 @@ def api_select():
             if r.get('load_detail') or r['conf'] not in c:
                 ndetail+=1
                 continue
+            # Geminiのみ検出(cross='gemini')=取りこぼし候補。Claude未確認なので確定率の母数外にし、
+            # 別枠「＋G要確認」で集計(確定=Claudeが読んだ機器の確定率を維持しつつ、Geminiの拾いは人が確認)。
+            if r.get('cross')=='gemini':
+                gadd+=1
+                continue
             c[r['conf']]+=1
     tot=sum(c.values()) or 1
     # 確実ダウンロード用: 直近の選定結果をセッション単位でメモリ保持。
@@ -3537,7 +3547,7 @@ def api_select():
     except Exception:
         pass
     return jsonify(panels=panels, summary=dict(total=sum(c.values()),ok=c['◎'],warn=c['○'],chk=c['△'],
-        detail=ndetail, rate=round((c['◎']+c['○'])/tot*100)))
+        detail=ndetail, gemini_only=gadd, rate=round((c['◎']+c['○'])/tot*100)))
 
 # 直近の選定結果(セッションID→panels)。プロセス内メモリ。再起動で消えるが実用上十分。
 _LAST_RESULT={}
