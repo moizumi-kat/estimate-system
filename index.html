@@ -276,7 +276,7 @@ function render(d,filter){
   let h='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+
     '<button id="allbtn" onclick="toggleAll()" style="background:#305496;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">全行を一括チェック</button>'+
     '<span style="font-size:12px;color:#888">もう一度押すと全解除</span>'+
-    '<button id="accApply" onclick="applyAccessories()" style="display:none;margin-left:auto;background:#2a7;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">盤付属品を反映して再選定</button></div>';
+    '<button id="accApply" onclick="applyAccessories()" style="display:none;margin-left:auto;background:#2a7;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">盤付属品・板金サイズを反映して再選定</button></div>';
   h+='<table><thead><tr><th>部品名＋仕様〈幹線〉(負荷名称)</th><th>数量</th><th>提示</th><th>判定</th><th>最終選択コード</th><th>品名</th><th>確認</th></tr></thead><tbody>';
   let gid=0;
   for(const p of d.panels){
@@ -285,6 +285,19 @@ function render(d,filter){
     h+='<tr class="pnl"><td colspan="7">'+esc(p.panel)+
        (p.outline_note?'<span style="margin-left:12px;font-size:12px;color:#357;font-weight:500">📐 '+esc(p.outline_note)+'</span>':'')+
        '</td></tr>';
+    if(p.sheet_metal){
+      const sm=p.sheet_metal;
+      if(sm.fixed){
+        h+='<tr class="smrow"><td colspan="7" style="background:#eef7ee;padding:5px 10px;font-size:12px;color:#276">'+
+           '🔧 配電盤 板金サイズ：<b>W'+sm.w+' × H'+sm.h+' × D'+sm.d+' mm</b>（外形図で確定・固定）</td></tr>';
+      }else{
+        h+='<tr class="smrow"><td colspan="7" style="background:#fff6e6;padding:5px 10px;font-size:12px;color:#a60">'+
+           '🔧 配電盤 板金サイズ（'+esc(sm.source)+'・変更可）：'+
+           'W<input type="number" min="0" value="'+sm.w+'" data-pi="'+pi+'" data-sm="w" onchange="smChange('+pi+')" style="width:60px;text-align:center;padding:2px;border:1px solid #bbb;border-radius:4px"> × '+
+           'H<input type="number" min="0" value="'+sm.h+'" data-pi="'+pi+'" data-sm="h" onchange="smChange('+pi+')" style="width:60px;text-align:center;padding:2px;border:1px solid #bbb;border-radius:4px"> × '+
+           'D<input type="number" min="0" value="'+sm.d+'" data-pi="'+pi+'" data-sm="d" onchange="smChange('+pi+')" style="width:60px;text-align:center;padding:2px;border:1px solid #bbb;border-radius:4px"> mm</td></tr>';
+      }
+    }
     if(p.acc_gate&&p.acc_gate.length){
       let ac='<tr class="accg"><td colspan="7" style="background:#f2f8ff;padding:6px 10px;font-size:12px;color:#2a5">'+
         '■ 盤面の標準付属品（既定＝換気扇1・照明1／面。不要な盤は員数を0に、面数分は員数を増やしてください）：';
@@ -346,10 +359,22 @@ function accChange(pi){
   extracted[pi].acc_confirmed=conf;
   const b=$('accApply'); if(b)b.style.display='inline-block';
 }
-// 全盤の付属品ゲートの現在値を acc_confirmed に確定し、再選定して結果に反映。
+// 配電盤の板金サイズ(W×H×D)の入力を sheet_metal_confirmed に反映(外形図が無い/仮の盤のみ編集可)。
+function smChange(pi){
+  if(!extracted||!extracted[pi])return;
+  const row=[...document.querySelectorAll('#out tr.smrow')].find(tr=>tr.querySelector('[data-pi="'+pi+'"]'));
+  if(!row)return;
+  const g=k=>{const el=row.querySelector('[data-sm="'+k+'"]');return el?parseInt(el.value||'0',10):0;};
+  extracted[pi].sheet_metal_confirmed={w:g('w'),h:g('h'),d:g('d')};
+  const b=$('accApply'); if(b)b.style.display='inline-block';
+}
+// 全盤の付属品ゲート＋板金サイズの現在値を確定し、再選定して結果に反映。
 function applyAccessories(){
   document.querySelectorAll('#out tr.accg').forEach(tr=>{
     const el=tr.querySelector('[data-pi]'); if(el)accChange(parseInt(el.getAttribute('data-pi'),10));
+  });
+  document.querySelectorAll('#out tr.smrow').forEach(tr=>{
+    const el=tr.querySelector('[data-pi]'); if(el)smChange(parseInt(el.getAttribute('data-pi'),10));
   });
   $('goSelect').click();
 }

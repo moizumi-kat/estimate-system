@@ -3356,6 +3356,19 @@ def select_from_extracted(data):
             _stlbl={1:'単独',2:'二段積',3:'三段積'}.get(_st,'%d段'%_st)
             _og['outline_note']='外形図: %s面 %s%s'%(_ol2.get('faces','?'), _stlbl, ' '+_sz if _sz else '')
             _og['outline_hint']='段積=%s(16系段積セットの段数判断材料)／寸法=%s(函体・据付判断)'%(_stlbl, _sz or '不明')
+        # 配電盤の板金サイズ(W×H×D): 外形図があればそのサイズをfix(確定)。無ければ既定 800×2300×2000 を仮で入れ、
+        # ユーザが後で変更できるようにする(茂泉様確定)。ユーザ入力(sheet_metal_confirmed)があればそれを優先。
+        if _panel_kind(p.get('panel',''))=='haiden' and _panel_is_real_face(rows):
+            _smc=p.get('sheet_metal_confirmed') or {}
+            _od=_ol2 if isinstance(_ol2,dict) else {}
+            if not (_od.get('w') and _od.get('h') and _od.get('d')) and isinstance(_gaikei,dict):
+                _od=_gaikei   # 外形図の全体寸法(lineup)をフォールバックに使う
+            if all(str(_smc.get(k,'')).strip() for k in ('w','h','d')):
+                _og['sheet_metal']={'w':int(_smc['w']),'h':int(_smc['h']),'d':int(_smc['d']),'fixed':False,'source':'ユーザ入力'}
+            elif _od.get('w') and _od.get('h') and _od.get('d'):
+                _og['sheet_metal']={'w':int(_od['w']),'h':int(_od['h']),'d':int(_od['d']),'fixed':True,'source':'外形図(確定)'}
+            else:
+                _og['sheet_metal']={'w':800,'h':2300,'d':2000,'fixed':False,'source':'既定(仮・要確認)'}
         out.append(_og)
     # 受変電(高圧)図面の標準付属品(1図面に各1): テストプラグ98800・CH取付金具79030。
     # 実見積書7案件すべての受変電で計上(テストプラグ=全7案件×1、CH取付金具=×1〜2)。決定的な同時計上。
