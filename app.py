@@ -2624,6 +2624,14 @@ def sc_confirm_form(attrs):
     for k in SC_REQ.get(st,[]):
         if k in SC_ALWAYS_CONFIRM and k not in fields: fields.append(k)
     out=[]
+    # 受変電の受電/饋電盤は「段積み(16系)」にもなり得る。段積みか否か・段数は単線図から確実に読めないため、
+    # 確認ゲートで人が選ぶ(茂泉様確定・◎誤答ゼロ)。settype=段積を選ぶと16系段積セット、高圧のままなら従来。
+    if st in ('高圧','段積'):
+        out.append({'spec':'settype','options':['高圧','段積'],'default':(st if st in ('高圧','段積') else '高圧')})
+        if attrs.get('role')!='受電盤':   # 受電盤は段数不要。饋電盤等は段数(一/二/三段積・母連)を選ぶ(段積み時のみ有効)。
+            _rc=attrs.get('role') if attrs.get('role') in ('一段積','二段積','三段積','母線連絡') else ''
+            out.append({'spec':'role','options':['一段積','二段積','三段積','母線連絡'],'default':_rc})
+        fields=[k for k in fields if k not in ('settype','role')]
     for k in fields:
         opts=_sc_valid_options(st, k, attrs)
         out.append({'spec':k,'options':opts,'default':_sc_default(k, opts, attrs)})
@@ -2858,10 +2866,14 @@ def select_from_extracted(data):
         # set_attrs があればセットコードを1行出力。セット内包品(計器/TR/LBS等)は個別計上せず抑制。
         # セットが確定した(code有)場合のみ内包品を抑制。未確定(vcb/op等が未確認)でも確認ゲート行は出す。
         _set_expand=set(); _set_meter=''; _set_row_ref=None
-        # 配電盤(受変電: 低圧17系/高圧11系/段積16系)は全て個別で拾う(プロ助言・茂泉様確定)。
-        # セットだと過不足の差し引きが大変。個別なら段積みか単独かの判別も不要になる。
-        # ∴ settype付き(低圧/高圧/段積)はセットパスを通さず個別選定に回す。制御盤の分岐は22-29系(別経路)。
-        _use_set = False
+        # 配電盤(受変電: 低圧17系/高圧11系)は個別で拾う(プロ助言・茂泉様確定)。
+        # セットだと過不足の差し引きが大変。個別なら単独かの判別も不要になる。
+        # ∴ 低圧/高圧(単独)は個別選定。制御盤の分岐は22-29系(別経路)。
+        # 【例外】段積(16系)だけはセットで出す: 段積の見積書は16系セットコードで積算されており、
+        #   段積を個別展開すると段間の按分が煩雑。段積は確認ゲートで人が settype=段積・段数を確定した
+        #   場合のみ発火(Visionは段積を誤検出しやすい→◎誤答ゼロのため必ずゲート確認)。
+        _sa = p.get('set_attrs') or {}
+        _use_set = _sa.get('settype') in ('段積','段積VCS')
         if _use_set:
             _sc=sc_resolve(panel_nm, p['set_attrs'])
             if _sc:
