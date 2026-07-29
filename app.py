@@ -2532,7 +2532,7 @@ SC_OPTIONS={'meter':['普通角','広角','マルチ'],'phase':['1φ3W','3φ3W',
             'role':['受電盤','饋電盤','一段積','二段積','三段積','母線連絡','母線連絡+一段積'],
             'vcb':['8KA','12.5KA'],'op':['手動','電動','電動引出','電磁','電磁引出PF'],'cap':[]}
 SC_REQ={'低圧':['meter','phase','cap'],'高圧':['role','meter','vcb','op'],
-        '段積':['role','meter','vcb'],'段積VCS':['role','op']}
+        '段積':['role','meter','vcb'],'段積VCS':['role','op'],'JEM':[]}
 SC_ALWAYS_CONFIRM={'meter','op'}   # 計器種別・VCB操作方式(手動/電動/引出)は単線図で誤読しやすく
                                    # 誤るとセットコードが変わる(◎誤答)→常に人が確認。実見積書照合で
                                    # 八戸受電盤が op=手動 と誤抽出(正解=電動)だった実例に基づく。
@@ -2568,6 +2568,10 @@ def _sc_meter_key(m):
 
 def sc_classify(panel_name):
     n=str(panel_name or '')
+    # 母線接続盤(独立)=19系JEMセット(段積の母線連絡16074とは別物。単独JEM盤)。
+    if re.search(r'母線接続|母連盤',n) and not re.search(r'発電',n): return {'settype':'JEM','role':'母線接続'}
+    # 発電機連絡盤=異種2段の段積(下段=受電型16214 + 上段=母線連絡16074)。1物理面から2コード。
+    if re.search(r'発電機連絡|発電機連系',n): return {'settype':'段積','role':'発電機連絡'}
     if re.search(r'受電',n): return {'settype':'高圧','role':'受電盤'}
     if re.search(r'饋電|き電',n): return {'settype':'高圧','role':'饋電盤'}
     # 分電盤(電灯分電盤/動力分電盤/1L-1等)は60系個別選定=配電盤セット対象外。制御盤も対象外。
@@ -2628,7 +2632,8 @@ def sc_confirm_form(attrs):
     # 確認ゲートで人が選ぶ(茂泉様確定・◎誤答ゼロ)。settype=段積を選ぶと16系段積セット、高圧のままなら従来。
     if st in ('高圧','段積'):
         out.append({'spec':'settype','options':['高圧','段積'],'default':(st if st in ('高圧','段積') else '高圧')})
-        if attrs.get('role')!='受電盤':   # 受電盤は段数不要。饋電盤等は段数(一/二/三段積・母連)を選ぶ(段積み時のみ有効)。
+        # 受電盤・発電機連絡盤(異種2段固定)は段数選択不要。饋電盤等は段数(一/二/三段積・母連)を選ぶ。
+        if attrs.get('role') not in ('受電盤','発電機連絡'):
             _rc=attrs.get('role') if attrs.get('role') in ('一段積','二段積','三段積','母線連絡') else ''
             out.append({'spec':'role','options':['一段積','二段積','三段積','母線連絡'],'default':_rc})
         fields=[k for k in fields if k not in ('settype','role')]
@@ -2664,16 +2669,26 @@ def sc_select(attrs):
     if st=='段積VCS':
         cs=[c for c in pool if c.get('role')==attrs.get('role') and c.get('op')==attrs.get('op')]
         return (cs[0]['code'],'◎','') if len(cs)==1 else ('','△','VCS段積属性不一致→確認')
+    if st=='JEM':   # 高圧盤(JEM)セット: 母線接続盤=19004。roleで一意特定(容量/VCBは既定)。
+        cs=[c for c in pool if c.get('role')==attrs.get('role')]
+        return (cs[0]['code'],'◎','') if len(cs)==1 else ('','△','JEMセット該当なし→確認')
     return '','△','盤種セット対象外'
 
-_SC_DAN_ROLES={'段積':['受電盤','一段積','二段積','三段積','母線連絡','母線連絡+一段積'],
+_SC_DAN_ROLES={'段積':['受電盤','一段積','二段積','三段積','母線連絡','母線連絡+一段積','発電機連絡'],
                '段積VCS':['一段積','二段積','三段積']}
+# 異種2段の段積(1物理面に別種の段が積まれる)→ 下段/上段を各々のセットコードで出す(手本準拠)。
+# 発電機連絡盤=下段:受電型(16214 マルチ) + 上段:母線連絡(16074 広角)。
+_SC_COMPOUND={'発電機連絡':[{'role':'受電盤','meter':'マルチ'},{'role':'母線連絡','meter':'広角'}]}
 def sc_resolve(panel_name, set_attrs=None):
-    attrs=dict(sc_classify(panel_name))
+    _base=sc_classify(panel_name)
+    attrs=dict(_base)
+    # 母線接続盤(JEM)・発電機連絡盤は盤名が一意→Visionのsettype/role(高圧・母線連絡等)で上書きしない。
+    _name_auth = _base.get('role') in ('母線接続','発電機連絡')
     if set_attrs:
         for k,v in set_attrs.items():
-            if v and k!='settype': attrs[k]=v
-        if set_attrs.get('settype'): attrs['settype']=set_attrs['settype']
+            if v and k!='settype' and not (_name_auth and k=='role'): attrs[k]=v
+        if set_attrs.get('settype') and not _name_auth:
+            attrs['settype']=set_attrs['settype']
     # 段積へ切替時のロール整合(茂泉様確定: 段積の段数=一/二/三段積は構造依存で誤読が◎誤答→確認ゲートで確定):
     # 受電盤ロールはそのまま有効。饋電盤/コンデンサ等の非段数ロールは段数が必要→未確定にしてゲートで段数を聞く。
     if attrs.get('settype') in _SC_DAN_ROLES:
@@ -2873,9 +2888,27 @@ def select_from_extracted(data):
         #   段積を個別展開すると段間の按分が煩雑。段積は確認ゲートで人が settype=段積・段数を確定した
         #   場合のみ発火(Visionは段積を誤検出しやすい→◎誤答ゼロのため必ずゲート確認)。
         _sa = p.get('set_attrs') or {}
-        _use_set = _sa.get('settype') in ('段積','段積VCS')
-        if _use_set:
-            _sc=sc_resolve(panel_nm, p['set_attrs'])
+        _cls0 = sc_classify(panel_nm)
+        # 段積(16系)・段積VCS・JEM(19系母線接続盤)はセットで出す。低圧17系/高圧11系(単独)は個別選定。
+        # 段積は人が確認ゲートで確定した時のみ(Vision誤検出対策)。JEM(母線接続盤)は盤名が一意なので自動。
+        _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype')=='JEM'
+        # 【異種2段の段積】発電機連絡盤等: 下段/上段を別コードで出す(手本準拠)。人が確定後のみ発火。
+        _role0 = _sa.get('role') or _cls0.get('role')
+        _subspecs = _SC_COMPOUND.get(_role0) if _use_set else None
+        if _subspecs and _sa.get('_confirmed'):
+            # 異種2段: 下段/上段の各サブ仕様で直接セット選定(sc_selectを直接呼び、盤名分類の上書きを避ける)。
+            for _ss in _subspecs:
+                _a=dict(_sa); _a.update(_ss); _a['settype']='段積'
+                _code,_conf,_note=sc_select(sc_apply_defaults(_a))
+                if _code:
+                    _srow=byCode.get(_code,{})
+                    _set_expand |= {x.split('x')[0] for x in (_srow.get('expand','') or '').split(';') if x}
+                    rows.append(dict(code=_code,name=_srow.get('name',''),conf=_conf,
+                                     note=_note,raw=panel_nm,qty='1',is_setcode=True,
+                                     set_confirm=[],set_attrs=dict(_a),
+                                     load_detail=False,feed='',deviations=[]))
+        elif _use_set:
+            _sc=sc_resolve(panel_nm, _sa)
             if _sc:
                 if _sc.get('code'):
                     _srow=byCode.get(_sc['code'],{})
@@ -3528,11 +3561,15 @@ def api_extract():
     # 「図面に明記されず特記仕様/客先打合せで決まる」仕様の確認フォームを付ける。
     # 社員はコード選定の前にここを確定してから選定に進む(誤った既定値での◎誤答を防ぐ)。
     for p in all_panels:
-        attrs=dict(sc_classify(p.get('panel','')))
+        _base=sc_classify(p.get('panel',''))
+        attrs=dict(_base)
         sa=p.get('set_attrs') or {}
+        # 母線接続盤(JEM)・発電機連絡盤は盤名が一意→Visionのsettype/roleで上書きしない。
+        _na=_base.get('role') in ('母線接続','発電機連絡')
         for k,v in sa.items():
-            if v and k!='settype': attrs[k]=v
-        if sa.get('settype'): attrs['settype']=sa['settype']
+            if v and k!='settype' and not (_na and k=='role'): attrs[k]=v
+        if sa.get('settype') and not _na:
+            attrs['settype']=sa['settype']
         # 段積の段数ロール整合(sc_resolveと同じ): 段積で非段数ロールは未確定にしてゲートで段数を聞く。
         if attrs.get('settype') in _SC_DAN_ROLES and attrs.get('role') not in _SC_DAN_ROLES[attrs['settype']]:
             attrs['role']=None
