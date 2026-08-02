@@ -2576,11 +2576,15 @@ def sc_classify(panel_name):
     if re.search(r'饋電|き電',n): return {'settype':'高圧','role':'饋電盤'}
     # 分電盤(電灯分電盤/動力分電盤/1L-1等)は60系個別選定=配電盤セット対象外。制御盤も対象外。
     if re.search(r'分電|制御|操作',n): return {'settype':None}
+    # 17系低圧セット=受変電のTR二次側(変圧器あり)。TR盤/変圧器盤/低圧電灯・動力盤。
+    # MCCB盤(変圧器なし・分電のみ)は17系対象外→個別(18系ACB主幹+個別MCB)。TR盤判定を優先。
+    _is_mccb=re.search(r'MCCB盤|ＭＣＣＢ盤|MCCB番|ＭＣＣＢ番',n)
+    _is_tr=re.search(r'TR盤|ＴＲ盤|変圧器盤|ﾄﾗﾝｽ盤',n)
+    if _is_mccb and not _is_tr: return {'settype':None}   # MCCB盤=個別
     if re.search(r'スコット|ｽｺｯﾄ',n): return {'settype':'低圧','phase':'スコット'}
-    # 17系低圧セットは受変電のTR二次側(低圧電灯盤/低圧動力盤/変圧器盤・TR盤)。'低圧'または変圧器盤の明示が要る。
-    if re.search(r'低圧',n) and re.search(r'電灯',n): return {'settype':'低圧','phase':'1φ3W'}
-    if re.search(r'低圧',n) and re.search(r'動力',n): return {'settype':'低圧','phase':'3φ3W'}
-    if re.search(r'変圧器盤|ﾄﾗﾝｽ盤|TR盤',n): return {'settype':'低圧'}
+    if _is_tr or (re.search(r'低圧',n) and re.search(r'電灯|動力',n)):
+        ph='3φ3W' if re.search(r'動力',n) else ('1φ3W' if re.search(r'電灯',n) else '')
+        return {'settype':'低圧','phase':ph}
     if re.search(r'コンデンサ|ｺﾝﾃﾞﾝｻ',n): return {'settype':None}
     return {'settype':None}
 
@@ -2877,6 +2881,16 @@ def select_from_extracted(data):
             if re.search(r'(?<![A-Za-z])SC(?![A-Za-z])|ｺﾝﾃﾞﾝｻ|コンデンサ', _nm):
                 _mk=re.search(r'(\d+\.?\d*)\s*kvar', _nm, re.I)
                 if _mk: _panel_sc_kvar=float(_mk.group(1))
+        # 17系低圧セットの容量/相をTR(変圧器)itemから把握(見積システムの17系はTR支給前提)。
+        _panel_tr_kva=None; _panel_tr_phase=None
+        for _it in p.get('items',[]):
+            _nm=str(_it.get('name',''))
+            if re.search(r'(?<![A-Za-z])TR(?![A-Za-z])|変圧器|ﾄﾗﾝｽ|トランス', _nm) and re.search(r'kva', _nm, re.I):
+                _mk=re.search(r'(\d+\.?\d*)\s*kva', _nm, re.I)
+                if _mk: _panel_tr_kva=_mk.group(1)+'KVA'
+                if re.search(r'スコット|ｽｺｯﾄ|scott', _nm, re.I): _panel_tr_phase='スコット'
+                elif re.search(r'3\s*[φΦ相]|三相', _nm): _panel_tr_phase='3φ3W'
+                elif re.search(r'1\s*[φΦ相]|単相', _nm): _panel_tr_phase='1φ3W'
         # --- 配電盤セット判定(後方互換: set_attrs が無ければ従来通り全item個別選定) ---
         # set_attrs があればセットコードを1行出力。セット内包品(計器/TR/LBS等)は個別計上せず抑制。
         # セットが確定した(code有)場合のみ内包品を抑制。未確定(vcb/op等が未確認)でも確認ゲート行は出す。
@@ -2889,9 +2903,15 @@ def select_from_extracted(data):
         #   場合のみ発火(Visionは段積を誤検出しやすい→◎誤答ゼロのため必ずゲート確認)。
         _sa = p.get('set_attrs') or {}
         _cls0 = sc_classify(panel_nm)
-        # 段積(16系)・段積VCS・JEM(19系母線接続盤)はセットで出す。低圧17系/高圧11系(単独)は個別選定。
-        # 段積は人が確認ゲートで確定した時のみ(Vision誤検出対策)。JEM(母線接続盤)は盤名が一意なので自動。
-        _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype')=='JEM'
+        # 段積(16系)・段積VCS・JEM(19系母線接続盤)・低圧(17系TR盤)はセットで出す。高圧11系(単独)は個別選定。
+        # 段積は人が確認ゲートで確定した時のみ(Vision誤検出対策)。JEM/低圧TR盤は盤名+TRで判定し自動発火
+        # (低圧は計器種別が要確認=○止まり/容量不明は△なので◎誤答にならない)。MCCB盤は個別(sc_classify=None)。
+        _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype') in ('JEM','低圧')
+        # 低圧17系: 相/容量をTR itemから補完(手本通り: TR支給のkVA/相で最近傍上位を選定)。
+        if _cls0.get('settype')=='低圧':
+            _sa=dict(_sa); _sa.setdefault('settype','低圧')
+            if not _sa.get('phase'): _sa['phase']=_panel_tr_phase or _cls0.get('phase')
+            if not _sa.get('cap'): _sa['cap']=_panel_tr_kva
         # 【異種2段の段積】発電機連絡盤等: 下段/上段を別コードで出す(手本準拠)。人が確定後のみ発火。
         _role0 = _sa.get('role') or _cls0.get('role')
         _subspecs = _SC_COMPOUND.get(_role0) if _use_set else None
@@ -2919,6 +2939,16 @@ def select_from_extracted(data):
                                      set_confirm=_sc['confirm'],set_attrs=dict(_sc.get('attrs') or {}),
                                      load_detail=False,feed='',deviations=[])
                     rows.append(_set_row_ref)
+                    # 低圧動力TR盤の高圧LBS(励突/エネセーバ)は11009(高圧LBSエネセーバセット)で別計上(手本準拠)。
+                    # 電灯TR(17208/17258)はLBS(43321)がセット内包だが、動力TRのエネセーバLBSは別セット。
+                    if _srow.get('phase')=='3φ3W' and byCode.get('11009') and \
+                       any(re.search(r'励突|ｴﾈｾｰﾊﾞ|エネセーバ',str(_it.get('name','')),re.I) for _it in p.get('items',[])):
+                        _lrow=byCode.get('11009',{})
+                        _set_expand |= {x.split('x')[0] for x in (_lrow.get('expand','') or '').split(';') if x and x[0]!='?'}
+                        _set_expand |= {'43347','43321','46300'}   # エネセーバ/標準LBS・SC-TRIP(11009内包)を個別計上抑制
+                        rows.append(dict(code='11009',name=_lrow.get('name',''),conf=_sc['conf'],
+                                         note='動力TRのエネセーバLBS(励突)を別セット計上',raw=panel_nm,qty='1',
+                                         is_setcode=True,set_confirm=[],set_attrs={},load_detail=False,feed='',deviations=[]))
                 elif _sc.get('confirm') and sc_classify(panel_nm).get('settype'):
                     # 未確定セット: 確認ゲート行を出す(コード空・△)。ユーザがコンボボックスで確定→再選定で発火。
                     # ただし盤名が配電盤セット(受電/饋電/低圧電灯・動力/スコット/変圧器盤)と分かる場合のみ。
@@ -3160,6 +3190,9 @@ def select_from_extracted(data):
                             sel=dict(code=_cc,conf='○',note=f'回路種別=直入L-S(標準)仮定・確認ゲートで確定({_pk}kW枠)',candidates=[])
             # セット内包品(計器/TR/LBS/LG-RY等)はセットコードから積算ソフトが展開→個別計上しない
             if _set_expand and sel.get('code') in _set_expand:
+                continue
+            # 動力TRの11009(エネセーバLBS)発火時、内包のSC-TRIP等は名称で抑制(個別選定が△になるため)。
+            if '46300' in _set_expand and re.search(r'SC-?TRIP|ｽﾄﾘｯﾌﾟ', nm, re.I):
                 continue
             # セット発火盤の計器・変成器(VM/AM/VS/AS/W/Wh/力率/マルチ指示計・VT/CT/ZCT)は、
             # 選定コードがexpand表に無くてもセット内包→個別計上しない(主変圧器TR/LBS/PFは除外・別計上)。
