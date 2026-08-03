@@ -52313,5 +52313,61 @@
   "shikyu": "",
   "ax": "",
   "furukawa": ""
+ },
+ {
+  "code": "97801",
+  "name": "認定料",
+  "kind": "共用",
+  "cat": "認定料",
+  "spec": "",
+  "af": "",
+  "cap": "",
+  "volt": "",
+  "sp": "",
+  "shikyu": "",
+  "ax": "",
+  "furukawa": ""
+ },
+ {
+  "code": "97802",
+  "name": "認定料",
+  "kind": "共用",
+  "cat": "認定料",
+  "spec": "",
+  "af": "",
+  "cap": "",
+  "volt": "",
+  "sp": "",
+  "shikyu": "",
+  "ax": "",
+  "furukawa": ""
+ },
+ {
+  "code": "97803",
+  "name": "認定料",
+  "kind": "共用",
+  "cat": "認定料",
+  "spec": "",
+  "af": "",
+  "cap": "",
+  "volt": "",
+  "sp": "",
+  "shikyu": "",
+  "ax": "",
+  "furukawa": ""
+ },
+ {
+  "code": "97811",
+  "name": "認定同等品",
+  "kind": "共用",
+  "cat": "認定料",
+  "spec": "",
+  "af": "",
+  "cap": "",
+  "volt": "",
+  "sp": "",
+  "shikyu": "",
+  "ax": "",
+  "furukawa": ""
  }
 ]

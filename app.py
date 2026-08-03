@@ -2805,6 +2805,23 @@ def accessory_gate(panel_name, confirmed=None):
                       _mk('スペースヒーター',[('74106','スペースヒーター')])) if g]
     return gate or None
 
+# 認定料(94系 形式/個別・97系)は経費系で図面から要否が読めない→確認フェーズで人が判断(茂泉様確定)。
+# 既定=なし(計上しない)。形式/個別は最大TR容量から最近傍上位のtierを提示。
+_NINTEI_KEISHIKI=[(300,'94001'),(500,'94002'),(750,'94003'),(1000,'94004'),(1500,'94005'),(2000,'94006')]
+_NINTEI_KOBETSU=[(500,'94011'),(750,'94012'),(1000,'94013'),(1500,'94014'),(2000,'94015'),(3000,'94016'),(4000,'94017')]
+def nintei_gate(max_kva, confirmed=None):
+    def _tier(table):
+        for cap,code in table:
+            if max_kva and max_kva<=cap and code in byCode: return code
+        return None
+    opts=[{'code':'','label':'なし(計上しない)'}]
+    for c in (_tier(_NINTEI_KEISHIKI), _tier(_NINTEI_KOBETSU), '97801'):
+        if c and c in byCode: opts.append({'code':c,'label':byCode[c]['name']})
+    if len(opts)==1: return None   # 該当tierが無ければゲートを出さない
+    conf={str(x.get('code','')):int(x.get('qty',0) or 0) for x in (confirmed or [])}
+    d=next(({'code':c,'qty':conf[c]} for c in conf if conf[c]>0 and any(o['code']==c for o in opts)),{'code':'','qty':0})
+    return {'spec':'認定料','options':opts,'default':d}
+
 def select_from_extracted(data):
     out=[]
     # 受変電部で上段に出たマルチ指示計のコードを記憶し、下段のV/電流計に継承する。
@@ -2824,6 +2841,16 @@ def select_from_extracted(data):
     for _p in data.get('panels',[]):
         _txt=str(_p.get('panel',''))+' '+' '.join(str(it.get('name','')) for it in _p.get('items',[]))
         if re.search(r'寒冷地', _txt): _cold_spec=True; break
+    # 認定料の確認質問用に、図面内の最大TR容量(kVA)を把握(形式/個別認定料のtier提示に使う)。
+    _max_tr_kva=0
+    for _p in data.get('panels',[]):
+        for _it in _p.get('items',[]):
+            _nm=str(_it.get('name',''))
+            if re.search(r'(?<![A-Za-z])TR(?![A-Za-z])|変圧器|ﾄﾗﾝｽ|トランス', _nm):
+                _mk=re.search(r'(\d+\.?\d*)\s*kva', _nm, re.I)
+                if _mk:
+                    try: _max_tr_kva=max(_max_tr_kva, float(_mk.group(1)))
+                    except: pass
     # 配電盤 外形図(機器外形図)があれば、面数・換気扇数を配電盤の照明/換気扇の権威値とする(茂泉様提案)。
     # outline に sections(各面) を持つ盤=外形図。照明=面数・換気扇=外形図で換気扇ありの面数、を一括計上し、
     # 電気盤(単線図)ごとの照明/換気扇の自動計上は抑制(電気盤数>物理面数の過剰計上を解消)。
@@ -2836,6 +2863,7 @@ def select_from_extracted(data):
                      'fans':sum(1 for s in _secs if s.get('fan')),
                      'w':_ol.get('w'),'h':_ol.get('h'),'d':_ol.get('d')}
             break
+    _nintei_placed=False   # 認定料の確認質問は図面で1回だけ(最初の受変電盤に載せる)
     for p in data.get('panels',[]):
         # 図面種別ヒントを盤ごとにセット(_panel_kindが名前判定できない盤のフォールバック)。
         _dk=p.get('_drawing_kind')
@@ -3438,6 +3466,11 @@ def select_from_extracted(data):
         _og=dict(panel=p.get('panel',''),rows=rows)
         _ag=accessory_gate(p.get('panel',''), [{'code':c,'qty':q} for c,q in _acc_src])
         if _ag: _og['acc_gate']=_ag
+        # 認定料の確認質問を最初の受変電盤(受電/引込/キュービクル)に1回だけ載せる(経費系→人が要否判断)。
+        if not _nintei_placed and re.search(r'受電|引込|受変電|ｷｭ-?ﾋﾞｸﾙ|キュービクル', str(p.get('panel',''))):
+            _ng=nintei_gate(_max_tr_kva, p.get('acc_confirmed'))
+            if _ng:
+                _og.setdefault('acc_gate',[]).append(_ng); _nintei_placed=True
         # 外形図から拾った面数・サイズを盤情報として出力(照明員数=面数/函体・段積の判断材料)。
         _ol2=p.get('outline')
         if isinstance(_ol2,dict) and _ol2:
