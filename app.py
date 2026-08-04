@@ -3592,6 +3592,53 @@ def index(): return Response(INDEX_HTML, mimetype='text/html')
 @app.route('/api/health')
 def health(): return jsonify(ok=True, db=len(DB), key=bool(os.environ.get('ANTHROPIC_API_KEY')))
 
+# 【確定結果の保存】システム提案(presented)とユーザー確定(final)を両方保存し、後で分析・チューンアップ。
+# 提案≠確定の行が「問題候補」=精度改善のシグナル。JSONL追記(1確定=1レコード、EC2上に永続)。
+CONFIRM_LOG=os.environ.get('CONFIRM_LOG') or os.path.join(HERE,'confirm_log.jsonl')
+@app.route('/api/confirm', methods=['POST'])
+@login_required
+def api_confirm():
+    d=request.get_json(force=True) or {}
+    rows=d.get('rows',[])
+    # 提案から変更された行(final!=presented かつ finalが空でない)=要注目
+    changed=[r for r in rows if r.get('final') and str(r.get('final'))!=str(r.get('presented'))]
+    # ◎提案がユーザーに変更された=◎誤答の疑い(最重要シグナル)
+    maru_overridden=[r for r in changed if str(r.get('conf',''))=='◎']
+    rec={'ts':datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+         'drawing':str(d.get('drawing',''))[:300],
+         'nrows':len(rows),'nchanged':len(changed),'nmaru_overridden':len(maru_overridden),
+         'rows':rows,'gates':d.get('gates',[]),'summary':d.get('summary',{}),'comment':str(d.get('comment',''))[:1000]}
+    try:
+        with open(CONFIRM_LOG,'a',encoding='utf-8') as f:
+            f.write(json.dumps(rec,ensure_ascii=False)+'\n')
+    except Exception as e:
+        return jsonify(ok=False,error=str(e)),500
+    return jsonify(ok=True,saved=len(rows),changed=len(changed),maru_overridden=len(maru_overridden),
+                   logfile=os.path.basename(CONFIRM_LOG))
+
+# 【蓄積の分析】保存ログを集計(◎誤答の疑い・変更の多いコードを抽出→チューンアップの手掛かり)。
+@app.route('/api/confirm/stats')
+@login_required
+def api_confirm_stats():
+    from collections import Counter
+    recs=[]
+    if os.path.exists(CONFIRM_LOG):
+        for ln in open(CONFIRM_LOG,encoding='utf-8'):
+            ln=ln.strip()
+            if ln:
+                try: recs.append(json.loads(ln))
+                except: pass
+    change_pairs=Counter(); maru=[]
+    for r in recs:
+        for row in r.get('rows',[]):
+            p,fi,cf=str(row.get('presented','')),str(row.get('final','')),str(row.get('conf',''))
+            if fi and fi!=p:
+                change_pairs['%s→%s'%(p or '(空)',fi)]+=1
+                if cf=='◎': maru.append({'ts':r.get('ts'),'drawing':r.get('drawing'),'presented':p,'final':fi,'spec':row.get('spec')})
+    return jsonify(ok=True, records=len(recs),
+                   maru_overridden=maru[-50:],
+                   top_changes=change_pairs.most_common(30))
+
 # 【段階1】抽出のみ：図面→盤・機器リスト（コード選定はまだしない）
 @app.route('/api/extract', methods=['POST'])
 @login_required

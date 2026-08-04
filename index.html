@@ -405,8 +405,8 @@ function onChk(){
   else{btn.style.background='#aaa';btn.style.cursor='not-allowed';btn.disabled=true;}
 }
 function confirmLearn(){
-  // 各行の最終選択コードを収集(第三段階で /api/confirm に送信予定)
-  const result=[];
+  // システム提案(presented)とユーザー確定(final)を両方収集→サーバ保存(後日の分析・チューンアップ用)。
+  const rows=[];
   document.querySelectorAll('#out tbody tr[id^=row]').forEach(tr=>{
     const id=tr.id.replace('row','');
     const sel=tr.querySelector('select'); if(!sel)return;
@@ -415,11 +415,22 @@ function confirmLearn(){
     else if(sel.value==='__none__') val='';   // 計上しない(空白)
     else val=sel.value;
     const qin=tr.querySelector('input[type=number]');
-    const qty=qin?qin.value:'';
-    result.push({presented:tr.dataset.code,final:val,qty:qty,spec:tr.cells[0].textContent});
+    rows.push({presented:tr.dataset.code, final:val, qty:(qin?qin.value:''),
+               spec:tr.cells[0].textContent, conf:(tr.cells[3]?tr.cells[3].textContent.trim():'')});
   });
-  const changed=result.filter(r=>r.final&&r.final!==r.presented).length;
-  alert('確定しました（'+result.length+'行）。\n提示から変更: '+changed+'行。\n\n※学習機能(サーバ保存・3回昇格・DB追加候補検出)は第三段階で実装予定です。');
+  const drawing=curFiles?curFiles.map(f=>f.name).join(', '):'';
+  const summary=(lastData&&lastData.summary)||{};
+  const btn=document.getElementById('cbtn'); if(btn){btn.disabled=true;btn.textContent='保存中…';}
+  fetch('/api/confirm',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({drawing:drawing, rows:rows, summary:summary})})
+    .then(r=>r.json()).then(j=>{
+      if(btn){btn.textContent='確定して学習';btn.disabled=false;}
+      if(j.ok){
+        alert('保存しました（'+j.saved+'行）。\n提示から変更: '+j.changed+'行'+
+              (j.maru_overridden? '（うち◎を変更 '+j.maru_overridden+'行＝要分析）':'')+
+              '。\n\nこの記録（提案＋確定）は後日の精度改善（チューンアップ）に使われます。');
+      }else{ alert('保存に失敗しました: '+(j.error||'不明')); }
+    }).catch(e=>{ if(btn){btn.textContent='確定して学習';btn.disabled=false;} alert('保存エラー: '+e); });
 }
 function stat(cls,n,l){return '<div class="stat '+cls+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>';}
 function esc(s){return(s+'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
