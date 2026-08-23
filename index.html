@@ -9,6 +9,8 @@
 header{background:var(--green);color:#f4f1ea;padding:14px 22px;display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--green2)}
 header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.04em}header .ver{font-size:11px;opacity:.7;font-family:var(--mono)}
 header .db{margin-left:auto;font-size:11px;opacity:.85;font-family:var(--mono)}
+header .lo{align-self:center;font-size:11px;color:#f4f1ea;text-decoration:none;border:1px solid rgba(255,255,255,.45);border-radius:6px;padding:3px 10px;white-space:nowrap}
+header .lo:hover{background:rgba(255,255,255,.12)}
 .container{max-width:1180px;margin:0 auto;padding:22px}
 .steps{display:flex;gap:8px;margin-bottom:18px;font-size:12px}
 .steps .s{flex:1;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:#fff;color:#9a9488;text-align:center}
@@ -50,7 +52,7 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
 .manual{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px}
 </style></head>
 <body>
-<header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span></header>
+<header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span><a href="/logout" class="lo">ログアウト</a></header>
 <div class="container">
   <div class="steps">
     <div class="s active" id="st1">1. 図面アップロード</div>
