@@ -281,7 +281,8 @@ function render(d,filter){
     '<button id="accApply" onclick="applyAccessories()" style="display:none;margin-left:auto;background:#2a7;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">盤付属品・板金サイズを反映して再選定</button></div>';
   h+='<table><thead><tr><th>部品名＋仕様〈幹線〉(負荷名称)</th><th>数量</th><th>提示</th><th>判定</th><th>最終選択コード</th><th>品名</th><th>確認</th></tr></thead><tbody>';
   let gid=0;
-  for(const p of d.panels){
+  for(let pi=0;pi<d.panels.length;pi++){
+    const p=d.panels[pi];
     const rows=p.rows.filter(r=>!r.load_detail&&(filter==='all'||r.conf===filter));
     if(!rows.length)continue;
     h+='<tr class="pnl"><td colspan="7">'+esc(p.panel)+
