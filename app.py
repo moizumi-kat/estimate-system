@@ -3549,21 +3549,24 @@ def make_excel(panels):
     for p in panels:
         for r in p['rows']:
             is_detail=r.get('load_detail')
-            ws.append([p['panel'],r['raw'],r['qty'],r['code'] or '—',byCode.get(r['code'],{}).get('name','') if r['code'] else '',
-                       r['conf'],_cand_str(r),r['note'],'','',''])
+            # 付属品/外形図/セット行は raw/qty 等のキーが無いことがある→全て .get で安全に取得。
+            _code=r.get('code') or ''; _conf=str(r.get('conf',''))
+            ws.append([p.get('panel',''),r.get('raw',r.get('name','')),r.get('qty','1'),_code or '—',
+                       byCode.get(_code,{}).get('name','') if _code else '',
+                       _conf,_cand_str(r),r.get('note',''),'','',''])
             row=ws[ws.max_row]
             for c in row: c.font=Font(name=FONT,size=9); c.border=bd; c.alignment=Alignment(vertical='center',wrap_text=True)
-            if p['panel']!=prev: row[0].font=Font(name=FONT,size=9,bold=True); row[0].fill=PatternFill('solid',start_color='F0F0F0'); prev=p['panel']
+            if p.get('panel','')!=prev: row[0].font=Font(name=FONT,size=9,bold=True); row[0].fill=PatternFill('solid',start_color='F0F0F0'); prev=p.get('panel','')
             if is_detail:
                 # 負荷明細行: グレーでインデント表示、計上対象外
                 for c in row: c.font=Font(name=FONT,size=9,italic=True,color='999999')
                 row[1].alignment=Alignment(vertical='center',wrap_text=True,indent=2)
                 ndetail+=1
                 continue
-            row[5].fill=cf.get(r['conf'],PatternFill()); row[5].alignment=Alignment(horizontal='center'); row[3].font=Font(name=FONT,size=9,bold=True)
+            row[5].fill=cf.get(_conf,PatternFill()); row[5].alignment=Alignment(horizontal='center'); row[3].font=Font(name=FONT,size=9,bold=True)
             row[8].fill=PatternFill('solid',start_color='EAF1FB')  # 確認列を薄青で目立たせる
-            if r['conf']=='◎': nok+=1
-            elif r['conf']=='○': nw+=1
+            if _conf=='◎': nok+=1
+            elif _conf=='○': nw+=1
             else: nc+=1
     # 「確認」列(I列)にドロップダウン(未確認/OK/要修正)を設定=チェックボックス代わり
     dv=DataValidation(type='list', formula1='"未確認,OK,要修正"', allow_blank=True)
