@@ -3616,6 +3616,7 @@ def api_confirm():
     # ◎提案がユーザーに変更された=◎誤答の疑い(最重要シグナル)
     maru_overridden=[r for r in changed if str(r.get('conf',''))=='◎']
     rec={'ts':datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+         'user':str(d.get('user',''))[:200],   # 利用者(メールアドレス)=誰が確定したか
          'drawing':str(d.get('drawing',''))[:300],
          'nrows':len(rows),'nchanged':len(changed),'nmaru_overridden':len(maru_overridden),
          'rows':rows,'gates':d.get('gates',[]),'summary':d.get('summary',{}),'comment':str(d.get('comment',''))[:1000]}
@@ -3645,7 +3646,7 @@ def api_confirm_stats():
             p,fi,cf=str(row.get('presented','')),str(row.get('final','')),str(row.get('conf',''))
             if fi and fi!=p:
                 change_pairs['%s→%s'%(p or '(空)',fi)]+=1
-                if cf=='◎': maru.append({'ts':r.get('ts'),'drawing':r.get('drawing'),'presented':p,'final':fi,'spec':row.get('spec')})
+                if cf=='◎': maru.append({'ts':r.get('ts'),'user':r.get('user',''),'drawing':r.get('drawing'),'presented':p,'final':fi,'spec':row.get('spec')})
     return jsonify(ok=True, records=len(recs),
                    maru_overridden=maru[-50:],
                    top_changes=change_pairs.most_common(30))

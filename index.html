@@ -6,7 +6,9 @@
 --ok:#e8f0e8;--okbd:#3a7d4f;--warn:#fff4d6;--warnbd:#c79a2e;--chk:#fce4e4;--chkbd:#c0504d;
 --mono:'SFMono-Regular',Consolas,Menlo,monospace;}
 *{box-sizing:border-box}body{margin:0;font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif;background:var(--paper);color:var(--ink);font-size:14px}
-header{background:var(--green);color:#f4f1ea;padding:14px 22px;display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--green2)}
+header{background:var(--green);color:#f4f1ea;padding:14px 22px;display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--green2);flex-wrap:wrap}
+header .uid{align-self:center;font-size:11px;color:#f4f1ea;display:flex;align-items:center;gap:5px}
+header .uid input{font-size:12px;padding:3px 8px;border:1px solid rgba(255,255,255,.5);border-radius:6px;background:rgba(255,255,255,.96);color:#16201a;width:200px}
 header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.04em}header .ver{font-size:11px;opacity:.7;font-family:var(--mono)}
 header .db{margin-left:auto;font-size:11px;opacity:.85;font-family:var(--mono)}
 header .lo{align-self:center;font-size:11px;color:#f4f1ea;text-decoration:none;border:1px solid rgba(255,255,255,.45);border-radius:6px;padding:3px 10px;white-space:nowrap}
@@ -52,7 +54,8 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
 .manual{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px}
 </style></head>
 <body>
-<header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span><a href="/logout" class="lo">ログアウト</a></header>
+<header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span><span class="uid">利用者<input list="emails" id="userEmail" type="email" placeholder="you@furukawa-denki.com" autocomplete="off"></span><a href="/logout" class="lo">ログアウト</a></header>
+<datalist id="emails"></datalist>
 <div class="container">
   <div class="steps">
     <div class="s active" id="st1">1. 図面アップロード</div>
@@ -97,6 +100,15 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
 let curFiles=null, extracted=null, lastData=null, controller=null;
 const $=id=>document.getElementById(id);
 fetch('/api/health').then(r=>r.json()).then(d=>{$('db').textContent='DB '+d.db+'コード'+(d.key?'':' / APIキー未設定');});
+
+// ===== 利用者(メール): この端末に履歴を保存し、次回から入力欄のリストから選べる =====
+function _emGet(){try{return JSON.parse(localStorage.getItem('estimate_emails')||'[]')}catch(e){return[]}}
+function _emRender(){const dl=$('emails');if(dl)dl.innerHTML=_emGet().map(e=>'<option value="'+esc(e)+'">').join('');}
+function _emSave(em){em=(em||'').trim();if(!em)return;let l=_emGet().filter(x=>x!==em);l.unshift(em);l=l.slice(0,20);try{localStorage.setItem('estimate_emails',JSON.stringify(l));localStorage.setItem('estimate_email_last',em)}catch(e){}_emRender();}
+function currentUser(){return ($('userEmail')?$('userEmail').value.trim():'');}
+(function(){_emRender();let last='';try{last=localStorage.getItem('estimate_email_last')||''}catch(e){}
+ if($('userEmail')){$('userEmail').value=last;$('userEmail').addEventListener('change',()=>_emSave(currentUser()));}
+})();
 
 const drop=$('drop'),file=$('file');
 drop.onclick=()=>file.click();
@@ -447,9 +459,12 @@ function confirmLearn(){
   });
   const drawing=curFiles?curFiles.map(f=>f.name).join(', '):'';
   const summary=(lastData&&lastData.summary)||{};
+  const user=currentUser();
+  if(!user){ if(!confirm('利用者（メールアドレス）が未入力です。誰が確定したか記録されません。このまま保存しますか？')){ if($('userEmail'))$('userEmail').focus(); return; } }
+  else { _emSave(user); }   // 入力履歴に保存(次回リストから選べる)
   const btn=document.getElementById('cbtn'); if(btn){btn.disabled=true;btn.textContent='保存中…';}
   fetch('/api/confirm',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({drawing:drawing, rows:rows, summary:summary})})
+      body:JSON.stringify({user:user, drawing:drawing, rows:rows, summary:summary})})
     .then(r=>r.json()).then(j=>{
       if(btn){btn.textContent='確定して学習';btn.disabled=false;}
       if(j.ok){
