@@ -56,18 +56,28 @@ h1{font-size:16px;color:#1e3a28;margin:0 0 18px}input{width:100%;padding:10px;bo
 border-radius:6px;font-size:14px;box-sizing:border-box}button{width:100%;margin-top:12px;padding:11px;
 background:#1e3a28;color:#fff;border:0;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}
 .e{color:#c0504d;font-size:12px;margin-top:10px}</style></head>
-<body><form class=box method=post action=/login>
+<body><form class=box method=post action=/login onsubmit="saveEm()">
 <h1>積算コード選定システム</h1>
-<input type=password name=pw placeholder=パスワード autofocus>
+<input type=email name=user id=uid list=emails placeholder="メールアドレス（利用者ID）" autocomplete=off required autofocus style="margin-bottom:10px">
+<datalist id=emails></datalist>
+<input type=password name=pw placeholder=パスワード>
 <button>ログイン</button>
-{ERR}</form></body></html>"""
+{ERR}</form>
+<script>
+function _g(){try{return JSON.parse(localStorage.getItem('estimate_emails')||'[]')}catch(e){return[]}}
+document.getElementById('emails').innerHTML=_g().map(function(e){return '<option value="'+String(e).replace(/[<>&\"]/g,'')+'">'}).join('');
+try{document.getElementById('uid').value=localStorage.getItem('estimate_email_last')||''}catch(e){}
+function saveEm(){var em=(document.getElementById('uid').value||'').trim();if(!em)return;var l=_g().filter(function(x){return x!==em});l.unshift(em);l=l.slice(0,20);try{localStorage.setItem('estimate_emails',JSON.stringify(l));localStorage.setItem('estimate_email_last',em)}catch(e){}}
+</script></body></html>"""
 
 @app.route('/login',methods=['GET','POST'])
 def login():
     if not APP_PASSWORD: return redirect('/')
     if request.method=='POST':
         if hmac.compare_digest(request.form.get('pw',''),APP_PASSWORD):
-            session['auth']=True; return redirect('/')
+            session['auth']=True
+            session['user']=request.form.get('user','').strip()[:200]   # 利用者(メール)をセッションに保持
+            return redirect('/')
         return Response(LOGIN_HTML.replace('{ERR}','<div class=e>パスワードが違います</div>'),mimetype='text/html')
     return Response(LOGIN_HTML.replace('{ERR}',''),mimetype='text/html')
 
@@ -3601,7 +3611,7 @@ def make_excel(panels):
 def index(): return Response(INDEX_HTML, mimetype='text/html')
 
 @app.route('/api/health')
-def health(): return jsonify(ok=True, db=len(DB), key=bool(os.environ.get('ANTHROPIC_API_KEY')))
+def health(): return jsonify(ok=True, db=len(DB), key=bool(os.environ.get('ANTHROPIC_API_KEY')), user=session.get('user',''))
 
 # 【確定結果の保存】システム提案(presented)とユーザー確定(final)を両方保存し、後で分析・チューンアップ。
 # 提案≠確定の行が「問題候補」=精度改善のシグナル。JSONL追記(1確定=1レコード、EC2上に永続)。
@@ -3616,7 +3626,7 @@ def api_confirm():
     # ◎提案がユーザーに変更された=◎誤答の疑い(最重要シグナル)
     maru_overridden=[r for r in changed if str(r.get('conf',''))=='◎']
     rec={'ts':datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-         'user':str(d.get('user',''))[:200],   # 利用者(メールアドレス)=誰が確定したか
+         'user':(session.get('user') or str(d.get('user',''))[:200]),   # 利用者(ログイン時のメール)=誰が確定したか
          'drawing':str(d.get('drawing',''))[:300],
          'nrows':len(rows),'nchanged':len(changed),'nmaru_overridden':len(maru_overridden),
          'rows':rows,'gates':d.get('gates',[]),'summary':d.get('summary',{}),'comment':str(d.get('comment',''))[:1000]}

@@ -54,8 +54,7 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
 .manual{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px}
 </style></head>
 <body>
-<header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span><span class="uid">利用者<input list="emails" id="userEmail" type="email" placeholder="you@furukawa-denki.com" autocomplete="off"></span><a href="/logout" class="lo">ログアウト</a></header>
-<datalist id="emails"></datalist>
+<header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span><span class="uid" id="uidLabel"></span><a href="/logout" class="lo">ログアウト</a></header>
 <div class="container">
   <div class="steps">
     <div class="s active" id="st1">1. 図面アップロード</div>
@@ -99,16 +98,13 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
 <script>
 let curFiles=null, extracted=null, lastData=null, controller=null;
 const $=id=>document.getElementById(id);
-fetch('/api/health').then(r=>r.json()).then(d=>{$('db').textContent='DB '+d.db+'コード'+(d.key?'':' / APIキー未設定');});
-
-// ===== 利用者(メール): この端末に履歴を保存し、次回から入力欄のリストから選べる =====
-function _emGet(){try{return JSON.parse(localStorage.getItem('estimate_emails')||'[]')}catch(e){return[]}}
-function _emRender(){const dl=$('emails');if(dl)dl.innerHTML=_emGet().map(e=>'<option value="'+esc(e)+'">').join('');}
-function _emSave(em){em=(em||'').trim();if(!em)return;let l=_emGet().filter(x=>x!==em);l.unshift(em);l=l.slice(0,20);try{localStorage.setItem('estimate_emails',JSON.stringify(l));localStorage.setItem('estimate_email_last',em)}catch(e){}_emRender();}
-function currentUser(){return ($('userEmail')?$('userEmail').value.trim():'');}
-(function(){_emRender();let last='';try{last=localStorage.getItem('estimate_email_last')||''}catch(e){}
- if($('userEmail')){$('userEmail').value=last;$('userEmail').addEventListener('change',()=>_emSave(currentUser()));}
-})();
+// ログイン中の利用者(メール)はサーバのセッションから取得し、ヘッダに表示。
+window._me='';
+fetch('/api/health').then(r=>r.json()).then(d=>{
+  $('db').textContent='DB '+d.db+'コード'+(d.key?'':' / APIキー未設定');
+  window._me=d.user||''; if($('uidLabel'))$('uidLabel').textContent=window._me?('利用者: '+window._me):'';
+});
+function currentUser(){return window._me||'';}
 
 const drop=$('drop'),file=$('file');
 drop.onclick=()=>file.click();
@@ -459,9 +455,7 @@ function confirmLearn(){
   });
   const drawing=curFiles?curFiles.map(f=>f.name).join(', '):'';
   const summary=(lastData&&lastData.summary)||{};
-  const user=currentUser();
-  if(!user){ if(!confirm('利用者（メールアドレス）が未入力です。誰が確定したか記録されません。このまま保存しますか？')){ if($('userEmail'))$('userEmail').focus(); return; } }
-  else { _emSave(user); }   // 入力履歴に保存(次回リストから選べる)
+  const user=currentUser();   // ログイン時のメール(サーバ側でもセッションから記録)
   const btn=document.getElementById('cbtn'); if(btn){btn.disabled=true;btn.textContent='保存中…';}
   fetch('/api/confirm',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({user:user, drawing:drawing, rows:rows, summary:summary})})
