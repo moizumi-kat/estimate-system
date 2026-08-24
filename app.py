@@ -2632,6 +2632,12 @@ def sc_confirm_form(attrs):
     for k in SC_REQ.get(st,[]):
         if k in SC_ALWAYS_CONFIRM and k not in fields: fields.append(k)
     out=[]
+    # 低圧TR盤は「個別」か「17系セット」かを人が選ぶ(案件で使い分け・茂泉様確定)。既定=個別。
+    # 17系セットを選んだ時のみ計器種別が効く(セットのメータ digit)。個別時は個別選定。
+    if st=='低圧':
+        out.append({'spec':'低圧計上','options':['個別','17系セット'],'default':(attrs.get('低圧計上') or '個別')})
+        out.append({'spec':'meter','options':_sc_valid_options('低圧','meter',attrs),'default':_sc_default('meter',SC_OPTIONS.get('meter',[]),attrs)})
+        return out
     # 受変電の受電/饋電盤は「段積み(16系)」にもなり得る。段積みか否か・段数は単線図から確実に読めないため、
     # 確認ゲートで人が選ぶ(茂泉様確定・◎誤答ゼロ)。settype=段積を選ぶと16系段積セット、高圧のままなら従来。
     if st in ('高圧','段積'):
@@ -2931,12 +2937,14 @@ def select_from_extracted(data):
         #   場合のみ発火(Visionは段積を誤検出しやすい→◎誤答ゼロのため必ずゲート確認)。
         _sa = p.get('set_attrs') or {}
         _cls0 = sc_classify(panel_nm)
-        # 段積(16系)・段積VCS・JEM(19系母線接続盤)・低圧(17系TR盤)はセットで出す。高圧11系(単独)は個別選定。
-        # 段積は人が確認ゲートで確定した時のみ(Vision誤検出対策)。JEM/低圧TR盤は盤名+TRで判定し自動発火
-        # (低圧は計器種別が要確認=○止まり/容量不明は△なので◎誤答にならない)。MCCB盤は個別(sc_classify=None)。
-        _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype') in ('JEM','低圧')
-        # 低圧17系: 相/容量をTR itemから補完(手本通り: TR支給のkVA/相で最近傍上位を選定)。
-        if _cls0.get('settype')=='低圧':
+        # 段積(16系)・段積VCS・JEM(19系母線接続盤)はセットで出す。高圧11系(単独)は個別。
+        # 段積は人が確認ゲートで確定した時のみ(Vision誤検出対策)。JEMは盤名一意で自動。
+        # 【低圧17系】案件で個別/セットを使い分ける(茂泉様確定)。既定=個別(尼崎手本=個別)。
+        #   確認ゲートで「17系セット」を選んだ低圧TR盤のみセット発火(YUASA手本=セット)。MCCB盤は個別。
+        _low_set = _cls0.get('settype')=='低圧' and _sa.get('低圧計上')=='17系セット'
+        _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype')=='JEM' or _low_set
+        # 低圧17系(セット選択時のみ): 相/容量をTR itemから補完(TR支給のkVA/相で最近傍上位)。
+        if _low_set:
             _sa=dict(_sa); _sa.setdefault('settype','低圧')
             if not _sa.get('phase'): _sa['phase']=_panel_tr_phase or _cls0.get('phase')
             if not _sa.get('cap'): _sa['cap']=_panel_tr_kva
