@@ -233,12 +233,20 @@ $('xls').onclick=async()=>{
     if(!r.ok)throw new Error('server '+r.status);
     const blob=await r.blob();
     const fname='積算コード選定_'+new Date().toISOString().slice(0,10)+'.xlsx';
+    // PC(Chrome/Edge): 「名前を付けて保存」ダイアログで保存先フォルダを選べる
+    if(window.showSaveFilePicker){
+      try{
+        const h=await window.showSaveFilePicker({suggestedName:fname,types:[{description:'Excelブック',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]});
+        const w=await h.createWritable(); await w.write(blob); await w.close();
+        btn.disabled=false; btn.textContent=orig; return;
+      }catch(e){ if(e&&e.name==='AbortError'){btn.disabled=false;btn.textContent=orig;return;} }
+    }
+    // iPhone等: 共有シート→「"ファイル"に保存」で保存先を選べる。他アプリ送信も可。
     const file=new File([blob],fname,{type:blob.type||'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    // iPhone等: 共有シートを出し「"ファイル"に保存」で保存先フォルダを選べる。他アプリ送信も可。
     if(navigator.canShare&&navigator.canShare({files:[file]})){
-      await navigator.share({files:[file],title:'積算コード選定'});   // 場所を選んで保存/送信
+      await navigator.share({files:[file],title:'積算コード選定'});
     }else{
-      // 共有非対応(HTTP等/PC): 確実に保存できるGET方式(場所選択は不可)
+      // 非対応(Safari PC/HTTP等): 確実に保存できるGET方式
       window.location.href='/api/excel/download';
     }
   }catch(e){
