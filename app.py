@@ -3735,13 +3735,31 @@ def api_select():
         if not sid:
             sid=secrets.token_hex(8); session['sid']=sid
         _LAST_RESULT[sid]=panels
+        _save_last(sid,panels)   # gunicorn複数ワーカー対策: ファイルにも保存(別ワーカーからも読める)
     except Exception:
         pass
     return jsonify(panels=panels, summary=dict(total=sum(c.values()),ok=c['◎'],warn=c['○'],chk=c['△'],
         detail=ndetail, gemini_only=gadd, rate=round((c['◎']+c['○'])/tot*100)))
 
-# 直近の選定結果(セッションID→panels)。プロセス内メモリ。再起動で消えるが実用上十分。
+# 直近の選定結果(セッションID→panels)。プロセス内メモリ+ファイル。
+# gunicorn -w N ではメモリがワーカー間で共有されないため、ダウンロードが別ワーカーに当たると
+# 「選定結果がありません」になる。ファイルにも保存し、どのワーカーからでも読めるようにする。
 _LAST_RESULT={}
+_LAST_DIR=os.path.join(tempfile.gettempdir(),'estimate_last')
+try: os.makedirs(_LAST_DIR,exist_ok=True)
+except Exception: pass
+def _save_last(sid,panels):
+    try:
+        with open(os.path.join(_LAST_DIR,re.sub(r'[^0-9a-zA-Z]','',str(sid))[:32]+'.json'),'w',encoding='utf-8') as f:
+            json.dump(panels,f,ensure_ascii=False)
+    except Exception: pass
+def _load_last(sid):
+    try:
+        fp=os.path.join(_LAST_DIR,re.sub(r'[^0-9a-zA-Z]','',str(sid))[:32]+'.json')
+        if os.path.exists(fp):
+            with open(fp,encoding='utf-8') as f: return json.load(f)
+    except Exception: pass
+    return None
 
 @app.route('/api/excel', methods=['POST'])
 @login_required
@@ -3757,7 +3775,7 @@ def api_excel():
 @login_required
 def api_excel_download():
     sid=session.get('sid')
-    panels=_LAST_RESULT.get(sid)
+    panels=_LAST_RESULT.get(sid) or _load_last(sid)   # 別ワーカー対策: メモリ→ファイルの順で探す
     if not panels:
         return Response('選定結果がありません。先に図面を読み込み、コード選定を実行してください。',
                         status=404, mimetype='text/plain; charset=utf-8')
