@@ -23,7 +23,14 @@ import collections
 import ezdxf
 
 # 電線が乗るレイヤ（直接／ブロック展開の双方で収集）
-WIRE_LAYERS = {'L_CONTROL', 'L_CONTROL_H', 'L_MAIN', 'L_EARTH', 'DENSEN'}
+# 公式作図仕様(OFFICIAL_ANALYSIS_SPEC): 制御=L_CONTROL / 電源母線=L_MAIN / 外部制御=L_OUTSIDE。
+# L_OUTSIDE(端子台の先＝手元操作盤・外部機器)は端子台_LU*を介して内部と繋がる。
+# スケルトン(主回路)は L_EARTH/DENSEN も使うため後方互換で残す。
+WIRE_LAYERS = {'L_CONTROL', 'L_CONTROL_H', 'L_MAIN', 'L_OUTSIDE', 'L_EARTH', 'DENSEN'}
+# 公式仕様のしきい値（作図単位=mm想定）
+POINT_TOL = 5          # 同一節点判定
+TERMINAL_TOL = 15      # 端子台_LU*の中継結合
+SENBAN_SEG_MAXDIST = 250   # 線番→配線の割当
 # 端子/機器としてカウントしない付属・銘板系
 SKIP_DEVICES = {'銘板', '端子ｶﾊﾞｰ', 'TB取付金具', 'ﾊﾝﾄﾞﾙ', '系統情報',
                 'CABLE', 'CABLE1', 'CABLE2', 'CH', 'CP', 'CPMAIN1', '補助接点ﾕﾆｯﾄ',
@@ -221,6 +228,23 @@ class DrawingModel:
                     out.append((v, e.dxf.insert.x, e.dxf.insert.y - j * 30, 'main'))
         return out
 
+    def _junction_points(self):
+        """公式仕様の接続機構ブロックの位置を返す [(x, y, tol), ...]。
+          _crossPoint1 … T字接続マーカ（POINT_TOL）
+          _LU*         … 端子台=中継。中心±TERMINAL_TOL の配線端点を全結合（内外橋渡し）
+        """
+        pts = []
+        for e in self.msp:
+            if e.dxftype() != 'INSERT':
+                continue
+            nm = (e.dxf.name or '').upper()
+            ins = e.dxf.insert
+            if nm == '_CROSSPOINT1':
+                pts.append((ins.x, ins.y, POINT_TOL))
+            elif nm.startswith('_LU'):
+                pts.append((ins.x, ins.y, TERMINAL_TOL))
+        return pts
+
     # ---- ネット ----
     def _build_nets(self, tol=8):
         """ネット構築。属性端子ピン＋電線連結を辿る方式を優先（過剰収集を回避）。
@@ -262,6 +286,14 @@ class DrawingModel:
                 d, t = pt_seg_dist(px, py, ax, ay, bx, by)
                 if d <= tol and 0.02 < t < 0.98:
                     uf.union(qn((px, py)), qn((ax, ay)))
+
+        # 公式仕様の接続機構:
+        #  ・接続点マーカ _crossPoint1 … マーカ位置 POINT_TOL 内を通る配線端点を結合(T字)
+        #  ・端子台 _LU* … 中心 TERMINAL_TOL 内の配線端点を全て結合(内部L_CONTROL⇔外部L_OUTSIDE橋渡し)
+        for cx, cy, ctol in self._junction_points():
+            near = [p for p in nodes_all if abs(p[0] - cx) <= ctol and abs(p[1] - cy) <= ctol]
+            for p in near[1:]:
+                uf.union(qn(near[0]), qn(p))
 
         # 号線ラベル → ラベル位置に最も近い電線端点の成分root（＋種別）
         node_list = list(nodes_all)
