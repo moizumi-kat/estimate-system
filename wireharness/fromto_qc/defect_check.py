@@ -104,18 +104,21 @@ def rule_R3_neutral(model):
     """中性線端子の相名: 単相3線(端子に N を持つ電源側TB)がある盤で、
     負荷側TBが V を使っていれば V→N の疑いを指摘。"""
     tbs = _tb_terminals(model)
-    has_single = any('N' in t['terms'] and 'V' not in t['terms'] for t in tbs)  # R,N,T 等
-    if not has_single:
+    single = [t for t in tbs if 'N' in t['terms'] and 'V' not in t['terms']]   # R,N,T 等
+    if not single:
         return []
+    # 注: 現状の図面は「相(単相3線/三相3線)」を属性で持たないため、V使用TBが単相か三相か
+    #     決定論では区別できない。よって候補(low)として挙げ、設計が単相回路のTBかを確認する。
+    #     ※作図仕様に「回路の相」属性を足せば、三相を除外してクリーンに検出できる（要提案）。
     findings = []
     for t in tbs:
         if 'V' in t['terms'] and 'N' not in t['terms']:
             findings.append(_finding(
                 'R3', 'med', t['sym'],
-                f"単相3線回路のある盤で {t['sym']} の端子が {','.join(t['terms'])}（V を使用）。単相の中性線は N とすべきです。",
-                f"{t['sym']} の 'V' を 'N' に変更してください（単相3線の中性線）。",
-                f"電源側TBに N を持つ単相3線回路が存在（例 R,N,T）。{t['sym']}=末端の相名不一致",
-                confidence='med'))
+                f"この盤には単相3線回路（例 {single[0]['sym']}={','.join(single[0]['terms'])}）があり、{t['sym']} は端子に V を使用（{','.join(t['terms'])}）。もし {t['sym']} が単相回路なら中性線は N とすべきです。",
+                f"{t['sym']} が単相3線回路なら 'V' を 'N' に変更してください（三相回路なら V のままで正）。",
+                "単相3線回路(N保有TB)が存在。相属性が無いため三相との区別は設計確認が必要",
+                confidence='low'))
     return findings
 
 
