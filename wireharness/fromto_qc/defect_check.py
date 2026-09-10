@@ -288,6 +288,51 @@ def rule_R5_confirmation_table(model):
     return findings
 
 
+# ---------- R6: SPD警報回路の整合（AI補助＝Gemini） ----------
+R6_PROMPT = """あなたは制御盤のシーケンス図を確認する電気技術者です。
+この画像は SPD（避雷器/サージ保護）とその警報回路の付近です。次を確認してください：
+  - SPD の故障接点（SPDX 等）が、警報回路（警報電源・警報接点・中央監視盤への信号）へ
+    正しく結線されているか。
+  - 途中で切れている線、未接続の端子、繋がるべきなのに繋がっていない箇所が無いか。
+問題があれば JSON で返す（説明文やコードフェンス不要）:
+{"issues":[{"where":"場所の説明","problem":"何が問題か","suggest":"どう直すか"}]}
+問題が無ければ {"issues":[]} を返す。断定できないものは problem に「要確認」と明記。"""
+
+
+def rule_R6_spd_gemini(model, dpi=150, tmpdir=None):
+    """SPD警報回路の整合を Gemini（AI補助）で確認し、候補指摘を返す。
+    決定論で書けない『回路の意味理解』が要る難所に限定して使う。要 GEMINI_API_KEY。
+    Vision は非決定論なので confidence='low'（設計の確認ゲート前提）。"""
+    import os
+    import tempfile
+    from . import vision, render
+    # SPD系の機器位置からSPD警報回路の領域を決める
+    spd = [dv for dv in model.devices if re.search(r'SPD', dv.sym, re.I)]
+    if not spd:
+        return []
+    xs = [dv.x for dv in spd]
+    ys = [dv.y for dv in spd]
+    m = 500
+    region = (min(xs) - m, max(xs) + m, min(ys) - m, max(ys) + m)
+    tmpdir = tmpdir or tempfile.mkdtemp(prefix='r6_')
+    png = os.path.join(tmpdir, 'spd.png')
+    render.render_region(model, region, png, dpi=dpi)
+    try:
+        ans = vision.ask_image_gemini(png, R6_PROMPT)
+    except Exception as ex:
+        return [_finding('R6', 'low', 'SPD警報回路', f'Gemini補助の実行に失敗: {ex}',
+                         'GEMINI_API_KEY を設定して再実行してください。', 'AI補助(Gemini)未実行', 'low')]
+    findings = []
+    for it in ans.get('issues', []):
+        findings.append(_finding(
+            'R6', 'med', f"SPD警報回路: {it.get('where','')}",
+            f"[AI補助] {it.get('problem','')}",
+            it.get('suggest', '設計で確認してください。'),
+            'Gemini(Vision)によるSPD警報回路の整合確認（候補・要設計確認）',
+            confidence='low'))
+    return findings
+
+
 def catalog():
     p = os.path.join(os.path.dirname(__file__), 'defect_catalog.json')
     return json.load(open(p, encoding='utf-8'))

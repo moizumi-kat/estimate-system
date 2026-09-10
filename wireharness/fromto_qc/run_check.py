@@ -19,7 +19,7 @@ from . import defect_check as dc
 from . import harness_qc
 
 
-def run(seq_paths, skel_paths, layout_path, table_path=None):
+def run(seq_paths, skel_paths, layout_path, table_path=None, ai=False):
     seq = [DrawingModel(p) for p in (seq_paths or [])]
     skel = [DrawingModel(p) for p in (skel_paths or [])]
     layout = DrawingModel(layout_path) if layout_path else None
@@ -45,6 +45,10 @@ def run(seq_paths, skel_paths, layout_path, table_path=None):
     # R5 社内確認表の仕様不整合
     if table:
         findings += dc.rule_R5_confirmation_table(table)
+    # R6 SPD警報回路（AI補助＝Gemini。--ai 指定時のみ。要 GEMINI_API_KEY）
+    if ai:
+        for m in seq:
+            findings += dc.rule_R6_spd_gemini(m)
     # H1-H5 ハーネス化検図（各シート）
     for m in seq + skel:
         for iss in harness_qc.check(m):
@@ -66,9 +70,10 @@ def main(argv=None):
     ap.add_argument('--skel', nargs='*', default=[], help='スケルトン図 DXF')
     ap.add_argument('--layout', default=None, help='内部配置図 DXF')
     ap.add_argument('--table', default=None, help='社内確認表 DXF')
+    ap.add_argument('--ai', action='store_true', help='AI補助(Gemini)でR6を実行(要 GEMINI_API_KEY)')
     ap.add_argument('--out', default=None, help='レポート出力先(省略時は標準出力)')
     a = ap.parse_args(argv)
-    findings = run(a.seq, a.skel, a.layout, a.table)
+    findings = run(a.seq, a.skel, a.layout, a.table, a.ai)
     report = f"=== 図面不具合チェック 結果 ===\n件数: {len(findings)}  内訳: {summary(findings)}\n\n" \
         + dc.format_report(findings)
     if a.out:

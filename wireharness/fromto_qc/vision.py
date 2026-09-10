@@ -116,6 +116,34 @@ def trace_tile_gemini(png_path, model=os.environ.get('GEMINI_MODEL', 'gemini-2.5
         return json.loads(m.group(0)) if m else {"nets": []}
 
 
+def ask_image_gemini(png_path, prompt, model=os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')):
+    """画像1枚＋任意プロンプトをGeminiに投げ、JSON（またはテキスト）を返す汎用関数。
+    検図のAI補助（回路の意味理解が要る箇所）に使う。要 GEMINI_API_KEY。REST直呼び。"""
+    import base64
+    import urllib.request
+    key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+    if not key:
+        raise RuntimeError('GEMINI_API_KEY 未設定（Gemini補助には必要）')
+    data = base64.standard_b64encode(open(png_path, 'rb').read()).decode()
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+    body = json.dumps({"contents": [{"parts": [
+        {"text": prompt},
+        {"inline_data": {"mime_type": "image/png", "data": data}}]}]}).encode()
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+
+    def _call():
+        with urllib.request.urlopen(req, timeout=180) as r:
+            return json.load(r)
+    d = _retry(_call)
+    txt = "".join(p.get('text', '') for p in d['candidates'][0]['content']['parts']).strip()
+    txt = re.sub(r'^```(json)?|```$', '', txt, flags=re.M).strip()
+    try:
+        return json.loads(txt)
+    except Exception:
+        m = re.search(r'\{.*\}', txt, re.S)
+        return json.loads(m.group(0)) if m else {"raw": txt}
+
+
 def clean_device(s):
     """Vision出力の機器名から位置語・ノイズを除去し正規化キーにする（ASCII英数字のみ）。"""
     import re
