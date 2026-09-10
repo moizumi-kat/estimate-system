@@ -20,7 +20,7 @@ import re
 import os
 import json
 import ezdxf
-from .geometry import DrawingModel, norm
+from .geometry import DrawingModel, norm, SKIP_DEVICES
 
 
 def _finding(rule, severity, place, problem, suggest, basis, confidence='high'):
@@ -120,34 +120,66 @@ def rule_R3_neutral(model):
 
 
 # ---------- R1: 配置図漏れ ----------
+# 同一機器の呼び分け（回路図↔配置図）をカテゴリで吸収する:
+#   ランプ RL/GL/OL/WL/PL(機能色) ↔ SL(信号灯) 、 計器 AM/VM ↔ A/V
+# → (カテゴリ, 回路番号) が配置図に在れば「漏れではない」と判定（別名辞書を手作りせず自動吸収）。
+_CATEGORY = {
+    'RL': 'LAMP', 'GL': 'LAMP', 'OL': 'LAMP', 'WL': 'LAMP', 'PL': 'LAMP', 'SL': 'LAMP',
+    'AM': 'METER', 'VM': 'METER', 'A': 'METER', 'V': 'METER',
+}
+
+
+def _dev_records(model):
+    """機器INSERT → [(sym, device, dev1, parts)]。"""
+    out = []
+    for e in model.msp:
+        if e.dxftype() != 'INSERT' or not e.attribs:
+            continue
+        a = {at.dxf.tag: at.dxf.text.strip() for at in e.attribs}
+        dev = a.get('DEVICE', '')
+        if not dev or dev in SKIP_DEVICES:
+            continue
+        sym = f"{dev}-{a.get('DEVICE1','')}" if a.get('DEVICE1') else dev
+        out.append((sym, dev, a.get('DEVICE1', ''), a.get('PARTS', '')))
+    return out
+
+
+def _cat_key(device, parts, dev1):
+    """(カテゴリ, 回路番号) キー。カテゴリはランプ/計器を吸収、他はDEVICEそのもの。"""
+    cat = _CATEGORY.get(device.upper()) or _CATEGORY.get(parts.upper()) or device.upper()
+    return (cat, dev1)
+
+
 def rule_R1_layout_missing(schematic_models, layout_model, alias=None):
     """schematic(シーケンス/スケルトン)に在る機器が layout(内部配置図)に無いものを指摘。
-    alias: {schematic機器: layout機器} 別名（SL⇔RL等）で誤検出を抑制。"""
+    exact名 と (カテゴリ,回路番号) の両方で突合し、呼び分け(SL⇔RL等)は漏れ扱いしない。
+    alias: 追加の {schematic機器: layout機器} 手動別名。"""
     alias = alias or {}
-    lay = set()
-    for e in layout_model.msp:
-        if e.dxftype() == 'INSERT' and e.attribs:
-            a = {at.dxf.tag: at.dxf.text.strip() for at in e.attribs}
-            dev = a.get('DEVICE', '')
-            if dev:
-                sym = f"{dev}-{a.get('DEVICE1','')}" if a.get('DEVICE1') else dev
-                lay.add(norm(sym))
+    lay_names, lay_cat = set(), set()
+    for sym, dev, dev1, parts in _dev_records(layout_model):
+        lay_names.add(norm(sym))
+        lay_cat.add(_cat_key(dev, parts, dev1))
     findings = []
     seen = set()
     for m in schematic_models:
-        for dv in m.devices:
-            key = norm(alias.get(dv.sym, dv.sym))
-            if key in seen or key in lay:
+        for sym, dev, dev1, parts in _dev_records(m):
+            key = norm(alias.get(sym, sym))
+            if key in seen:
+                continue
+            if key in lay_names or _cat_key(dev, parts, dev1) in lay_cat:
+                continue
+            # 端子台・ヒューズは配置図に別形で出るため除外
+            if dev in ('TB',) or re.fullmatch(r'F', dev):
+                continue
+            # ランプ/計器で回路番号が無い機器は照合不能（呼び分けを一意に対応付けられない）→ 指摘しない
+            if _CATEGORY.get(dev.upper()) in ('LAMP', 'METER') and not dev1:
                 continue
             seen.add(key)
-            # 端子台や号線など配置図に出ない種類は除外
-            if re.fullmatch(r'TB.*|F|RL|GL|OL|WL', dv.sym):
-                continue
             findings.append(_finding(
-                'R1', 'high', dv.sym,
-                f"機器 {dv.sym} が回路図(シーケンス/スケルトン)に在りますが、内部配置図に見当たりません（配置図漏れの疑い）。",
-                f"{dv.sym} を内部配置図に追加してください。",
-                "回路図に在り内部配置図に無い（機器名突合）",
+                'R1', 'high', sym,
+                f"機器 {sym} が回路図(シーケンス/スケルトン)に在りますが、内部配置図に見当たりません（配置図漏れの疑い）。",
+                f"{sym} を内部配置図に追加してください。",
+                "回路図に在り内部配置図に無い（機器名＋カテゴリ×回路番号で突合）",
                 confidence='med'))
     return findings
 
