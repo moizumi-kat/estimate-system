@@ -38,6 +38,9 @@ def run(seq_paths, skel_paths, layout_path):
     # R4 変更漏れ（制御図の接点 vs 物理図）
     if seq and physical:
         findings += dc.rule_R4_orphan_contact(seq, physical)
+    # R7 接地結線漏れ（全シート）
+    for m in seq + skel + ([layout] if layout else []):
+        findings += dc.rule_R7_earth(m)
     # H1-H5 ハーネス化検図（各シート）
     for m in seq + skel:
         for iss in harness_qc.check(m):

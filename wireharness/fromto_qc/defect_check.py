@@ -226,6 +226,31 @@ def rule_R4_orphan_contact(control_models, physical_models):
     return findings
 
 
+# ---------- R7: 接地結線漏れ（ETバー接続の指示があるが接地線が不足） ----------
+def rule_R7_earth(model):
+    """『ETバーヘ接続』等の接地指示がN個あるのに接地線(L_EARTH)がそれより少ない図面を
+    『接地結線漏れ』として指摘。位置ではなく本数で判定（接地線はETバー側で結線され、
+    指示テキストと離れた位置に描かれるため位置照合は不安定）。"""
+    ann = 0
+    earth_wires = 0
+    for e in model.msp:
+        t = e.dxftype()
+        if t in ('TEXT', 'MTEXT'):
+            txt = (e.dxf.text or '').replace('ﾍ', 'ヘ').replace('ﾊﾞ', 'バ')
+            if 'ETバーヘ接続' in txt or 'ETバー接続' in txt:
+                ann += 1
+        elif t in ('LINE', 'LWPOLYLINE') and e.dxf.layer == 'L_EARTH':
+            earth_wires += 1
+    if ann > 0 and earth_wires < ann:
+        return [_finding(
+            'R7', 'high', '接地(ETバー)結線',
+            f"「ETバーヘ接続」の指示が {ann} 箇所ありますが、接地線(L_EARTH)は {earth_wires} 本しか描かれていません（接地結線漏れの疑い）。",
+            f"不足している {ann - earth_wires} 本の接地線をETバーへ結線してください。",
+            f"接地指示 {ann} 箇所 > L_EARTH電線 {earth_wires} 本",
+            confidence='med')]
+    return []
+
+
 def catalog():
     p = os.path.join(os.path.dirname(__file__), 'defect_catalog.json')
     return json.load(open(p, encoding='utf-8'))
