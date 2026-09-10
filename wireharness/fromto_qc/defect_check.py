@@ -187,6 +187,45 @@ def rule_R1_layout_missing(schematic_models, layout_model, alias=None):
     return findings
 
 
+# ---------- R4: 変更漏れ（親機器の無い警報/補助接点＝シート間の取り残し） ----------
+def rule_R4_orphan_contact(control_models, physical_models):
+    """制御図(シーケンス)に在る 警報/補助接点 のうち、その親機器(DEVICE-DEVICE1)が
+    物理図(スケルトン/内部配置図)に無いものを指摘。回路の削除/変更が制御図に反映されず
+    接点が取り残された『変更漏れ』を検出する。
+    control_models: シーケンス等 / physical_models: スケルトン・内部配置図。"""
+    phys = set()
+    for m in physical_models:
+        for sym, dev, dev1, parts in _dev_records(m):
+            phys.add(norm(sym))
+            phys.add(_cat_key(dev, parts, dev1))
+    findings = []
+    seen = set()
+    for m in control_models:
+        for e in m.msp:
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            a = {at.dxf.tag: at.dxf.text.strip() for at in e.attribs}
+            dev = a.get('DEVICE', '')
+            if not dev or dev in SKIP_DEVICES:
+                continue
+            cmnt = a.get('CMNTJ1', '') + a.get('CMNTJ2', '')
+            is_aux = ('警報' in cmnt or '補助' in cmnt or a.get('DEVICE') in ('ELCB', 'MCCB'))
+            if not is_aux:
+                continue
+            sym = f"{dev}-{a.get('DEVICE1','')}" if a.get('DEVICE1') else dev
+            key = norm(sym)
+            if key in seen or key in phys or _cat_key(dev, parts=a.get('PARTS', ''), dev1=a.get('DEVICE1', '')) in phys:
+                continue
+            seen.add(key)
+            findings.append(_finding(
+                'R4', 'med', sym,
+                f"制御図に {sym}（{cmnt or '接点'}）が在りますが、親機器 {sym} が主回路(スケルトン)・内部配置図に見当たりません（変更漏れ＝回路変更の取り残しの疑い）。",
+                f"{sym} が削除された回路なら制御図の接点も削除、必要なら主回路/配置図に {sym} を追加してください。",
+                "制御図の接点に対応する機器が物理図に無い（シート間の機器突合）",
+                confidence='med'))
+    return findings
+
+
 def catalog():
     p = os.path.join(os.path.dirname(__file__), 'defect_catalog.json')
     return json.load(open(p, encoding='utf-8'))
