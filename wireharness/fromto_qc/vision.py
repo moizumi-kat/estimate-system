@@ -116,6 +116,36 @@ def trace_tile_gemini(png_path, model=os.environ.get('GEMINI_MODEL', 'gemini-2.5
         return json.loads(m.group(0)) if m else {"nets": []}
 
 
+def ask_image_claude(png_path, prompt, model=os.environ.get('VISION_MODEL', 'claude-opus-4-8')):
+    """画像1枚＋任意プロンプトを Claude Vision に投げ、JSON（またはテキスト）を返す。
+    検図のAI補助に使う。要 ANTHROPIC_API_KEY。"""
+    cli = _client()
+    data = base64.standard_b64encode(open(png_path, 'rb').read()).decode()
+    block = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": data}}
+
+    def _call():
+        with cli.messages.stream(model=model, max_tokens=4000,
+                                 messages=[{"role": "user", "content": [block, {"type": "text", "text": prompt}]}]) as st:
+            return st.get_final_message()
+    msg = _retry(_call)
+    txt = "".join(b.text for b in msg.content if b.type == "text").strip()
+    txt = re.sub(r'^```(json)?|```$', '', txt, flags=re.M).strip()
+    try:
+        return json.loads(txt)
+    except Exception:
+        m = re.search(r'\{.*\}', txt, re.S)
+        return json.loads(m.group(0)) if m else {"raw": txt}
+
+
+def ask_image(png_path, prompt):
+    """利用可能なキーで画像QCを実行（ANTHROPIC優先→GEMINI）。R6等のAI補助の共通入口。"""
+    if os.environ.get('ANTHROPIC_API_KEY'):
+        return ask_image_claude(png_path, prompt)
+    if os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY'):
+        return ask_image_gemini(png_path, prompt)
+    raise RuntimeError('AI補助には ANTHROPIC_API_KEY か GEMINI_API_KEY が必要')
+
+
 def ask_image_gemini(png_path, prompt, model=os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')):
     """画像1枚＋任意プロンプトをGeminiに投げ、JSON（またはテキスト）を返す汎用関数。
     検図のAI補助（回路の意味理解が要る箇所）に使う。要 GEMINI_API_KEY。REST直呼び。"""

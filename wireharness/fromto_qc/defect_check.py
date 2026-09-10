@@ -318,10 +318,10 @@ def rule_R6_spd_gemini(model, dpi=150, tmpdir=None):
     png = os.path.join(tmpdir, 'spd.png')
     render.render_region(model, region, png, dpi=dpi)
     try:
-        ans = vision.ask_image_gemini(png, R6_PROMPT)
+        ans = vision.ask_image(png, R6_PROMPT)   # ANTHROPIC優先→GEMINI
     except Exception as ex:
-        return [_finding('R6', 'low', 'SPD警報回路', f'Gemini補助の実行に失敗: {ex}',
-                         'GEMINI_API_KEY を設定して再実行してください。', 'AI補助(Gemini)未実行', 'low')]
+        return [_finding('R6', 'low', 'SPD警報回路', f'AI補助の実行に失敗: {ex}',
+                         'ANTHROPIC_API_KEY か GEMINI_API_KEY を設定して再実行してください。', 'AI補助(Vision)未実行', 'low')]
     findings = []
     for it in ans.get('issues', []):
         findings.append(_finding(
