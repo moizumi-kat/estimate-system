@@ -251,6 +251,43 @@ def rule_R7_earth(model):
     return []
 
 
+# ---------- R5: 社内確認表の仕様不整合（標準的に必要な項目が不要側にチェック） ----------
+# 当社標準で「要求仕様(必要)」側であるべき項目。確認表で標準(不要)側に●が有れば不整合。
+_MUST_REQUIRED = ['エコ電線', 'ｴｺ電線']
+
+
+def rule_R5_confirmation_table(model):
+    """社内確認表(000-Z001)で、標準的に『必要(要求仕様)』とすべき項目が
+    『不要(標準仕様)』側にチェックされている不整合を指摘（例 盤内エコ電線）。
+    列は『標準仕様』『要求仕様』ヘッダのx中点で判定。"""
+    texts = [(e.dxf.insert.x, e.dxf.insert.y, (e.dxf.text or '').strip())
+             for e in model.msp if e.dxftype() in ('TEXT', 'MTEXT') and (e.dxf.text or '').strip()]
+    hx_std = [x for x, y, t in texts if t == '標準仕様']
+    hx_req = [x for x, y, t in texts if t == '要求仕様']
+    if not hx_std or not hx_req:
+        return []
+    # 要求仕様は複数サブ列を持ち、ヘッダ中心より左から始まるため、境界は標準寄りに置く
+    boundary = hx_std[0] + (hx_req[0] - hx_std[0]) * 0.35
+    marks = [(x, y) for x, y, t in texts if t in ('●', '○')]
+    findings = []
+    for x, y, t in texts:
+        if not any(k in t for k in _MUST_REQUIRED):
+            continue
+        # この項目行(同一y付近)の● を探す
+        row_marks = [(mx, my) for mx, my in marks if abs(my - y) <= 15]
+        if not row_marks:
+            continue
+        mx = min(row_marks, key=lambda p: abs(p[1] - y))[0]
+        if mx < boundary:   # 標準仕様(不要)側
+            findings.append(_finding(
+                'R5', 'med', f"確認表: {t}",
+                f"社内確認表で「{t}」が“標準仕様(不要)”側にチェックされています。当社標準では適用(要求仕様/必要)です。",
+                f"「{t}」のチェックを“要求仕様(必要)”側へ移してください（製作仕様書と整合）。",
+                "確認表の●位置が標準仕様側／標準では要求仕様であるべき項目",
+                confidence='med'))
+    return findings
+
+
 def catalog():
     p = os.path.join(os.path.dirname(__file__), 'defect_catalog.json')
     return json.load(open(p, encoding='utf-8'))

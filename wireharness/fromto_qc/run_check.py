@@ -19,10 +19,11 @@ from . import defect_check as dc
 from . import harness_qc
 
 
-def run(seq_paths, skel_paths, layout_path):
+def run(seq_paths, skel_paths, layout_path, table_path=None):
     seq = [DrawingModel(p) for p in (seq_paths or [])]
     skel = [DrawingModel(p) for p in (skel_paths or [])]
     layout = DrawingModel(layout_path) if layout_path else None
+    table = DrawingModel(table_path) if table_path else None
     physical = list(skel) + ([layout] if layout else [])
 
     findings = []
@@ -41,6 +42,9 @@ def run(seq_paths, skel_paths, layout_path):
     # R7 接地結線漏れ（全シート）
     for m in seq + skel + ([layout] if layout else []):
         findings += dc.rule_R7_earth(m)
+    # R5 社内確認表の仕様不整合
+    if table:
+        findings += dc.rule_R5_confirmation_table(table)
     # H1-H5 ハーネス化検図（各シート）
     for m in seq + skel:
         for iss in harness_qc.check(m):
@@ -61,9 +65,10 @@ def main(argv=None):
     ap.add_argument('--seq', nargs='*', default=[], help='シーケンス図 DXF')
     ap.add_argument('--skel', nargs='*', default=[], help='スケルトン図 DXF')
     ap.add_argument('--layout', default=None, help='内部配置図 DXF')
+    ap.add_argument('--table', default=None, help='社内確認表 DXF')
     ap.add_argument('--out', default=None, help='レポート出力先(省略時は標準出力)')
     a = ap.parse_args(argv)
-    findings = run(a.seq, a.skel, a.layout)
+    findings = run(a.seq, a.skel, a.layout, a.table)
     report = f"=== 図面不具合チェック 結果 ===\n件数: {len(findings)}  内訳: {summary(findings)}\n\n" \
         + dc.format_report(findings)
     if a.out:
