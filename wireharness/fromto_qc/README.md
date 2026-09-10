@@ -51,6 +51,11 @@
 | `routing.py` | 機器to機器の最適配線＋中継端子の最適配置(線長最小)。多点ネットをMSTで分解、2本/端子制約超は既存端子台を中継に |
 | `compare.py` | 人手ハーネスデータ.txt の解析と一致率スコア |
 | `run.py` | CLIオーケストレータ |
+| `defect_check.py` | 図面不具合ルール R1-R7（配置図漏れ/容量逆転/中性線端子/変更漏れ/確認表/SPD警報(AI)/接地漏れ） |
+| `harness_qc.py` | ハーネス化検図 H1-H5（号線欠落/孤立端子/号線分離/号線混在/外部線中継漏れ） |
+| `sheet_classify.py` | アップDXFの系統自動判定（seq/skel/layout/table）。レイヤ構成・電線数・確認表マークで排他仕分け。ファイル名接頭辞で人手上書き可 |
+| `run_check.py` | 検図CLI。`--seq/--skel/--layout/--table [--ai]` で R1-R7＋H1-H5 を実行し {場所/問題/提案/根拠} で出力 |
+| `defect_catalog.json` | 不具合ルールのレジストリ。実案件を1件=1タイプで登録しバージョンアップで拡充 |
 
 ## 端子辞書 (Terminal Library)
 
@@ -109,6 +114,32 @@ ANTHROPIC_API_KEY=sk-... GEMINI_API_KEY=... python -m wireharness.fromto_qc.run 
 ⚠️ 実データ2盤では「2号線以上で再現する別名」が無く**自動採用は0件**（＝誤学習しない正しい挙動）。
 過去対の蓄積が増えるほど、切/入⇔43 のような繰り返し現れる別名が学習される。合成データでの
 学習・棄却の要件は `test_alias.py` で固定。
+
+## 検図の運用（CLI と Web/クラウド）
+
+設計次工程で走らせる図面不具合チェックは、CLI と Web API の両方で使える。
+
+```bash
+# CLI: 系統を明示して実行
+python -m wireharness.fromto_qc.run_check \
+  --seq シーケンス.dxf --skel スケルトン.dxf \
+  --layout 内部配置図.dxf --table 社内確認表.dxf [--ai] [--out report.txt]
+```
+
+**Web（`app.py` に統合）**: ブラウザから DXF（複数可・ZIP可）をアップロードするだけ。
+系統ラベルは不要で、`sheet_classify.py` が各図面をレイヤ構成・電線数・確認表マークから
+seq/skel/layout/table に自動仕分けして R1-R7＋H1-H5 を実行する。
+
+- 画面: `GET /kenzu`（トップ「積算コード選定」から「図面検図 →」で遷移）
+- API: `POST /api/kenzu`（multipart `file` を複数、任意で `ai=1` で R6/SPD警報のAI補助）
+  → `{count, summary, classification, findings[{rule,severity,confidence,場所,問題,提案,根拠}], warnings}`
+
+判断は設計（確認ゲート）。指摘は「こう直したら？」の申し送り材料として設計へ戻す。
+
+**クラウド配備**: 検図の主軸（R1-R5,R7＋H1-H5）は純Python・ステートレス・APIキー不要で、
+既存の Flask/gunicorn 構成にそのまま載る（`requirements.txt` に ezdxf/matplotlib を追加済み）。
+R6（SPD警報）のAI補助のみ `ANTHROPIC_API_KEY`（無ければ `GEMINI_API_KEY`）を使い、
+キーが無ければ該当ルールを飛ばして他は動く。実測の検出力は `VALIDATION_BASELINE.md`。
 
 ## 現状と到達見込み（実測 / 制御号線・機器to機器・A〜K別名除外）
 
