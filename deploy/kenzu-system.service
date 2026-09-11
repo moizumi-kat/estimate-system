@@ -1,0 +1,29 @@
+# systemd ユニット（EC2）: 図面検図システム（現場用）を gunicorn で常駐させる。
+# 積算コード選定システム(estimate-system.service)とは別プロセス・別ポート・別ログイン。
+# 設置: /etc/systemd/system/kenzu-system.service にコピーして
+#   sudo systemctl daemon-reload && sudo systemctl enable --now kenzu-system
+# ---- 環境に合わせて {APP_DIR} / {APP_USER} を書き換える ----
+[Unit]
+Description=Kenzu (drawing QC) for factory floor (Flask/gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User={APP_USER}
+Group={APP_USER}
+WorkingDirectory={APP_DIR}
+# 現場用の別ログイン・別鍵。/etc/kenzu-system.env に
+#   KENZU_PASSWORD=... / KENZU_SECRET=... / (任意)ANTHROPIC_API_KEY=... を記載し chmod 600。
+EnvironmentFile=/etc/kenzu-system.env
+# 検図R6の描画で matplotlib を使う。headless 用にキャッシュ先を明示。
+Environment=MPLBACKEND=Agg
+Environment=MPLCONFIGDIR={APP_DIR}/.mplcache
+# 積算(8000)と別ポート 8001 で待ち受ける。gunicorn の起点は kenzu_app:app。
+ExecStart={APP_DIR}/venv/bin/gunicorn kenzu_app:app \
+    --workers 3 --timeout 300 --graceful-timeout 30 \
+    --bind 127.0.0.1:8001 --access-logfile - --error-logfile -
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

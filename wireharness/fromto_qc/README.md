@@ -126,20 +126,27 @@ python -m wireharness.fromto_qc.run_check \
   --layout 内部配置図.dxf --table 社内確認表.dxf [--ai] [--out report.txt]
 ```
 
-**Web（`app.py` に統合）**: ブラウザから DXF（複数可・ZIP可）をアップロードするだけ。
-系統ラベルは不要で、`sheet_classify.py` が各図面をレイヤ構成・電線数・確認表マークから
-seq/skel/layout/table に自動仕分けして R1-R7＋H1-H5 を実行する。
+**Web（現場用の単独アプリ `kenzu_app.py`）**: 工場現場で使う独立アプリ。営業が使う
+積算コード選定システム(`app.py`)とは**別プロセス・別アドレス・別ログイン**で動かす
+（部署が違うため入口ごと分離）。検図ロジックは本パッケージをそのまま利用する。
+ブラウザから DXF（複数可・ZIP可）をアップロードするだけで、系統ラベルは不要。
+`sheet_classify.py` が各図面をレイヤ構成・電線数・確認表マークから seq/skel/layout/table に
+自動仕分けして R1-R7＋H1-H5 を実行する。
 
-- 画面: `GET /kenzu`（トップ「積算コード選定」から「図面検図 →」で遷移）
+- 画面: `GET /`（検図アップロード画面）
 - API: `POST /api/kenzu`（multipart `file` を複数、任意で `ai=1` で R6/SPD警報のAI補助）
   → `{count, summary, classification, findings[{rule,severity,confidence,場所,問題,提案,根拠}], warnings}`
+- 起動: 開発 `python kenzu_app.py`（PORT 既定 8001） / 本番 `gunicorn kenzu_app:app`
+- ログイン: 環境変数 `KENZU_PASSWORD`（未設定なら認証オフ＝検証のみ）
 
 判断は設計（確認ゲート）。指摘は「こう直したら？」の申し送り材料として設計へ戻す。
 
-**クラウド配備**: 検図の主軸（R1-R5,R7＋H1-H5）は純Python・ステートレス・APIキー不要で、
-既存の Flask/gunicorn 構成にそのまま載る（`requirements.txt` に ezdxf/matplotlib を追加済み）。
+**クラウド配備（AWS EC2）**: 検図の主軸（R1-R5,R7＋H1-H5）は純Python・ステートレス・
+APIキー不要で、gunicorn/systemd にそのまま載る（`requirements.txt` に ezdxf/matplotlib 追加済み）。
 R6（SPD警報）のAI補助のみ `ANTHROPIC_API_KEY`（無ければ `GEMINI_API_KEY`）を使い、
-キーが無ければ該当ルールを飛ばして他は動く。実測の検出力は `VALIDATION_BASELINE.md`。
+キーが無ければ該当ルールを飛ばして他は動く。EC2手順・systemd/nginx テンプレートは
+リポジトリ直下の `deploy/`（`kenzu-system.service` / `nginx-kenzu.conf` / `update.sh` /
+`README_EC2.md`）。実測の検出力は `VALIDATION_BASELINE.md`。
 
 ## 現状と到達見込み（実測 / 制御号線・機器to機器・A〜K別名除外）
 

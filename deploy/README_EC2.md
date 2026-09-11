@@ -1,81 +1,108 @@
-# EC2 配備手順（見積システム ＋ 図面検図）
+# EC2 配備手順（積算コード選定システム ＋ 図面検図システム）
 
-検図（`/kenzu`・`/api/kenzu`）は見積システムと**同じ `app.py`** に統合済み。
-そのため EC2 で見積が動いていれば、**同じプロセス（gunicorn）でそのまま検図も動く**。
-新しいサーバは不要で、やることは「コード更新 → 依存追加 → 再起動」だけ。
+このリポジトリには**2つの独立アプリ**が入っている。部署が違うので入口を分けている。
+
+| アプリ | 用途 / 部署 | 起点 | ポート | ログイン | 公開名(例) |
+|---|---|---|---|---|---|
+| 積算コード選定システム | 見積・営業 | `app:app` | 8000 | `APP_PASSWORD` | estimate.example.co.jp |
+| 図面検図システム | 図面QC・工場現場 | `kenzu_app:app` | 8001 | `KENZU_PASSWORD` | kenzu.example.co.jp |
+
+- **別プロセス（別 gunicorn / 別 systemd サービス）**なので片方を再起動しても他方は無停止。
+- **別ログイン**（環境変数が別）。現場ユーザに営業用画面は見えない。
+- **同じリポジトリ・同じ venv**。検図ロジック `wireharness/fromto_qc/` は共有。
+- 同一 EC2 の別ポートで同居させても、別 EC2 に分けてもよい（下記どちらも可）。
 
 ---
 
-## A. すでに見積システムが EC2 で動いている場合（＝今回の更新）
+## A. すでに積算システムが EC2 で動いている場合（＝検図を“追加”する）
 
-一番簡単なのは同梱の更新スクリプト。EC2 に SSH して:
+### A-1. 検図サービスを新規に立てる（初回のみ）
 
 ```bash
-cd <アプリのディレクトリ>          # 例 /home/ec2-user/estimate-system
-./deploy/update.sh main            # 本番ブランチ名（既定 main）
+cd <アプリのディレクトリ>            # 例 /home/ec2-user/estimate-system
+git pull --ff-only origin main       # kenzu_app.py 等を取り込む
+./venv/bin/pip install -r requirements.txt   # matplotlib 追加分
+
+# 現場用ログインの環境変数（積算とは別ファイル・別パスワード）
+sudo tee /etc/kenzu-system.env >/dev/null <<'EOF'
+KENZU_PASSWORD=（現場用ログインパスワード）
+KENZU_SECRET=（ランダムな長い文字列）
+ANTHROPIC_API_KEY=（R6のAI補助を使う場合のみ。無ければ省略可）
+EOF
+sudo chmod 600 /etc/kenzu-system.env
+
+# systemd 常駐（{APP_DIR}/{APP_USER} を書き換えてからコピー）
+sudo cp deploy/kenzu-system.service /etc/systemd/system/kenzu-system.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now kenzu-system
+curl -fsS http://127.0.0.1:8001/api/health      # {"app":"kenzu",...ok:true}
+
+# nginx を別ホスト名で（{KENZU_DOMAIN} を書き換え）
+sudo cp deploy/nginx-kenzu.conf /etc/nginx/conf.d/kenzu.conf
+sudo nginx -t && sudo systemctl reload nginx
+# HTTPS: sudo certbot --nginx -d <KENZU_DOMAIN>
 ```
 
-`update.sh` が (1) git pull → (2) `pip install -r requirements.txt`
-（今回追加の **matplotlib** もここで入る）→ (3) gunicorn 再起動 →
-(4) `/api/health` 確認、まで自動でやる。完了後:
+→ 現場は `https://<KENZU_DOMAIN>/` で検図画面。営業の積算はこれまで通り別アドレス。
 
-- 見積: `https://<ドメイン>/`
-- 検図: `https://<ドメイン>/kenzu`（トップ右上「図面検図 →」からも）
+### A-2. 以後のコード更新（両アプリまとめて）
 
-> 手動でやる場合:
-> ```bash
-> cd <アプリのディレクトリ>
-> git pull --ff-only origin main
-> ./venv/bin/pip install -r requirements.txt   # matplotlib 追加分
-> sudo systemctl restart estimate-system        # サービス名は環境に合わせる
-> curl -fsS http://127.0.0.1:8000/api/health
-> ```
-> systemd を使わず nohup/tmux で gunicorn を起こしている場合は、その gunicorn を
-> 落として同じコマンドで起動し直す（下の gunicorn 例を参照）。
+```bash
+cd <アプリのディレクトリ>
+./deploy/update.sh main                    # 積算＋検図の両方を再起動
+# 検図だけ更新したいとき:
+./deploy/update.sh main kenzu-system
+```
 
-### 反映すべきブランチについて
-今回の検図の変更はブランチ `claude/wire-harness-software-2322ld` にある。
-本番が `main` から配備されているなら、**このブランチを main にマージ**してから
-`update.sh main` を実行する（PR の作成が必要なら指示ください）。
+`update.sh` が git pull →`pip install`→ 登録済みサービスを再起動 → 各 `/api/health` 確認まで行う。
 
 ---
 
-## B. まだ常駐化していない／作り直す場合（EC2 初期設定）
+## B. まだ常駐化していない／新規 EC2 に両方構築する場合
 
-Amazon Linux 2023 / Ubuntu どちらでも手順は同じ（パッケージ名だけ読み替え）。
+Amazon Linux 2023 / Ubuntu 共通（パッケージ名だけ読み替え）。
 
 ```bash
-# 1) 取得と venv
 sudo yum install -y git python3 nginx      # Ubuntu: sudo apt install -y git python3-venv nginx
 git clone https://github.com/moizumi-kat/estimate-system.git
 cd estimate-system
 python3 -m venv venv
-./venv/bin/pip install -r requirements.txt   # flask/gunicorn/ezdxf/matplotlib など
+./venv/bin/pip install -r requirements.txt
 
-# 2) 環境変数ファイル（平文をリポジトリに置かない）
+# 環境変数（2アプリ分。平文はリポジトリに置かない）
 sudo tee /etc/estimate-system.env >/dev/null <<'EOF'
-APP_PASSWORD=（画面ログイン用パスワード）
-APP_SECRET=（ランダムな長い文字列）
-ANTHROPIC_API_KEY=（Vision/AI補助を使う場合のみ。無ければ省略可）
+APP_PASSWORD=（積算ログイン）
+APP_SECRET=（ランダム長文字列）
+ANTHROPIC_API_KEY=（積算のVision用）
 EOF
-sudo chmod 600 /etc/estimate-system.env
+sudo tee /etc/kenzu-system.env >/dev/null <<'EOF'
+KENZU_PASSWORD=（検図ログイン）
+KENZU_SECRET=（ランダム長文字列）
+ANTHROPIC_API_KEY=（検図R6用。任意）
+EOF
+sudo chmod 600 /etc/estimate-system.env /etc/kenzu-system.env
 
-# 3) systemd 常駐化（deploy/estimate-system.service の {APP_DIR}/{APP_USER} を書換え）
-sudo cp deploy/estimate-system.service /etc/systemd/system/estimate-system.service
+# systemd（各 .service の {APP_DIR}/{APP_USER} を書き換え）
+sudo cp deploy/estimate-system.service /etc/systemd/system/
+sudo cp deploy/kenzu-system.service    /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now estimate-system
-curl -fsS http://127.0.0.1:8000/api/health
+sudo systemctl enable --now estimate-system kenzu-system
 
-# 4) nginx リバースプロキシ（deploy/nginx-estimate.conf の {DOMAIN} を書換え）
+# nginx（2ホスト名。各 {DOMAIN}/{KENZU_DOMAIN} を書き換え）
 sudo cp deploy/nginx-estimate.conf /etc/nginx/conf.d/estimate.conf
+sudo cp deploy/nginx-kenzu.conf    /etc/nginx/conf.d/kenzu.conf
 sudo nginx -t && sudo systemctl enable --now nginx
-# HTTPS: sudo certbot --nginx -d <ドメイン>   もしくは ALB+ACM で終端
 ```
 
-gunicorn を直接起こす場合の最小例（systemd を使わないとき）:
+> **別 EC2 に分ける構成**にする場合は、検図用インスタンスで同じ clone を置き、
+> `kenzu-system.service`＋`nginx-kenzu.conf` だけを設定する（積算側は不要）。
+> コードは同じでも、起動するのは `kenzu_app:app` だけ。
+
+gunicorn を直接起こす最小例（systemd を使わないとき）:
 ```bash
-MPLBACKEND=Agg MPLCONFIGDIR=$PWD/.mplcache \
-./venv/bin/gunicorn app:app --workers 3 --timeout 300 --bind 127.0.0.1:8000
+# 検図
+KENZU_PASSWORD=... MPLBACKEND=Agg MPLCONFIGDIR=$PWD/.mplcache \
+./venv/bin/gunicorn kenzu_app:app --workers 3 --timeout 300 --bind 127.0.0.1:8001
 ```
 
 ---
@@ -83,25 +110,20 @@ MPLBACKEND=Agg MPLCONFIGDIR=$PWD/.mplcache \
 ## 検図まわりの注意（EC2 特有）
 
 - **依存**: 検図の主軸(R1-R5,R7＋H1-H5)は `ezdxf` のみで動く。R6(SPD警報のAI補助)で
-  `matplotlib` を使い領域画像を描く→ `requirements.txt` に追加済み。matplotlib は
-  headless 用に `Agg` を強制済み。systemd 配下ではキャッシュ書込先が要るので
-  ユニットで `MPLCONFIGDIR` を指定している。
-- **APIキー**: R6 を使うときだけ `ANTHROPIC_API_KEY`（無ければ `GEMINI_API_KEY`）が要る。
-  未設定なら R6 を飛ばして他ルールは動く。見積の Vision 抽出と同じキーを共用してよい。
-- **アップロード上限**: DXF/ZIP のため app 側 40MB。nginx は `client_max_body_size 45m`。
-- **タイムアウト**: 検図(特にR6)や見積のVisionは秒〜十数秒かかる。gunicorn `--timeout 300`、
-  nginx `proxy_read_timeout 300s` を設定済み。
-- **メモリ**: matplotlib＋ezdxf のワーカが太る。t3.small 以上を推奨。ワーカ数は vCPU に合わせる。
-- **認証**: `APP_PASSWORD` を設定すれば `/kenzu` も含め全画面がログイン必須になる
-  （API は 401）。社外に出す場合は必ず設定する。
+  `matplotlib` を使う→ `requirements.txt` に追加済み・`Agg` 強制済み。systemd 配下では
+  キャッシュ書込先が要るのでユニットで `MPLCONFIGDIR` を指定。
+- **APIキー**: R6 のときだけ `ANTHROPIC_API_KEY`（無ければ `GEMINI_API_KEY`）。未設定なら
+  R6 を飛ばして他ルールは動く。積算とキーを共用してもよいし、検図用を別に持ってもよい。
+- **アップロード上限**: DXF/ZIP のため検図 app 側 45MB。nginx `client_max_body_size 45m`。
+- **タイムアウト**: gunicorn `--timeout 300`、nginx `proxy_read_timeout 300s`。
+- **メモリ**: matplotlib＋ezdxf でワーカが太る。t3.small 以上を推奨。
+- **認証**: `KENZU_PASSWORD` 未設定だと検図は認証オフ（社内LAN/検証のみ）。社外公開時は必ず設定。
 
 ## 動作確認
 
 ```bash
-# 見積 → コード選定画面
-curl -fsS https://<ドメイン>/api/health
-# 検図画面
-open https://<ドメイン>/kenzu
-# 検図API（DXF/ZIP を multipart で送る。系統は自動判定）
-curl -s -F "file=@シーケンス.dxf" -F "file=@内部配置図.dxf" https://<ドメイン>/api/kenzu
+curl -fsS http://127.0.0.1:8001/api/health                 # {"app":"kenzu",...}
+# DXF/ZIP を multipart で送る（系統は自動判定）
+curl -s -F "file=@シーケンス.dxf" -F "file=@内部配置図.dxf" \
+     http://127.0.0.1:8001/api/kenzu
 ```
