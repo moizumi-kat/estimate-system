@@ -128,24 +128,26 @@ def _kenzu_models(files):
     return models, warnings, tmps
 
 
-def _kenzu_run(seq, skel, layout, table, ai=False):
-    """系統別モデルに対し R1-R7＋H1-H5 を実行。ルール構成は run_check と一致。"""
+def _kenzu_run(seq, skel, layouts, tables, ai=False):
+    """系統別モデルに R1-R7＋H1-H5 を実行。列盤(複数面)対応で layouts/tables は複数可。"""
     from wireharness.fromto_qc import defect_check as dc
     from wireharness.fromto_qc import harness_qc
-    physical = list(skel) + ([layout] if layout else [])
+    layouts = [x for x in (layouts or []) if x]
+    tables = [x for x in (tables or []) if x]
+    physical = list(skel) + layouts
     findings = []
-    if seq and layout:
-        findings += dc.rule_R1_layout_missing(seq + skel, layout)
+    if seq and layouts:
+        findings += dc.rule_R1_layout_missing(seq + skel, layouts)
     for m in skel:
         findings += dc.rule_R2_capacity(m)
     for m in skel:
         findings += dc.rule_R3_neutral(m)
     if seq and physical:
         findings += dc.rule_R4_orphan_contact(seq, physical)
-    for m in seq + skel + ([layout] if layout else []):
+    for m in seq + skel + layouts:
         findings += dc.rule_R7_earth(m)
-    if table:
-        findings += dc.rule_R5_confirmation_table(table)
+    for t in tables:
+        findings += dc.rule_R5_confirmation_table(t)
     if ai:
         for m in seq:
             findings += dc.rule_R6_spd_gemini(m)
@@ -179,9 +181,9 @@ def api_kenzu():
         buckets = sc.classify_files(models)
         seq = buckets['seq']
         skel = buckets['skel']
-        layout = buckets['layout']
-        table = buckets['table']
-        findings = _kenzu_run(seq, skel, layout, table, ai)
+        layouts = buckets['layout_all']
+        tables = buckets['table_all']
+        findings = _kenzu_run(seq, skel, layouts, tables, ai)
         # 二重指摘の除去(同一 rule/場所/問題)
         seen = set()
         uniq = []
