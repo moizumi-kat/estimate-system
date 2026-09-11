@@ -256,19 +256,21 @@ def index():
 KENZU_HTML = """<!DOCTYPE html><html lang=ja><head><meta charset=UTF-8>
 <meta name=viewport content="width=device-width,initial-scale=1"><title>工業電気検図システム</title>
 <style>
-body{font-family:'Yu Gothic',Meiryo,sans-serif;background:#f7f5ef;margin:0;color:#26332b}
-header{background:#1e3a28;color:#f4f1ea;padding:14px 22px;display:flex;align-items:baseline;gap:12px}
+*{box-sizing:border-box}
+body{font-family:'Yu Gothic',Meiryo,sans-serif;background:#f7f5ef;margin:0;color:#26332b;-webkit-text-size-adjust:100%;overflow-x:hidden}
+header{background:#1e3a28;color:#f4f1ea;padding:14px 18px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.04em}
 header .ver{font-size:11px;opacity:.7}
 .wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px}
 h2{font-size:16px;color:#1e3a28;margin:0 0 4px}.sub{color:#6b7a70;font-size:13px;margin:0 0 18px}
-.card{background:#fff;border:1px solid #d9d3c5;border-radius:10px;padding:18px;margin-bottom:16px}
-.drop{border:2px dashed #b9c2b8;border-radius:10px;padding:26px;text-align:center;color:#5c6b60;
- background:#fbfaf6;cursor:pointer}.drop.hi{background:#eef4ea;border-color:#1e3a28}
+.card{background:#fff;border:1px solid #d9d3c5;border-radius:10px;padding:16px;margin-bottom:16px;overflow-x:auto}
+.drop{display:block;width:100%;border:2px dashed #b9c2b8;border-radius:10px;padding:22px 14px;text-align:center;color:#5c6b60;
+ background:#fbfaf6;cursor:pointer;font-size:14px}.drop.hi{background:#eef4ea;border-color:#1e3a28}
 input[type=file]{display:none}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px}
 .btn{background:#1e3a28;color:#fff;border:0;border-radius:7px;padding:11px 20px;font-size:14px;
  font-weight:700;cursor:pointer}.btn:disabled{opacity:.5;cursor:default}
-label.chk{font-size:13px;color:#4a584f;margin-left:14px;user-select:none}
+label.chk{font-size:13px;color:#4a584f;user-select:none;display:flex;align-items:center;gap:5px}
 .files{font-size:13px;color:#4a584f;margin:12px 0}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th,td{border:1px solid #e2ddd0;padding:7px 9px;text-align:left;vertical-align:top}
@@ -289,10 +291,12 @@ th{background:#f0ede3;color:#3a4a3f;font-weight:700;white-space:nowrap}
  <label class=drop id=drop for=fi>ここに DXF / ZIP をドロップ、またはクリックして選択
   <input type=file id=fi multiple accept=".dxf,.zip"></label>
  <div class=files id=files></div>
- <button class=btn id=go disabled>検図する</button>
- <label class=chk><input type=checkbox id=ai> AI補助(R6/SPD警報)も実行</label>
- <span class=muted id=st></span>
- <span style="float:right"><a href="#" id=statslink class=muted>▼ 集計(バージョンアップ用)</a></span>
+ <div class=actions>
+  <button class=btn id=go disabled>検図する</button>
+  <label class=chk><input type=checkbox id=ai> AI補助(R6/SPD警報)も実行</label>
+  <span class=muted id=st></span>
+  <a href="#" id=statslink class=muted style="margin-left:auto">▼ 集計</a>
+ </div>
 </div>
 <div id=stats class=card hidden></div>
 <div id=out></div>
