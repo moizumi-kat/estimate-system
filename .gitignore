@@ -16,3 +16,8 @@ adj_cache.json
 experiments/*.pdf
 experiments/*.xlsx
 confirm_log.jsonl
+
+# 工業電気検図システム(kenzu_app)の実行時データ・キャッシュ
+kenzu_data/
+.mplcache/
+*.env
