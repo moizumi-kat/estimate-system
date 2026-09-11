@@ -264,7 +264,10 @@ header{background:#1e3a28;color:#f4f1ea;padding:14px 18px;display:flex;align-ite
 header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.04em}
 header .ver{font-size:11px;opacity:.7}
 .wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px}
-h2{font-size:16px;color:#1e3a28;margin:0 0 4px}.sub{color:#6b7a70;font-size:13px;margin:0 0 18px}
+h2{font-size:16px;color:#1e3a28;margin:0 0 4px}.sub{color:#6b7a70;font-size:13px;margin:0 0 14px}
+.help{background:#f0f4ef;border:1px solid #d9e0d6;border-radius:8px;padding:12px 14px;margin:0 0 16px;font-size:13px;color:#3a4a3f;line-height:1.6}
+.help-t{font-weight:700;color:#1e3a28;margin-bottom:6px}
+.help ul{margin:0;padding-left:18px}.help li{margin:3px 0}
 .card{background:#fff;border:1px solid #d9d3c5;border-radius:10px;padding:16px;margin-bottom:16px;overflow-x:auto}
 .drop{display:block;width:100%;border:2px dashed #b9c2b8;border-radius:10px;padding:22px 14px;text-align:center;color:#5c6b60;
  background:#fbfaf6;cursor:pointer;font-size:14px}.drop.hi{background:#eef4ea;border-color:#1e3a28}
@@ -287,10 +290,16 @@ th{background:#f0ede3;color:#3a4a3f;font-weight:700;white-space:nowrap}
 <header><h1>工業電気検図システム</h1><span class="ver">現場用</span></header>
 <div class=wrap>
 <h2>図面検図（設計次工程チェック）</h2>
-<p class=sub>1盤分のDXFを一式でアップロード（複数可・ZIP可）。系統を自動判定して不具合候補を指摘します。
-判断は設計。指摘は「こう直したら？」の申し送り材料です。</p>
-<p class=sub style="margin-top:-8px"><b>対象図面</b>：シーケンス図／スケルトン図／内部配置図（＋あれば社内確認表）。
-ファイル種類の指定は不要で、自動で振り分けます。</p>
+<p class=sub>系統を自動判定して不具合候補を指摘します。判断は設計。指摘は「こう直したら？」の申し送り材料です。</p>
+<div class=help>
+ <div class=help-t>アップロードする図面（DXF）</div>
+ <ul>
+  <li><b>対応する盤</b>：制御盤・分電盤（どちらも可）</li>
+  <li><b>単位</b>：1盤分、または列盤（3面体など）は1列盤分を<b>一式</b>で（複数選択・ZIP可）</li>
+  <li><b>入れる図面</b>：シーケンス図（制御回路）／スケルトン図（主回路）／内部配置図（機器の物理配置）／社内確認表（あれば）</li>
+  <li><b>注意</b>：シーケンス・スケルトンと内部配置図は<b>同じ範囲</b>をそろえる（面ごと／列盤ごと）。ファイル種類の指定は不要＝自動で振り分けます</li>
+ </ul>
+</div>
 <div class=card>
  <label class=drop id=drop for=fi>ここに DXF / ZIP をドロップ、またはクリックして選択
   <input type=file id=fi multiple accept=".dxf,.zip"></label>
