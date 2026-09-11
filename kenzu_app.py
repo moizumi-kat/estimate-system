@@ -285,8 +285,10 @@ th{background:#f0ede3;color:#3a4a3f;font-weight:700;white-space:nowrap}
 <header><h1>工業電気検図システム</h1><span class="ver">現場用</span></header>
 <div class=wrap>
 <h2>図面検図（設計次工程チェック）</h2>
-<p class=sub>DXF（複数可・ZIP可）をアップロードすると、系統を自動判定して不具合候補を指摘します。
+<p class=sub>1盤分のDXFを一式でアップロード（複数可・ZIP可）。系統を自動判定して不具合候補を指摘します。
 判断は設計。指摘は「こう直したら？」の申し送り材料です。</p>
+<p class=sub style="margin-top:-8px"><b>対象図面</b>：シーケンス図／スケルトン図／内部配置図（＋あれば社内確認表）。
+ファイル種類の指定は不要で、自動で振り分けます。</p>
 <div class=card>
  <label class=drop id=drop for=fi>ここに DXF / ZIP をドロップ、またはクリックして選択
   <input type=file id=fi multiple accept=".dxf,.zip"></label>
