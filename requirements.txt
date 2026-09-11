@@ -6,3 +6,4 @@ pymupdf>=1.24         # PDF高解像度レンダリング（import fitz）
 openpyxl>=3.1         # Excel 入出力（見積書パース・結果出力）
 gunicorn>=21.0        # 本番WSGI（任意・本番運用時）
 ezdxf>=1.1            # DXF入力対応（任意・DXF図面を扱う場合のみ）
+matplotlib>=3.7       # 工業電気検図システムのR6(SPD警報)領域描画（任意・AI補助時のみ）
