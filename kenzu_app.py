@@ -22,11 +22,21 @@ import hmac
 import secrets
 import functools
 from flask import Flask, request, jsonify, Response, session, redirect
+import kenzu_store
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 45 * 1024 * 1024  # 45MB（DXF/ZIP用）
 app.secret_key = os.environ.get('KENZU_SECRET', secrets.token_hex(16))
 KENZU_PASSWORD = os.environ.get('KENZU_PASSWORD', '')
+
+# --- APIキーの分離 ---
+# 検図は積算とは別のキーを使う。KENZU_ 接頭辞のキーが設定されていれば、この
+# プロセス内でだけ ANTHROPIC_API_KEY / GEMINI_API_KEY に反映する（vision.py が読む）。
+# 別プロセス(別 EnvironmentFile)なので、同一EC2でも積算のキーとは混ざらない。
+for _src, _dst in (('KENZU_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'),
+                   ('KENZU_GEMINI_API_KEY', 'GEMINI_API_KEY')):
+    if os.environ.get(_src):
+        os.environ[_dst] = os.environ[_src]
 
 
 def login_required(f):
@@ -183,7 +193,17 @@ def api_kenzu():
         counts = {}
         for f in uniq:
             counts[f.get('rule', '?')] = counts.get(f.get('rule', '?'), 0) + 1
-        return jsonify(ok=True, count=len(uniq), summary=counts,
+        # 検図専用ストアに実行を保存し、各指摘に安定ID(fid)を付けて返す
+        # （設計のフィードバック紐付け用）。保存失敗でも検図結果は返す。
+        run_id = None
+        try:
+            meta = {'files': [c['file'] for c in classification],
+                    'classification': classification, 'ai': ai, 'summary': counts}
+            run_id, uniq = kenzu_store.save_run(meta, uniq)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+        return jsonify(ok=True, run_id=run_id, count=len(uniq), summary=counts,
                        classification=classification, findings=uniq,
                        ai=ai, warnings=warnings)
     except Exception as e:
@@ -196,6 +216,33 @@ def api_kenzu():
                 os.unlink(p)
             except Exception:
                 pass
+
+
+@app.route('/api/feedback', methods=['POST'])
+@login_required
+def api_feedback():
+    """設計の判定を検図専用ストアに記録する。
+    body(JSON): {run_id, fid, disposition:'fixed'|'false_positive'|'missed', rule?, note?}
+    見逃し(missed)は fid 不要・rule/note で記述。"""
+    d = request.get_json(silent=True) or {}
+    disp = d.get('disposition')
+    if disp not in kenzu_store.DISPOSITIONS:
+        return jsonify(error=f"disposition は {kenzu_store.DISPOSITIONS} のいずれか"), 400
+    try:
+        rec = kenzu_store.add_feedback(
+            run_id=d.get('run_id'), disposition=disp, rule=d.get('rule'),
+            fid=d.get('fid'), note=d.get('note', ''),
+            user=(session.get('user') or ''))
+        return jsonify(ok=True, record=rec)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@app.route('/api/stats')
+@login_required
+def api_stats():
+    """バージョンアップ判断用の集計（ルール別 是正/誤検知/見逃し、適合率など）。"""
+    return jsonify(kenzu_store.stats())
 
 
 @app.route('/')
@@ -243,13 +290,16 @@ th{background:#f0ede3;color:#3a4a3f;font-weight:700;white-space:nowrap}
  <button class=btn id=go disabled>検図する</button>
  <label class=chk><input type=checkbox id=ai> AI補助(R6/SPD警報)も実行</label>
  <span class=muted id=st></span>
+ <span style="float:right"><a href="#" id=statslink class=muted>▼ 集計(バージョンアップ用)</a></span>
 </div>
+<div id=stats class=card hidden></div>
 <div id=out></div>
 <script>
 const fi=document.getElementById('fi'),drop=document.getElementById('drop'),
  files=document.getElementById('files'),go=document.getElementById('go'),
- st=document.getElementById('st'),out=document.getElementById('out'),ai=document.getElementById('ai');
-let picked=[];
+ st=document.getElementById('st'),out=document.getElementById('out'),ai=document.getElementById('ai'),
+ statsBox=document.getElementById('stats'),statslink=document.getElementById('statslink');
+let picked=[];let runId=null;
 function show(){files.textContent=picked.length?('選択: '+picked.map(f=>f.name).join(', ')):'';go.disabled=!picked.length;}
 fi.onchange=e=>{picked=[...e.target.files];show();};
 ;['dragover','dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();
@@ -262,23 +312,81 @@ go.onclick=async()=>{
  try{
   const r=await fetch('/api/kenzu',{method:'POST',body:fd});const d=await r.json();
   if(!r.ok){out.innerHTML='<div class=card><div class=err>'+esc(d.error||'エラー')+'</div></div>';st.textContent='';go.disabled=false;return;}
+  runId=d.run_id||null;
   let h='<div class=card>';
   h+='<div class=sum>指摘 <b>'+d.count+'</b> 件　内訳: '+esc(JSON.stringify(d.summary))+'</div>';
   h+='<div class=muted>系統判定: '+d.classification.map(c=>'<span class=role>'+esc(c.role)+'</span>'+esc(c.file)).join(' ')+'</div>';
   if(d.warnings&&d.warnings.length)h+='<div class=err style="margin-top:8px">'+d.warnings.map(esc).join('<br>')+'</div>';
   h+='</div>';
   if(d.findings.length){
-   h+='<div class=card><table><tr><th>ルール</th><th>重要度</th><th>場所</th><th>問題</th><th>提案</th></tr>';
+   h+='<div class=card><table><tr><th>ルール</th><th>重要度</th><th>場所</th><th>問題</th><th>提案</th><th>判定</th></tr>';
    for(const f of d.findings){
+    const fid=esc(f.fid);
     h+='<tr><td><span class=rule>'+esc(f.rule)+'</span><br><span class=muted>'+esc(f.confidence||'')+'</span></td>'+
        '<td><span class="pill '+sevcls(f.severity)+'">'+esc(f.severity)+'</span></td>'+
-       '<td>'+esc(f['場所'])+'</td><td>'+esc(f['問題'])+'</td><td>'+esc(f['提案'])+'</td></tr>';
+       '<td>'+esc(f['場所'])+'</td><td>'+esc(f['問題'])+'</td><td>'+esc(f['提案'])+'</td>'+
+       '<td class=fbcell data-fid="'+fid+'">'+
+         '<button class=fbbtn data-d=fixed title="正しい指摘・設計を是正">是正</button> '+
+         '<button class=fbbtn data-d=false_positive title="誤検知">誤検知</button>'+
+       '</td></tr>';
    }
-   h+='</table></div>';
+   h+='</table><div class=muted style="margin-top:8px">↑ 各指摘に設計の判定を記録できます（バージョンアップの集計に反映）。</div></div>';
   }else{h+='<div class=card>指摘はありませんでした。</div>';}
+  // 見逃し(ツールが出せなかった不具合)の登録
+  h+='<div class=card><b>見逃しの登録</b>（ツールが検出できなかった不具合を記録）<br>'+
+     '<input id=misrule placeholder="ルール/種別(例 R6, 新規)" style="width:180px;padding:6px;margin:8px 6px 0 0">'+
+     '<input id=misnote placeholder="内容メモ" style="width:360px;padding:6px">'+
+     ' <button class=btn id=misbtn style="padding:8px 14px">見逃しを登録</button>'+
+     ' <span class=muted id=misst></span></div>';
   out.innerHTML=h;st.textContent='';
  }catch(e){out.innerHTML='<div class=card><div class=err>'+esc(e)+'</div></div>';st.textContent='';}
  go.disabled=false;
+};
+// 指摘への判定(是正/誤検知)
+out.addEventListener('click',async e=>{
+ const b=e.target.closest('.fbbtn');if(!b)return;
+ const cell=b.closest('.fbcell');const fid=cell.getAttribute('data-fid');const disp=b.getAttribute('data-d');
+ try{
+  const r=await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({run_id:runId,fid:fid,disposition:disp})});
+  const d=await r.json();
+  cell.innerHTML=r.ok?('<span class=muted>記録: '+(disp==='fixed'?'是正':'誤検知')+' ✓</span>')
+                     :('<span class=err>'+esc(d.error||'失敗')+'</span>');
+ }catch(err){cell.innerHTML='<span class=err>'+esc(err)+'</span>';}
+});
+// 見逃しの登録
+out.addEventListener('click',async e=>{
+ if(e.target.id!=='misbtn')return;
+ const rule=document.getElementById('misrule').value.trim();
+ const note=document.getElementById('misnote').value.trim();
+ const misst=document.getElementById('misst');
+ if(!rule&&!note){misst.textContent='ルールか内容を入力してください';return;}
+ try{
+  const r=await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({run_id:runId,disposition:'missed',rule:rule,note:note})});
+  const d=await r.json();
+  misst.textContent=r.ok?'登録しました ✓':(d.error||'失敗');
+  if(r.ok){document.getElementById('misrule').value='';document.getElementById('misnote').value='';}
+ }catch(err){misst.textContent=String(err);}
+});
+// 集計(バージョンアップ用)
+statslink.onclick=async e=>{
+ e.preventDefault();
+ if(!statsBox.hidden){statsBox.hidden=true;return;}
+ try{
+  const r=await fetch('/api/stats');const s=await r.json();
+  let h='<b>集計</b>（保存先: <span class=muted>'+esc(s.data_dir)+'</span>）<br>'+
+    '実行 '+s.runs+' 回 / 総指摘 '+s.findings_total+' 件 / フィードバック '+s.feedback_total+' 件'+
+    ' / 見逃し '+s.missed_total+' 件<br>';
+  h+='<table style="margin-top:8px"><tr><th>ルール</th><th>是正</th><th>誤検知</th><th>見逃し</th><th>適合率</th></tr>';
+  const rules=Object.keys(s.by_rule).sort();
+  if(rules.length===0)h+='<tr><td colspan=5 class=muted>まだフィードバックがありません</td></tr>';
+  for(const k of rules){const c=s.by_rule[k];
+   h+='<tr><td>'+esc(k)+'</td><td>'+c.fixed+'</td><td>'+c.false_positive+'</td><td>'+c.missed+
+      '</td><td>'+(c.precision==null?'—':c.precision)+'</td></tr>';}
+  h+='</table>';
+  statsBox.innerHTML=h;statsBox.hidden=false;
+ }catch(err){statsBox.innerHTML='<span class=err>'+esc(err)+'</span>';statsBox.hidden=false;}
 };
 </script></div></body></html>"""
 

@@ -9,8 +9,17 @@
 
 - **別プロセス（別 gunicorn / 別 systemd サービス）**なので片方を再起動しても他方は無停止。
 - **別ログイン**（環境変数が別）。現場ユーザに営業用画面は見えない。
+- **別APIキー**: 検図は `KENZU_ANTHROPIC_API_KEY`（無ければ `KENZU_GEMINI_API_KEY`）を使う。
+  検図プロセス内でだけ有効化されるので、積算のキーとは混ざらない（課金・レート枠も分離）。
+- **別データ**: 検図の実行結果・フィードバックは `KENZU_DATA_DIR`（既定 `<repo>/kenzu_data`、
+  本番は `/var/lib/kenzu-system` 推奨）に保存。積算の `db.json` とは完全に別。
 - **同じリポジトリ・同じ venv**。検図ロジック `wireharness/fromto_qc/` は共有。
 - 同一 EC2 の別ポートで同居させても、別 EC2 に分けてもよい（下記どちらも可）。
+
+### 検図のフィードバック（バージョンアップの土台）
+検図画面で各指摘に **是正/誤検知** を、ツールが出せなかった不具合は **見逃し** を記録できる。
+集計（`/api/stats`）はルール別に是正/誤検知/見逃し件数と適合率を返し、
+「誤検知が多い→チューニング」「見逃し→新ルール」の判断に使う。データは上記の別領域に蓄積。
 
 ---
 
@@ -23,13 +32,16 @@ cd <アプリのディレクトリ>            # 例 /home/ec2-user/estimate-sys
 git pull --ff-only origin main       # kenzu_app.py 等を取り込む
 ./venv/bin/pip install -r requirements.txt   # matplotlib 追加分
 
-# 現場用ログインの環境変数（積算とは別ファイル・別パスワード）
+# 現場用の環境変数（積算とは別ファイル・別パスワード・別キー・別データ）
 sudo tee /etc/kenzu-system.env >/dev/null <<'EOF'
 KENZU_PASSWORD=（現場用ログインパスワード）
 KENZU_SECRET=（ランダムな長い文字列）
-ANTHROPIC_API_KEY=（R6のAI補助を使う場合のみ。無ければ省略可）
+KENZU_ANTHROPIC_API_KEY=（R6のAI補助用。積算のキーとは別。無ければ省略可→R6スキップ）
+KENZU_DATA_DIR=/var/lib/kenzu-system
 EOF
 sudo chmod 600 /etc/kenzu-system.env
+# フィードバック等の保存先（積算db.jsonとは別。永続領域）を作成
+sudo mkdir -p /var/lib/kenzu-system && sudo chown {APP_USER}:{APP_USER} /var/lib/kenzu-system
 
 # systemd 常駐（{APP_DIR}/{APP_USER} を書き換えてからコピー）
 sudo cp deploy/kenzu-system.service /etc/systemd/system/kenzu-system.service
@@ -78,9 +90,11 @@ EOF
 sudo tee /etc/kenzu-system.env >/dev/null <<'EOF'
 KENZU_PASSWORD=（検図ログイン）
 KENZU_SECRET=（ランダム長文字列）
-ANTHROPIC_API_KEY=（検図R6用。任意）
+KENZU_ANTHROPIC_API_KEY=（検図R6用。積算とは別キー。任意）
+KENZU_DATA_DIR=/var/lib/kenzu-system
 EOF
 sudo chmod 600 /etc/estimate-system.env /etc/kenzu-system.env
+sudo mkdir -p /var/lib/kenzu-system && sudo chown {APP_USER}:{APP_USER} /var/lib/kenzu-system
 
 # systemd（各 .service の {APP_DIR}/{APP_USER} を書き換え）
 sudo cp deploy/estimate-system.service /etc/systemd/system/

@@ -12,8 +12,11 @@ Type=simple
 User={APP_USER}
 Group={APP_USER}
 WorkingDirectory={APP_DIR}
-# 現場用の別ログイン・別鍵。/etc/kenzu-system.env に
-#   KENZU_PASSWORD=... / KENZU_SECRET=... / (任意)ANTHROPIC_API_KEY=... を記載し chmod 600。
+# 現場用の別ログイン・別鍵・別データ。/etc/kenzu-system.env に記載し chmod 600:
+#   KENZU_PASSWORD=...            画面ログイン(積算のAPP_PASSWORDとは別)
+#   KENZU_SECRET=...              セッション署名鍵
+#   KENZU_ANTHROPIC_API_KEY=...  R6のAI補助用(積算のANTHROPIC_API_KEYとは別キー。任意)
+#   KENZU_DATA_DIR=/var/lib/kenzu-system  フィードバック等の保存先(積算db.jsonと別。永続領域)
 EnvironmentFile=/etc/kenzu-system.env
 # 検図R6の描画で matplotlib を使う。headless 用にキャッシュ先を明示。
 Environment=MPLBACKEND=Agg
