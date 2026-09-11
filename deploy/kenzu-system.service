@@ -4,7 +4,7 @@
 #   sudo systemctl daemon-reload && sudo systemctl enable --now kenzu-system
 # ---- 環境に合わせて {APP_DIR} / {APP_USER} を書き換える ----
 [Unit]
-Description=Kenzu (drawing QC) for factory floor (Flask/gunicorn)
+Description=工業電気検図システム (drawing QC, factory floor) Flask/gunicorn
 After=network.target
 
 [Service]

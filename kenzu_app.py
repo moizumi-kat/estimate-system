@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""図面検図システム（現場用・単独アプリ）
+"""工業電気検図システム（現場用・単独アプリ）
 
 工場現場で使う図面不具合チェック。営業が使う積算コード選定システム(app.py)とは
 別プロセス・別アドレス・別ログインで動かす（部署が違うため入口ごと分ける）。
@@ -10,9 +10,11 @@
   本番(EC2)   gunicorn kenzu_app:app --workers 3 --timeout 300 --bind 127.0.0.1:8001
 
 環境変数:
-  KENZU_PASSWORD   画面ログイン用パスワード（未設定なら認証オフ＝ローカル試用のみ）
-  KENZU_SECRET     セッション署名鍵（未設定なら起動毎にランダム）
-  ANTHROPIC_API_KEY / GEMINI_API_KEY  R6(SPD警報)のAI補助を使う時だけ。無ければR6は自動スキップ。
+  KENZU_PASSWORD              画面ログイン用パスワード（未設定なら認証オフ＝ローカル試用のみ）
+  KENZU_SECRET               セッション署名鍵（未設定なら起動毎にランダム）
+  KENZU_ANTHROPIC_API_KEY    R6(SPD警報)のAI補助用。積算とは別キー。無ければR6は自動スキップ。
+  KENZU_GEMINI_API_KEY       同上(Gemini)。ANTHROPIC が無い時のフォールバック。
+  KENZU_DATA_DIR             検図結果・フィードバックの保存先(積算db.jsonと別。既定 <repo>/kenzu_data)
 """
 import os
 import io
@@ -53,7 +55,7 @@ def login_required(f):
 
 
 LOGIN_HTML = """<!DOCTYPE html><html lang=ja><head><meta charset=UTF-8>
-<meta name=viewport content="width=device-width,initial-scale=1"><title>図面検図システム ログイン</title>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>工業電気検図システム ログイン</title>
 <style>body{font-family:'Yu Gothic',Meiryo,sans-serif;background:#f7f5ef;display:flex;
 align-items:center;justify-content:center;height:100vh;margin:0}
 .box{background:#fff;border:1px solid #d6d1c4;border-radius:10px;padding:32px;width:320px}
@@ -62,7 +64,7 @@ border-radius:6px;font-size:14px;box-sizing:border-box}button{width:100%;margin-
 background:#1e3a28;color:#fff;border:0;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}
 .e{color:#c0504d;font-size:12px;margin-top:10px}</style></head>
 <body><form class=box method=post action=/login>
-<h1>図面検図システム</h1>
+<h1>工業電気検図システム</h1>
 <input type=password name=pw placeholder=パスワード autofocus>
 <button>ログイン</button>
 {ERR}</form></body></html>"""
@@ -252,7 +254,7 @@ def index():
 
 
 KENZU_HTML = """<!DOCTYPE html><html lang=ja><head><meta charset=UTF-8>
-<meta name=viewport content="width=device-width,initial-scale=1"><title>図面検図システム</title>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>工業電気検図システム</title>
 <style>
 body{font-family:'Yu Gothic',Meiryo,sans-serif;background:#f7f5ef;margin:0;color:#26332b}
 header{background:#1e3a28;color:#f4f1ea;padding:14px 22px;display:flex;align-items:baseline;gap:12px}
@@ -278,7 +280,7 @@ th{background:#f0ede3;color:#3a4a3f;font-weight:700;white-space:nowrap}
 .muted{color:#94a094;font-size:12px}.err{color:#c0504d;font-size:13px}
 .rule{font-weight:700;color:#1e3a28}
 </style></head><body>
-<header><h1>図面検図システム</h1><span class="ver">現場用</span></header>
+<header><h1>工業電気検図システム</h1><span class="ver">現場用</span></header>
 <div class=wrap>
 <h2>図面検図（設計次工程チェック）</h2>
 <p class=sub>DXF（複数可・ZIP可）をアップロードすると、系統を自動判定して不具合候補を指摘します。
@@ -394,6 +396,6 @@ statslink.onclick=async e=>{
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', '8001'))
     _aikey = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("GEMINI_API_KEY"))
-    print(f'図面検図システム(現場用)起動: http://localhost:{port}'
+    print(f'工業電気検図システム(現場用)起動: http://localhost:{port}'
           f'  (AIキー {"OK" if _aikey else "未設定→R6スキップ"})')
     app.run(host='0.0.0.0', port=port, debug=False)
