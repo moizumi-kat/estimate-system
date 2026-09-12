@@ -158,10 +158,15 @@ def rule_R1_layout_missing(schematic_models, layout_model, alias=None):
     exact名 と (カテゴリ,回路番号) の両方で突合し、呼び分け(SL⇔RL等)は漏れ扱いしない。
     alias: 追加の {schematic機器: layout機器} 手動別名。"""
     alias = alias or {}
+    # layout_model は 1枚 でも 複数枚(列盤=面ごとの配置図) でも可。全枚の機器を束ねて照合。
+    layouts = layout_model if isinstance(layout_model, (list, tuple)) else [layout_model]
     lay_names, lay_cat = set(), set()
-    for sym, dev, dev1, parts in _dev_records(layout_model):
-        lay_names.add(norm(sym))
-        lay_cat.add(_cat_key(dev, parts, dev1))
+    for lm in layouts:
+        if lm is None:
+            continue
+        for sym, dev, dev1, parts in _dev_records(lm):
+            lay_names.add(norm(sym))
+            lay_cat.add(_cat_key(dev, parts, dev1))
     findings = []
     seen = set()
     for m in schematic_models:
