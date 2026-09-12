@@ -289,6 +289,7 @@
     (if (>= ni 0)
       (setq tByNet (ft:push-idx ni pn tByNet))
       (setq orphanT (cons pn orphanT))))
+  (ft:write-devices (ft:devices))   ; 機器一覧（照合ゲートの欠品判定用）
   ;; 5) 出力
   (setq base (vl-filename-base (getvar "DWGNAME"))
         dir  (getvar "DWGPREFIX"))
@@ -401,6 +402,15 @@
         (setq i (1+ i)))))
   out)
 
+;; 機器一覧を <base>_devices.csv へ（記号,番号,サイズ）
+(defun ft:write-devices (devs / base dir f dv)
+  (setq base (vl-filename-base (getvar "DWGNAME")) dir (getvar "DWGPREFIX"))
+  (setq f (open (strcat dir base "_devices.csv") "w"))
+  (write-line "機器記号,機器番号,サイズ" f)
+  (foreach dv devs
+    (write-line (strcat (nth 0 dv) "," (nth 1 dv) "," (nth 3 dv)) f))
+  (close f))
+
 (defun C:FROMTOG ( / ss i en idata dev-pins devs tags tg g pt
                      bestp bestpd pn dd nd bd dv rows unatt
                      base dir fcsv frep csv rep row seen ds devset g2 d
@@ -421,6 +431,8 @@
   (princ (strcat "\n号線ラベル= " (itoa (length tags))
                  " / 端子ピン= " (itoa (length dev-pins))
                  " / 機器= " (itoa (length devs))))
+  ;; 機器一覧を出力（照合ゲートの欠品判定に使用）
+  (ft:write-devices devs)
   ;; 各号線ラベル → 最寄り端子(SNAP) → 無ければ最寄り機器(DEVSNAP)
   (setq rows '() unatt '())
   (foreach tg tags
