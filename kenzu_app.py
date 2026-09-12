@@ -160,6 +160,35 @@ def _kenzu_run(seq, skel, layouts, tables, ai=False):
     return findings
 
 
+_HARNESS_H = ('H1', 'H2', 'H3', 'H4', 'H5')  # ハーネス化(号線)チェック＝生成の可否ゲート
+
+
+def _harness_fromto(seq, skel, layouts):
+    """検図済みモデルから機器to機器 From-To を決定論生成。
+    戻り: {'rows':[{号線,from,to,size,len,stat}], 'groups':[...], 'summary':{...}} / 生成不可なら None。"""
+    if not (seq or skel):
+        return None
+    from wireharness.fromto_qc import harness as H
+    seq_paths = [m.path for m in seq]
+    skel_paths = [m.path for m in skel]
+    layout_path = (layouts[0].path if layouts else
+                   (seq_paths[0] if seq_paths else (skel_paths[0] if skel_paths else None)))
+    fused = H.fuse(seq_paths, skel_paths, layout_path)
+    rows, groups = [], []
+    for sid, net in fused['nets'].items():
+        size = net.get('wire_size', '')
+        if net.get('wires'):
+            for w in net['wires']:
+                a, b = w[0], w[1]
+                length = w[2] if len(w) > 2 else 0
+                rows.append({'号線': sid, 'from': a, 'to': b, 'size': size,
+                             'len': int(round(length)), 'stat': '確定(位置あり)'})
+        elif len(net.get('devices', [])) >= 2:
+            groups.append({'号線': sid, 'devs': list(net['devices']), 'size': size,
+                           'stat': '連結のみ(測長なし)'})
+    return {'rows': rows, 'groups': groups, 'summary': H.summary(fused)}
+
+
 @app.route('/api/health')
 def health():
     return jsonify(ok=True, app='kenzu',
@@ -197,19 +226,32 @@ def api_kenzu():
         counts = {}
         for f in uniq:
             counts[f.get('rule', '?')] = counts.get(f.get('rule', '?'), 0) + 1
+        # ハーネス From-To 生成（検図の後段）。H1-H5(ハーネス化)指摘が無ければ「検図OK」。
+        harness = None
+        try:
+            hp = _harness_fromto(seq, skel, layouts)
+            if hp is not None:
+                h_issues = sum(1 for f in uniq if f.get('rule') in _HARNESS_H)
+                hp['ok'] = (h_issues == 0)
+                hp['h_issues'] = h_issues
+                harness = hp
+        except Exception:
+            import traceback
+            traceback.print_exc()
         # 検図専用ストアに実行を保存し、各指摘に安定ID(fid)を付けて返す
         # （設計のフィードバック紐付け用）。保存失敗でも検図結果は返す。
         run_id = None
         try:
             meta = {'files': [c['file'] for c in classification],
-                    'classification': classification, 'ai': ai, 'summary': counts}
+                    'classification': classification, 'ai': ai, 'summary': counts,
+                    'harness': harness}
             run_id, uniq = kenzu_store.save_run(meta, uniq)
         except Exception:
             import traceback
             traceback.print_exc()
         return jsonify(ok=True, run_id=run_id, count=len(uniq), summary=counts,
                        classification=classification, findings=uniq,
-                       ai=ai, warnings=warnings)
+                       harness=harness, ai=ai, warnings=warnings)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -249,6 +291,32 @@ def api_stats():
     return jsonify(kenzu_store.stats())
 
 
+@app.route('/api/harness.csv')
+@login_required
+def api_harness_csv():
+    """保存済み run の ハーネス From-To を CSV でダウンロード（iPhone対応=GET）。"""
+    import io as _io
+    import csv as _csv
+    run_id = request.args.get('run', '')
+    rec = kenzu_store.get_run(run_id) if run_id else None
+    h = ((rec or {}).get('meta') or {}).get('harness') if rec else None
+    if not h:
+        return Response('From-Toデータがありません（先に検図を実行してください）',
+                        status=404, mimetype='text/plain; charset=utf-8')
+    buf = _io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow(['号線', 'From機器', 'To機器', '電線サイズ', '配線長(mm)', '状態'])
+    for r in h.get('rows', []):
+        w.writerow([r.get('号線', ''), r.get('from', ''), r.get('to', ''),
+                    r.get('size', ''), r.get('len', ''), r.get('stat', '')])
+    for g in h.get('groups', []):
+        w.writerow([g.get('号線', ''), '｜'.join(g.get('devs', [])), '',
+                    g.get('size', ''), '', g.get('stat', '')])
+    data = '﻿' + buf.getvalue()   # BOM: Excel(日本語)で文字化けしない
+    return Response(data, mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename=fromto_{run_id or "kenzu"}.csv'})
+
+
 @app.route('/')
 @login_required
 def index():
@@ -286,6 +354,8 @@ th{background:#f0ede3;color:#3a4a3f;font-weight:700;white-space:nowrap}
 .sum{font-size:14px;margin:6px 0 14px}.sum b{color:#1e3a28}
 .muted{color:#94a094;font-size:12px}.err{color:#c0504d;font-size:13px}
 .rule{font-weight:700;color:#1e3a28}
+.btn2{display:inline-block;background:#1e3a28;color:#fff;text-decoration:none;border-radius:7px;padding:9px 16px;font-size:13px;font-weight:700}
+.hok{border-left:5px solid #3a7d4f}.hng{border-left:5px solid #c79a2e}
 </style></head><body>
 <header><h1>工業電気検図システム</h1><span class="ver">現場用</span></header>
 <div class=wrap>
@@ -352,6 +422,28 @@ go.onclick=async()=>{
    }
    h+='</table><div class=muted style="margin-top:8px">↑ 各指摘に設計の判定を記録できます（バージョンアップの集計に反映）。</div></div>';
   }else{h+='<div class=card>指摘はありませんでした。</div>';}
+  // ハーネス From-To（検図の後段。H1-H5が無ければ「検図OK・生成」）
+  if(d.harness){
+   const H=d.harness,s=H.summary||{},csv='/api/harness.csv?run='+encodeURIComponent(runId||'');
+   h+='<div class="card '+(H.ok?'hok':'hng')+'">';
+   h+='<div class=help-t>ハーネス From-To '+(H.ok?'（検図OK → 生成）':'（未解消の指摘あり＝参考）')+'</div>';
+   if(!H.ok)h+='<div class=err style="margin:2px 0 8px">ハーネス化の指摘が '+H.h_issues+' 件あります。解消後の生成を推奨します（下は参考の下書き）。</div>';
+   h+='<div class=muted>号線 '+(s.nets||0)+' ／ 機器to機器つながり '+(s.conn||0)+' ／ 測長可 '+(s['測長可(物理位置あり)']||0)+'（'+(s.conn_pct||0)+'%）</div>';
+   h+='<div style="margin:8px 0"><a class=btn2 href="'+csv+'">CSVをダウンロード</a></div>';
+   if(H.rows&&H.rows.length){
+    h+='<table><tr><th>号線</th><th>From</th><th>To</th><th>サイズ</th><th>長さmm</th></tr>';
+    for(const r of H.rows.slice(0,300))h+='<tr><td>'+esc(r['号線'])+'</td><td>'+esc(r.from)+'</td><td>'+esc(r.to)+'</td><td>'+esc(r.size||'')+'</td><td>'+esc(r.len)+'</td></tr>';
+    h+='</table>';
+   }
+   if(H.groups&&H.groups.length){
+    h+='<div class=muted style="margin-top:8px">位置不明で測長できない号線（連結のみ）:</div>';
+    h+='<table><tr><th>号線</th><th>機器（連結）</th><th>サイズ</th></tr>';
+    for(const g of H.groups.slice(0,150))h+='<tr><td>'+esc(g['号線'])+'</td><td>'+esc((g.devs||[]).join(' ｜ '))+'</td><td>'+esc(g.size||'')+'</td></tr>';
+    h+='</table>';
+   }
+   if((!H.rows||!H.rows.length)&&(!H.groups||!H.groups.length))h+='<div class=muted>生成できるFrom-Toがありませんでした（号線・属性が不足）。</div>';
+   h+='</div>';
+  }
   // 見逃し(ツールが出せなかった不具合)の登録
   h+='<div class=card><b>見逃しの登録</b>（ツールが検出できなかった不具合を記録）<br>'+
      '<input id=misrule placeholder="ルール/種別(例 R6, 新規)" style="width:180px;padding:6px;margin:8px 6px 0 0">'+
