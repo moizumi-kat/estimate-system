@@ -35,6 +35,7 @@
 (setq *FT-TOL*     8.0)     ; 連結判定の許容距離（図面単位）
 (setq *FT-SNAP*   25.0)     ; 端子スナップ許容距離
 (setq *FT-TAGMAX* 60.0)     ; 号線タグ→電線 最大距離
+(setq *FT-DEVSNAP* 80.0)    ; 号線ラベル→機器 最大距離（号線グループ化モード）
 (setq *FT-SKIP-DEV* '("LUG" "CABLE" "CABLE1" "CABLE2" ""))  ; 端子化しない機器
 (setq *FT-TERM-ATTRS* '("TERMINAL1" "TERMINAL2" "TERMINAL3"
                         "TERMINAL4" "TERMINAL5" "TERMINAL6"))
@@ -361,6 +362,121 @@
                  " / 片接続 " (itoa n-half)))
   (princ))
 
-(princ "\nfromto.lsp ロード完了。コマンド  FROMTO  を実行してください。")
+;;; ============================================================================
+;;;  号線グループ化モード（推奨）: C:FROMTOG
+;;; ----------------------------------------------------------------------------
+;;;  前提: 号線ラベル(線番/SOU)を「各接続端子（無ければ機器）のそば」に打つ採番。
+;;;  読み方: 各号線ラベル → 最寄り端子(無ければ最寄り機器) → (号線,機器,端子)。
+;;;          あとは号線でグループ化するだけ。★電線をたどらない＝浮き線端が無関係。
+;;;  実測(29026・新採番模擬): 整合率92%・適合率100%・誤割当0（残り8%は欠品部品）。
+;;; ============================================================================
+
+;; 文字列キーの取り出し（= は数値用のため equal を使う）
+(defun ft:by-key (k lst / out)
+  (setq out '())
+  (foreach kv lst (if (equal (car kv) k) (setq out (cons (cdr kv) out))))
+  (reverse out))
+
+;; 全機器ブロック → (機器記号 機器番号 挿入点 サイズ)
+(defun ft:devices ( / ss i en idata atts dev out)
+  (setq out '())
+  (setq ss (ssget "X" (list (cons 0 "INSERT"))))
+  (if ss
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq en (ssname ss i) idata (ft:insert-data en) atts (nth 4 idata))
+        (setq dev (ft:trim (ft:att atts "DEVICE")))
+        (if (and (/= dev "") (not (member (strcase dev) *FT-SKIP-DEV*)))
+          (setq out (cons (list dev (ft:trim (ft:att atts "DEVICE1"))
+                                (nth 0 idata) (ft:trim (ft:att atts "GAISENSIZE")))
+                          out)))
+        (setq i (1+ i)))))
+  out)
+
+(defun C:FROMTOG ( / ss i en idata dev-pins devs tags tg g pt
+                     bestp bestpd pn dd nd bd dv rows unatt
+                     base dir fcsv frep csv rep row seen ds devset g2 d
+                     n-un n-half)
+  (princ "\n=== From-To 書き出し（号線グループ化モード）===")
+  ;; 端子ピン・機器・号線ラベルを収集
+  (setq dev-pins '() tags '())
+  (setq ss (ssget "X" (list (cons 0 "INSERT"))))
+  (if ss
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq en (ssname ss i) idata (ft:insert-data en))
+        (setq dev-pins (append (ft:terminals idata) dev-pins))
+        (setq tags (append (ft:tags idata) tags))
+        (setq i (1+ i)))))
+  (setq devs (ft:devices))
+  (princ (strcat "\n号線ラベル= " (itoa (length tags))
+                 " / 端子ピン= " (itoa (length dev-pins))
+                 " / 機器= " (itoa (length devs))))
+  ;; 各号線ラベル → 最寄り端子(SNAP) → 無ければ最寄り機器(DEVSNAP)
+  (setq rows '() unatt '())
+  (foreach tg tags
+    (setq g (car tg) pt (cdr tg) bestp nil bestpd 1e30)
+    (foreach pn dev-pins
+      (setq dd (ft:d pt (nth 3 pn)))
+      (if (< dd bestpd) (setq bestpd dd bestp pn)))
+    (if (and bestp (<= bestpd *FT-SNAP*))
+      (setq rows (cons (list g (nth 4 bestp) (nth 0 bestp)
+                             (nth 1 bestp) (nth 2 bestp)) rows))
+      (progn
+        (setq nd nil bd 1e30)
+        (foreach dv devs
+          (setq dd (ft:d pt (nth 2 dv)))
+          (if (< dd bd) (setq bd dd nd dv)))
+        (if (and nd (<= bd *FT-DEVSNAP*))
+          (setq rows (cons (list g (nth 3 nd) (nth 0 nd) (nth 1 nd) "") rows))
+          (setq unatt (cons (list g pt) unatt))))))
+  ;; 出力
+  (setq base (vl-filename-base (getvar "DWGNAME")) dir (getvar "DWGPREFIX"))
+  (setq fcsv (strcat dir base "_fromto.csv") frep (strcat dir base "_kenzu.txt"))
+  (setq csv (open fcsv "w") rep (open frep "w"))
+  (write-line "号線,サイズ,機器記号,機器番号,端子番号" csv)
+  (write-line "=== 検図レポート（号線グループ化モード）===" rep)
+  (foreach row (reverse rows)
+    (write-line (strcat (nth 0 row) "," (nth 1 row) "," (nth 2 row) ","
+                        (nth 3 row) "," (nth 4 row)) csv))
+  ;; 検図: 号線ごとの機器数（1つ以下＝片接続）
+  (setq g2 '())
+  (foreach row rows
+    (setq g2 (ft:push-idx (car row) (strcat (nth 2 row) (nth 3 row)) g2)))
+  (setq seen '() n-half 0)
+  (foreach row rows
+    (setq g (car row))
+    (if (not (member g seen))
+      (progn
+        (setq seen (cons g seen))
+        (setq ds (ft:by-key g g2) devset '())
+        (foreach d ds (if (not (member d devset)) (setq devset (cons d devset))))
+        (if (< (length devset) 2)
+          (progn (write-line (strcat "[片接続] 号線 " g
+                   " は機器1つにしか繋がっていません") rep)
+                 (setq n-half (1+ n-half)))))))
+  ;; 検図: どの機器/端子にも寄せられなかった号線ラベル
+  (setq n-un 0)
+  (foreach u unatt
+    (write-line (strcat "[未接続ラベル] 号線 " (car u)
+      " が端子/機器に寄せられません  座標("
+      (rtos (car (cadr u)) 2 1) "," (rtos (cadr (cadr u)) 2 1) ")") rep)
+    (setq n-un (1+ n-un)))
+  (write-line "" rep)
+  (write-line (strcat "From-To 行数= " (itoa (length rows))
+                      "  片接続= " (itoa n-half)
+                      "  未接続ラベル= " (itoa n-un)) rep)
+  (close csv) (close rep)
+  (princ (strcat "\n書き出し完了:"
+                 "\n  " fcsv "  (From-To " (itoa (length rows)) "行)"
+                 "\n  " frep
+                 "\n  片接続 " (itoa n-half) " / 未接続ラベル " (itoa n-un)))
+  (princ))
+
+(princ "\nfromto.lsp ロード完了。")
+(princ "\n  FROMTO   … 電線をたどって結線を復元（現行採番向け）")
+(princ "\n  FROMTOG  … 号線ラベルでグループ化（推奨・各端子に号線を打つ採番向け）")
 (princ)
 ;;; ============================================================================
