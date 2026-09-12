@@ -314,7 +314,8 @@
     (if (and (= g "") terms)
       (progn (write-line (strcat "[号線なし] 機器 "
               (apply 'strcat (mapcar '(lambda(x)(strcat (nth 0 x) (nth 1 x) " ")) terms))
-              "を結ぶ電線に線番が付いていません") rep)
+              "を結ぶ電線に線番が付いていません"
+              "\n    → 解決策: この電線に線番(号線)を付けてください") rep)
              (setq n-nogou (1+ n-nogou))))
     ;; 検図: 片接続（機器が1つ以下）
     (setq devset '())
@@ -323,7 +324,8 @@
       (if (not (member d devset)) (setq devset (cons d devset))))
     (if (and (/= g "") (< (length devset) 2))
       (progn (write-line (strcat "[片接続] 号線 " g
-              " は機器が1つしか繋がっていません（相手先不明）") rep)
+              " は機器が1つしか繋がっていません（相手先不明）"
+              "\n    → 解決策: 相手側の端子にも同じ号線を付ける／相手機器を図面に追加") rep)
              (setq n-half (1+ n-half))))
     ;; 検図: 浮き線端（次数1の端点で、近くに端子なし）
     (foreach p (ft:uniq-pts (car nt))
@@ -336,17 +338,22 @@
             (progn
               (write-line (strcat "[浮き線端] 号線 " (if (= g "") "?" g)
                 " の電線端が端子に未接続  座標("
-                (rtos (car p) 2 1) "," (rtos (cadr p) 2 1) ")") rep)
+                (rtos (car p) 2 1) "," (rtos (cadr p) 2 1) ")"
+                "\n    → 解決策: 電線の端を機器端子にスナップ接続してください") rep)
               (setq n-float (1+ n-float)))))))
     (setq ni (1+ ni)))
   ;; 検図: 端子未接続（電線が来ていない端子）
   (foreach pn orphanT
     (write-line (strcat "[端子未接続] " (nth 0 pn) (nth 1 pn)
       " 端子" (nth 2 pn) " に電線が来ていません  座標("
-      (rtos (car (nth 3 pn)) 2 1) "," (rtos (cadr (nth 3 pn)) 2 1) ")") rep)
+      (rtos (car (nth 3 pn)) 2 1) "," (rtos (cadr (nth 3 pn)) 2 1) ")"
+      "\n    → 解決策: この端子に接続すべき電線/号線を確認してください") rep)
     (setq n-orphan (1+ n-orphan)))
-  ;; まとめ
+  ;; まとめ（判定）
   (write-line "" rep)
+  (if (and (= n-float 0) (= n-orphan 0) (= n-nogou 0) (= n-half 0))
+    (write-line "判定: ◎ 合格 － From-To を 100% 生成できます。内容検図(R1-R7)へ進めます。" rep)
+    (write-line "判定: × 要修正 － 上記の問題点と解決策を設計に提示し、承認・修正後に再実行してください。" rep))
   (write-line (strcat "From-To 行数= " (itoa n-rows)) rep)
   (write-line (strcat "浮き線端= " (itoa n-float)
                       "  端子未接続= " (itoa n-orphan)
@@ -397,7 +404,7 @@
 (defun C:FROMTOG ( / ss i en idata dev-pins devs tags tg g pt
                      bestp bestpd pn dd nd bd dv rows unatt
                      base dir fcsv frep csv rep row seen ds devset g2 d
-                     n-un n-half)
+                     n-un n-half deflines ln u)
   (princ "\n=== From-To 書き出し（号線グループ化モード）===")
   ;; 端子ピン・機器・号線ラベルを収集
   (setq dev-pins '() tags '())
@@ -432,16 +439,9 @@
         (if (and nd (<= bd *FT-DEVSNAP*))
           (setq rows (cons (list g (nth 3 nd) (nth 0 nd) (nth 1 nd) "") rows))
           (setq unatt (cons (list g pt) unatt))))))
-  ;; 出力
-  (setq base (vl-filename-base (getvar "DWGNAME")) dir (getvar "DWGPREFIX"))
-  (setq fcsv (strcat dir base "_fromto.csv") frep (strcat dir base "_kenzu.txt"))
-  (setq csv (open fcsv "w") rep (open frep "w"))
-  (write-line "号線,サイズ,機器記号,機器番号,端子番号" csv)
-  (write-line "=== 検図レポート（号線グループ化モード）===" rep)
-  (foreach row (reverse rows)
-    (write-line (strcat (nth 0 row) "," (nth 1 row) "," (nth 2 row) ","
-                        (nth 3 row) "," (nth 4 row)) csv))
-  ;; 検図: 号線ごとの機器数（1つ以下＝片接続）
+  ;; --- 問題点＋解決策を組み立て（設計へ提示する形） ---
+  (setq deflines '())
+  ;; 片接続（相手先が1つしかない号線）
   (setq g2 '())
   (foreach row rows
     (setq g2 (ft:push-idx (car row) (strcat (nth 2 row) (nth 3 row)) g2)))
@@ -454,25 +454,44 @@
         (setq ds (ft:by-key g g2) devset '())
         (foreach d ds (if (not (member d devset)) (setq devset (cons d devset))))
         (if (< (length devset) 2)
-          (progn (write-line (strcat "[片接続] 号線 " g
-                   " は機器1つにしか繋がっていません") rep)
-                 (setq n-half (1+ n-half)))))))
-  ;; 検図: どの機器/端子にも寄せられなかった号線ラベル
+          (progn
+            (setq deflines (cons (strcat
+              "[片接続] 号線 " g " は機器1つにしか繋がっていません"
+              "\n    → 解決策: 相手側の端子にも号線 " g
+              " を付けてください（相手機器が図面に無い場合は追加が必要）") deflines))
+            (setq n-half (1+ n-half)))))))
+  ;; 未接続ラベル（端子/機器に寄せられない号線）
   (setq n-un 0)
   (foreach u unatt
-    (write-line (strcat "[未接続ラベル] 号線 " (car u)
-      " が端子/機器に寄せられません  座標("
-      (rtos (car (cadr u)) 2 1) "," (rtos (cadr (cadr u)) 2 1) ")") rep)
+    (setq deflines (cons (strcat
+      "[未接続ラベル] 号線 " (car u) "  座標("
+      (rtos (car (cadr u)) 2 1) "," (rtos (cadr (cadr u)) 2 1) ")"
+      "\n    → 解決策: この号線ラベルを接続先端子のそばに置く／"
+      "その端子・機器を図面に追加してください") deflines))
     (setq n-un (1+ n-un)))
-  (write-line "" rep)
+  ;; --- 出力 ---
+  (setq base (vl-filename-base (getvar "DWGNAME")) dir (getvar "DWGPREFIX"))
+  (setq fcsv (strcat dir base "_fromto.csv") frep (strcat dir base "_kenzu.txt"))
+  (setq csv (open fcsv "w") rep (open frep "w"))
+  (write-line "号線,サイズ,機器記号,機器番号,端子番号" csv)
+  (foreach row (reverse rows)
+    (write-line (strcat (nth 0 row) "," (nth 1 row) "," (nth 2 row) ","
+                        (nth 3 row) "," (nth 4 row)) csv))
+  (write-line "=== 接続検図レポート（号線グループ化モード）===" rep)
+  (if (and (= n-un 0) (= n-half 0))
+    (write-line "判定: ◎ 合格 － From-To を 100% 生成できます。内容検図(R1-R7)へ進めます。" rep)
+    (write-line "判定: × 要修正 － 下記の問題点と解決策を設計に提示し、承認・修正後に再実行してください。" rep))
   (write-line (strcat "From-To 行数= " (itoa (length rows))
-                      "  片接続= " (itoa n-half)
-                      "  未接続ラベル= " (itoa n-un)) rep)
+                      "  問題点: 片接続= " (itoa n-half)
+                      " / 未接続ラベル= " (itoa n-un)) rep)
+  (write-line "" rep)
+  (foreach ln (reverse deflines) (write-line ln rep))
   (close csv) (close rep)
   (princ (strcat "\n書き出し完了:"
                  "\n  " fcsv "  (From-To " (itoa (length rows)) "行)"
                  "\n  " frep
-                 "\n  片接続 " (itoa n-half) " / 未接続ラベル " (itoa n-un)))
+                 "\n  判定 " (if (and (= n-un 0) (= n-half 0)) "◎合格" "×要修正")
+                 " (片接続 " (itoa n-half) " / 未接続ラベル " (itoa n-un) ")"))
   (princ))
 
 (princ "\nfromto.lsp ロード完了。")
