@@ -295,14 +295,28 @@ class DrawingModel:
             for p in near[1:]:
                 uf.union(qn(near[0]), qn(p))
 
-        # 号線ラベル → ラベル位置に最も近い電線端点の成分root（＋種別）
+        # 号線ラベル → ラベルに最も近い『電線セグメント(垂線)』の成分root（＋種別）
+        # 【重要】端点最寄りではなくセグメント最寄り（仕様: SENBAN_SEG_MAXDIST）。
+        # 線の途中に置かれた号線を、遠い別線の端点ではなく“乗っている線”へ正しく割り当てる。
         node_list = list(nodes_all)
+
+        def _label_root(x, y):
+            best_root = None
+            bd = SENBAN_SEG_MAXDIST
+            for a, b in segs:
+                d, _t = pt_seg_dist(x, y, a[0], a[1], b[0], b[1])
+                if d < bd:
+                    bd = d
+                    best_root = uf.find(qn(a))
+            if best_root is None and node_list:
+                best_root = uf.find(qn(_nearest_node(x, y, node_list)))
+            return best_root
+
         label_root = {}    # root -> [(号線, kind), ...]
         for (v, x, y), k in zip(self.senban, self.senban_kind):
-            if not node_list:
-                break
-            nn = _nearest_node(x, y, node_list)
-            label_root.setdefault(uf.find(qn(nn)), []).append((v, k))
+            r = _label_root(x, y)
+            if r is not None:
+                label_root.setdefault(r, []).append((v, k))
 
         # 同じ号線名を持つ成分同士を連結（スナップ隙間の橋渡し）
         id_first_root = {}
@@ -334,12 +348,12 @@ class DrawingModel:
                     comp_footdev[uf.find(qn(nd))].add(dv.sym)
 
         # 成分ごとの号線ラベル（連結後のrootで引き直す。連結でrootがずれるため）
+        # ここも端点最寄りではなくセグメント最寄りで割当（_label_root と同一基準）。
         root_labels = collections.defaultdict(list)
         for (v, x, y), k in zip(self.senban, self.senban_kind):
-            if not node_list:
-                break
-            nn = _nearest_node(x, y, node_list)
-            root_labels[uf.find(qn(nn))].append((v, k))
+            r = _label_root(x, y)
+            if r is not None:
+                root_labels[uf.find(r)].append((v, k))
 
         nets = []
         seen_roots = set(comp_terms) | set(comp_footdev) | set(root_labels)
