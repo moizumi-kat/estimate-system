@@ -36,6 +36,11 @@ header .nav a:hover{background:#26492f}
 .stat.err .n{color:var(--err)}.stat.warn .n{color:var(--warn)}.stat.info .n{color:var(--info)}
 .overview{display:none;margin:16px 0;padding:16px 18px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--green2);border-radius:8px;font-size:13.5px;line-height:1.85;white-space:pre-wrap}
 .overview.show{display:block}.overview .h{font-size:11px;font-weight:700;color:var(--green2);letter-spacing:.08em;margin-bottom:6px}
+.fb{display:none;margin:16px 0;padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:8px}
+.fb.show{display:block}.fb .h{font-size:12px;font-weight:700;color:var(--green2);letter-spacing:.05em;margin-bottom:8px}
+.ev{width:26px;height:24px;border:1px solid var(--line);background:#fff;border-radius:5px;cursor:pointer;font-size:12px;margin-right:3px}
+.ev.ok.on{background:#e8f0e8;border-color:var(--okbd);color:var(--okbd);font-weight:800}
+.ev.ng.on{background:#fbe4e2;border-color:var(--err);color:var(--err);font-weight:800}
 .fbar{display:none;gap:8px;margin:14px 0 6px;flex-wrap:wrap}.fbar.show{display:flex}
 .fbar button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 14px;cursor:pointer;font-size:12px}.fbar button.on{background:var(--green);color:#fff;border-color:var(--green)}
 table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;background:#fff}
@@ -92,13 +97,14 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}tr:ho
   </div>
   <div id="out"></div>
   <div class="ok" id="ok">✓ 自動チェックでの指摘はありませんでした。<br><span style="font-size:12px;font-weight:400;color:#7a7568">（図面の全ミスを保証するものではありません。最終確認は設計者が行ってください）</span></div>
+  <div class="fb" id="fb"></div>
 
   <div class="foot">🔴重大＝誤製作・手戻りに直結／🟠警告＝要確認／🟡注意＝念のため確認。
     DXFは属性値から厳密判定、PDF・画像はAIによる補助チェック（<span class="src">AI</span>表示）です。
     本ツールは設計者の確認を補助するもので、全ての不備の検出を保証しません。</div>
 </div>
 <script>
-let curFiles=null, lastData=null, controller=null;
+let curFiles=null, lastData=null, controller=null, fbVerdicts={};
 const $=id=>document.getElementById(id);
 const drop=$('drop'),file=$('file');
 drop.onclick=()=>file.click();
@@ -112,8 +118,8 @@ function setFiles(fl){
   $('goCheck').disabled=false;$('err').classList.remove('show');clearResults();
 }
 function clearResults(){
-  lastData=null;$('sum').className='summary';$('ov').className='overview';$('fbar').className='fbar';
-  $('cov').className='note';$('xlsbar').style.display='none';$('out').innerHTML='';$('ok').className='ok';
+  lastData=null;fbVerdicts={};$('sum').className='summary';$('ov').className='overview';$('fbar').className='fbar';
+  $('cov').className='note';$('xlsbar').style.display='none';$('out').innerHTML='';$('ok').className='ok';$('fb').className='fb';
 }
 function busy(m){$('status').className='status show';$('status').innerHTML='<span class="spinner"></span><span class="step">'+m+'</span>';}
 function idle(){$('status').className='status';}
@@ -153,22 +159,65 @@ function render(d,filter){
   if(d.overview){$('ov').className='overview show';$('ov').innerHTML='<div class="h">AI総評</div>'+esc(d.overview);}
   // 明細
   const fs=d.findings||[];
-  if(!fs.length){$('ok').className='ok show';$('fbar').className='fbar';return;}
+  window._findings=fs;
+  if(!fs.length){$('ok').className='ok show';$('fbar').className='fbar';renderFeedback(d,true);return;}
   $('fbar').className='fbar show';$('xlsbar').style.display='flex';
-  const rows=fs.filter(f=>filter==='all'||f.sev===filter);
-  let h='<table><thead><tr><th>重大度</th><th>観点</th><th>図面</th><th>該当箇所</th><th>指摘内容 / 推奨対応</th></tr></thead><tbody>';
-  for(const f of rows){
+  let h='<table><thead><tr><th>重大度</th><th>観点</th><th>図面</th><th>該当箇所</th><th>指摘内容 / 推奨対応</th><th>評価</th></tr></thead><tbody>';
+  fs.forEach((f,i)=>{
+    if(!(filter==='all'||f.sev===filter))return;
     h+='<tr>'+
       '<td><span class="sev '+f.sev+'">'+esc(f.sev)+'</span></td>'+
       '<td class="cat">'+esc(f.cat||'')+'</td>'+
       '<td class="dwg">'+esc(f.dwg||'')+(f.source==='AI'?'<span class="src">AI</span>':'')+'</td>'+
       '<td class="tgt">'+esc(f.target||'')+'</td>'+
       '<td><div class="msg">'+esc(f.msg||'')+'</div>'+(f.suggest?'<div class="sug">→ '+esc(f.suggest)+'</div>':'')+'</td>'+
+      '<td class="evalcell" style="white-space:nowrap">'+
+        '<button class="ev ok" data-i="'+i+'" data-v="ok" title="妥当な指摘">✓</button>'+
+        '<button class="ev ng" data-i="'+i+'" data-v="ng" title="誤検出(直す必要なし)">✕</button>'+
+      '</td>'+
     '</tr>';
-  }
+  });
   h+='</tbody></table>';
   $('out').innerHTML=h;
+  document.querySelectorAll('#out .ev').forEach(b=>{
+    b.classList.toggle('on', fbVerdicts[b.dataset.i]===b.dataset.v);  // フィルタ再描画時も選択を復元
+    b.onclick=()=>{
+      const i=b.dataset.i, v=b.dataset.v;
+      fbVerdicts[i]=(fbVerdicts[i]===v)?undefined:v;
+      document.querySelectorAll('#out .ev[data-i="'+i+'"]').forEach(x=>x.classList.toggle('on', x.dataset.v===fbVerdicts[i]));
+    };
+  });
+  renderFeedback(d,false);
 }
+function renderFeedback(d,noFindings){
+  const dwgs=(d.coverage&&d.coverage.seibans)?Object.keys(d.coverage.seibans):[];
+  $('fb').className='fb show';
+  $('fb').innerHTML=
+    '<div class="h">フィードバック（ルール改善に使います）</div>'+
+    (noFindings?'<div style="font-size:12px;color:#7a7568;margin-bottom:8px">指摘が無くても、見逃し（本来出すべき指摘）があれば教えてください。</div>'
+               :'<div style="font-size:12px;color:#7a7568;margin-bottom:8px">各指摘の ✓（妥当）／✕（誤検出）を選び、見逃しがあれば下に記入して送信してください。</div>')+
+    '<textarea id="miss" placeholder="見逃し（本来検出すべきだったミス）があれば具体的に：例）○○盤の主幹容量が分岐より小さいのに出なかった" '+
+      'style="width:100%;min-height:60px;border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit;font-size:13px;box-sizing:border-box"></textarea>'+
+    '<div style="display:flex;gap:10px;align-items:center;margin-top:8px">'+
+      '<button class="btn" id="fbsend">フィードバックを送信</button>'+
+      '<span id="fbmsg" style="font-size:12px;color:var(--green2)"></span>'+
+    '</div>';
+  $('fbsend').onclick=async()=>{
+    const verdicts=[];
+    for(const i in fbVerdicts){ if(fbVerdicts[i]){ const f=window._findings[i]; verdicts.push({finding:{sev:f.sev,cat:f.cat,dwg:f.dwg,target:f.target,msg:f.msg},verdict:fbVerdicts[i]}); } }
+    const miss=($('miss').value||'').trim();
+    if(!verdicts.length&&!miss){$('fbmsg').textContent='評価か見逃し報告を入力してください。';return;}
+    $('fbsend').disabled=true;$('fbmsg').textContent='送信中…';
+    try{
+      const r=await fetch('/api/validate/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({verdicts,miss,dwgs})});
+      const j=await r.json();
+      if(!r.ok)throw new Error(j.error||'送信に失敗しました');
+      $('fbmsg').textContent='ありがとうございます。記録しました（✓'+j.saved.ok+' / ✕'+j.saved.ng+(j.saved.miss?' / 見逃し1':'')+'）。';
+      $('miss').value='';
+    }catch(e){$('fbmsg').textContent='エラー: '+e.message;}
+    finally{$('fbsend').disabled=false;}
+  };
 function stat(cls,n,l){return '<div class="stat '+cls+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>';}
 function esc(s){return(s+'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
 document.querySelectorAll('.fbar button').forEach(b=>b.onclick=()=>{

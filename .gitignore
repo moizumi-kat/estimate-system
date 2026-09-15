@@ -2,3 +2,6 @@ __pycache__/
 *.bak_*
 *.rpm
 app.py.new
+
+# 図面チェックの運用フィードバックログ
+check_feedback.jsonl

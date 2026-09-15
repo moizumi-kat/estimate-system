@@ -1681,6 +1681,37 @@ def api_validate_excel():
     return send_file(buf,as_attachment=True,download_name=f'図面チェック_{ts}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+# 運用フィードバックの保存先(JSONL・1行1件)。誤検出/見逃しの実例を蓄積し
+# ルール育成の実データにする。環境変数で保存先を差し替え可能。
+CHECK_FEEDBACK_PATH=os.environ.get('CHECK_FEEDBACK_PATH', os.path.join(HERE,'check_feedback.jsonl'))
+
+@app.route('/api/validate/feedback', methods=['POST'])
+@login_required
+def api_validate_feedback():
+    """指摘の妥当/誤検出の評価、および見逃し(未検出のミス)の報告を記録する。
+    body: {verdicts:[{finding,verdict}], miss:'見逃し内容', user:'', dwgs:[...]}"""
+    data=request.get_json(silent=True) or {}
+    verdicts=data.get('verdicts',[]) or []
+    miss=(data.get('miss') or '').strip()
+    if not verdicts and not miss:
+        return jsonify(error='評価または見逃し報告がありません'),400
+    rec=dict(
+        ts=datetime.datetime.now().isoformat(timespec='seconds'),
+        user=(data.get('user') or session.get('user') or '').strip(),
+        sid=session.get('sid',''),
+        dwgs=data.get('dwgs',[]),
+        verdicts=verdicts,   # [{finding:{sev,cat,dwg,target,msg}, verdict:'ok'|'ng'}]
+        miss=miss,
+    )
+    try:
+        with open(CHECK_FEEDBACK_PATH,'a',encoding='utf-8') as f:
+            f.write(json.dumps(rec,ensure_ascii=False)+'\n')
+    except Exception as e:
+        return jsonify(error=f'保存に失敗しました: {e}'),500
+    n_ng=sum(1 for v in verdicts if v.get('verdict')=='ng')
+    n_ok=sum(1 for v in verdicts if v.get('verdict')=='ok')
+    return jsonify(ok=True, saved=dict(ok=n_ok, ng=n_ng, miss=bool(miss)))
+
 INDEX_HTML=open(os.path.join(HERE,'index.html'),encoding='utf-8').read() if os.path.exists(os.path.join(HERE,'index.html')) else '<h1>index.html がありません</h1>'
 CHECK_HTML=open(os.path.join(HERE,'check.html'),encoding='utf-8').read() if os.path.exists(os.path.join(HERE,'check.html')) else '<h1>check.html がありません</h1>'
 
