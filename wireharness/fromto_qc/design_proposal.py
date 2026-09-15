@@ -79,6 +79,23 @@ def propose(models, fused, suppress=None):
                                     f"浮き線端・端子台のDEVICE1・ラベル位置を確認してください。",
                           'location': f"({x:.0f},{y:.0f})"})
 
+    # 学習した不具合ルール（自己整合では出せない過去の不具合）を適用
+    try:
+        from . import defect_rules
+        dev_syms = set()
+        for m in models:
+            for e in m.msp:
+                if e.dxftype() == 'INSERT' and e.attribs:
+                    a = {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}
+                    dv = a.get('DEVICE', '').strip()
+                    if dv:
+                        dev_syms.add(dv + ('-' + a.get('DEVICE1', '') if a.get('DEVICE1', '').strip() else ''))
+        gnets = lc.drawing_nets_by_gousen(fused)
+        for f in defect_rules.check(dev_syms, gnets):
+            props.append({'type': f['type'], 'detail': f['detail'], 'location': ''})
+    except Exception:
+        pass
+
     # 重複除去＋学習による抑制（誤検知の多い種別は出さない）
     seen = set()
     uniq = []
