@@ -7,6 +7,17 @@
 from .geometry import DrawingModel
 from . import harness, design_proposal, rules_engine, layout as layout_mod
 
+# 学習ストア（検図フィードバック）。リポジトリ直下の kenzu_store を任意で利用。
+try:
+    import os
+    import sys
+    _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if _ROOT not in sys.path:
+        sys.path.insert(0, _ROOT)
+    import kenzu_store
+except Exception:
+    kenzu_store = None
+
 
 def _logical_from_fused(fused):
     """harness.fuse の結果 → 論理ネット {号線: {'endpoints':[(dev,no,term)],'kind','size'}}。"""
@@ -26,14 +37,36 @@ def _logical_from_fused(fused):
     return out
 
 
-def run(seq_paths, skel_paths=None, layout_path=None):
-    """通しパイプライン実行。戻り: dict(proposals, logical, harness_rows, defects, summary)。"""
+def run(seq_paths, skel_paths=None, layout_path=None, seiban=''):
+    """通しパイプライン実行。戻り: dict(proposals, logical, harness_rows, defects, summary, run_id)。
+    検図の指摘は kenzu_store に記録され run_id が発行される。設計の判定
+    （kenzu_store.add_feedback / save_naming）が次回の学習に反映される。"""
     skel_paths = skel_paths or []
+    # 学習の反映（誤検知の抑制・確定名称）
+    learned = {}
+    if kenzu_store is not None:
+        try:
+            learned = kenzu_store.learned()
+        except Exception:
+            learned = {}
+    suppress = learned.get('suppress', set())
     # ② 抽出
     fused = harness.fuse(seq_paths, skel_paths, layout_path)
     models = [DrawingModel(p) for p in seq_paths + skel_paths]
-    # ① 設計への不足データ提案（図面のみ）
-    proposals = design_proposal.propose(models, fused)
+    # ① 設計への不足データ提案（図面のみ・学習で抑制を反映）
+    proposals = design_proposal.propose(models, fused, suppress=suppress)
+    # 実行を記録（設計の判定＝フィードバックを後で紐付けられるよう run_id を発行）
+    run_id = None
+    if kenzu_store is not None:
+        try:
+            findings = [{'rule': p['type'], 'detail': p['detail'],
+                         'location': p['location']} for p in proposals]
+            run_id, saved = kenzu_store.save_run(
+                {'seiban': seiban, 'seq': seq_paths}, findings)
+            for p, s in zip(proposals, saved):
+                p['fid'] = s['fid']
+        except Exception:
+            pass
     # ② 論理 From-To
     logical = _logical_from_fused(fused)
     # ③ 物理ハーネス生成
@@ -45,7 +78,9 @@ def run(seq_paths, skel_paths=None, layout_path=None):
             lay = None
     rows, defects = rules_engine.generate(logical, lay)
     return {'proposals': proposals, 'logical': logical,
-            'harness_rows': rows, 'defects': defects,
+            'harness_rows': rows, 'defects': defects, 'run_id': run_id,
+            'learned': {'suppressed': sorted(suppress),
+                        'naming_count': len(learned.get('naming', {}))},
             'summary': {'号線': len(logical), '生成電線': len(rows),
                         '設計提案': len(proposals), '検図(配置図不足)': len(defects),
                         **rules_engine.summary(rows)}}

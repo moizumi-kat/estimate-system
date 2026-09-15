@@ -31,8 +31,11 @@ def _is_power(g):
                      '102R', '102S', 'RC1', 'SC1'))
 
 
-def propose(models, fused):
-    """図面のみから設計への入力提案リストを返す。各項目 dict(type, detail, location)。"""
+def propose(models, fused, suppress=None):
+    """図面のみから設計への入力提案リストを返す。各項目 dict(type, detail, location)。
+    suppress: 誤検知が多く学習で抑制された指摘種別(P1_...等)の集合。該当種別は出さない。
+    """
+    suppress = suppress or set()
     props = []
 
     # P1: DEVICE1 が空の端子台（_LU で総称'TB'止まり）
@@ -76,10 +79,12 @@ def propose(models, fused):
                                     f"浮き線端・端子台のDEVICE1・ラベル位置を確認してください。",
                           'location': f"({x:.0f},{y:.0f})"})
 
-    # 重複除去
+    # 重複除去＋学習による抑制（誤検知の多い種別は出さない）
     seen = set()
     uniq = []
     for p in props:
+        if p['type'] in suppress:
+            continue
         key = (p['type'], p['detail'], p['location'])
         if key in seen:
             continue

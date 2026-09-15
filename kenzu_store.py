@@ -23,6 +23,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get('KENZU_DATA_DIR') or os.path.join(_HERE, 'kenzu_data')
 RUNS_DIR = os.path.join(DATA_DIR, 'runs')
 FEEDBACK_PATH = os.path.join(DATA_DIR, 'feedback.jsonl')
+NAMING_PATH = os.path.join(DATA_DIR, 'naming_map.json')
 
 _lock = threading.Lock()
 
@@ -101,6 +102,46 @@ def _iter_feedback():
                 yield json.loads(line)
             except Exception:
                 continue
+
+
+def save_naming(draw_name, harness_name, user=''):
+    """設計が確定した名称読み替え（図面名→ハーネス名）を学習として保存。"""
+    _ensure()
+    with _lock:
+        m = load_naming()
+        m[draw_name] = harness_name
+        with open(NAMING_PATH, 'w', encoding='utf-8') as fp:
+            json.dump(m, fp, ensure_ascii=False, indent=1)
+    add_feedback(run_id=None, disposition='fixed', rule='naming',
+                 note=f'{draw_name}->{harness_name}', user=user)
+    return m
+
+
+def load_naming():
+    if not os.path.exists(NAMING_PATH):
+        return {}
+    try:
+        with open(NAMING_PATH, encoding='utf-8') as fp:
+            return json.load(fp)
+    except Exception:
+        return {}
+
+
+def learned(min_fp=3, fp_ratio=0.6):
+    """蓄積フィードバックから『次回に反映する学習』を導出。
+      suppress … 誤検知が多い指摘種別（次回は出さない/優先度下げ）
+      naming   … 設計が確定した名称読み替えマップ
+      missed   … 見逃し（新しい検出ルールの候補）
+    """
+    s = stats()
+    suppress = set()
+    for rule, c in s['by_rule'].items():
+        judged = c['fixed'] + c['false_positive']
+        if judged and c['false_positive'] >= min_fp and c['false_positive'] / judged >= fp_ratio:
+            suppress.add(rule)
+    missed = [r for r in _iter_feedback() if r.get('disposition') == 'missed']
+    return {'suppress': suppress, 'naming': load_naming(),
+            'missed': missed, 'stats': s}
 
 
 def stats():
