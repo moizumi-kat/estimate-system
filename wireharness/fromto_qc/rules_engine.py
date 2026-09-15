@@ -78,16 +78,46 @@ def apply_terminal_relay(rows, capacity=TERM_CAPACITY):
     return rows
 
 
-def generate(logical_nets):
+def _sym(ep):
+    return ep[0] + ('-' + ep[1] if ep[1] else '')
+
+
+def apply_layout_rules(rows, layout):
+    """R-D 盤間→LUG/WAGO, R-E ダクト方向 を内部配置図から付与。
+    配置図に機器が無ければ判定不能（検図へ）。"""
+    for r in rows:
+        fa, fb = _sym(r['from']), _sym(r['to'])
+        # R-D: 盤間判定
+        cross = layout.is_cross_panel(fa, fb)
+        if cross:
+            main = _is_main(r['from'][0]) or _is_main(r['to'][0])
+            mk = 'LUG' if main else 'WAGO'
+            r['marker'] = (r['marker'] + '+' + mk).strip('+') if r['marker'] else mk
+        # R-E: ダクト方向（各端の機器で判定）
+        r['dir_from'] = layout.duct_direction(fa)
+        r['dir_to'] = layout.duct_direction(fb)
+    return rows
+
+
+def generate(logical_nets, layout=None):
     """論理From-To（{号線: {'endpoints':[(dev,no,term)], 'kind','size'}}）→ 物理ハーネス行。
-    R-A/B/C/F を適用。R-D(LUG/WAGO)・R-E(ダクト方向)は内部配置図が要るため未適用。
+    R-A/B/C/F を適用。layout を渡すと R-D(LUG/WAGO)・R-E(ダクト方向) も適用。
+    戻り: (rows, defects)  defects=配置図に無い機器（検図で設計へ）。
     """
     rows = []
     for gid, net in logical_nets.items():
         eps = net.get('endpoints', [])
         rows += expand_net(gid, eps, net.get('kind', 'ctrl'), net.get('size', ''))
     rows = apply_terminal_relay(rows)
-    return rows
+    defects = []
+    if layout is not None:
+        rows = apply_layout_rules(rows, layout)
+        devs = set()
+        for net in logical_nets.values():
+            for d, n, t in net.get('endpoints', []):
+                devs.add(d + ('-' + n if n else ''))
+        defects = layout.missing(devs)
+    return rows, defects
 
 
 def summary(rows):
