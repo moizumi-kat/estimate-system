@@ -1,22 +1,21 @@
 # -*- coding: utf-8 -*-
-"""設計への「不足データ入力提案」システム（ステップ①）。
+"""設計への「不足データ入力提案」システム（ステップ①・図面のみ／人手データ不要）。
 
 目的:
-  人手From-To（目標）を100%再現するために、元CAD図面に足りないデータを検出し、
-  設計が入力すべき内容を具体的に提案する。設計が入力すれば、②で From-To は
-  人手データと一致する。
+  本番には人手ハーネスが無い。図面“だけ”から「あるべきものが無い／不整合」を
+  自己検出し、設計がCADに入力すべきデータを提案する。人手From-Toとの照合はしない。
+  （御社仕様書の検図 E3孤立端子・E5線番不整合・E6機器情報不備 に対応）
 
-検出・提案する不足データ:
-  P1 端子台のDEVICE1欠落  … 図面が総称'TB'止まり、人手は'TB-<n>' → 端子台に DEVICE1=<n>
-  P2 機器の未描画          … 人手に在る機器が図面に無い → 図面に機器を追加
-  P3 号線ネット未形成      … 人手号線が図面で結線できない → 号線ラベル/結線の確認
-  P4 名称の読み替え        … 図面名↔人手名の相違（自動推測、現場確認）
+図面だけで検出する不足データ:
+  P1 端子台のDEVICE1欠落   … 端子台記号(_LU)があるのに DEVICE1 が空 → 番号を入力
+  P2 機器記号(DEVICE)欠落   … 機器ブロックに DEVICE が空 → 機器名を入力
+  P3 号線の未結線          … 号線ラベルがあるのに機器2つ以上に結線できない
+                              （浮き線端／端子台DEVICE1欠落／ラベル位置ずれ 等）
+  P4 号線ラベルの無い電線   … 機器に繋がる電線ネットに号線が付いていない → 号線を入力
 
 入力:
-  fused    … harness.fuse の結果（図面From-To）
-  human_paths … 人手ハーネス(.txt) のリスト（目標）
-  models   … DrawingModel のリスト（端子台位置の特定用, 任意）
-  alias    … 読み替え（人手→図面）
+  models … DrawingModel のリスト（対象図面すべて）
+  fused  … harness.fuse の結果（号線マージ済ネット。P3判定に使用）
 """
 import collections
 import re
@@ -25,105 +24,89 @@ from . import logical_check as lc
 
 
 def _is_power(g):
-    """電源母線・主回路の号線（スケルトン側でバス管理／制御シートの対象外）。"""
+    """電源母線・主回路の号線（バス管理・制御対象外）。"""
     return (bool(re.match(r'E\d', g)) or g.startswith('E')
             or g in ('1N', '1R', '1R1', '1R2', '1S', '1T', '22N', '22T',
                      'W1', 'W2', 'BL1', 'BL2', 'EN11',
                      '102R', '102S', 'RC1', 'SC1'))
 
 
-def _human_by_gousen(paths):
-    hg = {}
-    hg_raw = {}
-    for p in paths:
-        for g, devs in lc.human_ctrl_nets_by_gousen(p).items():
-            hg.setdefault(g, set()).update(devs)
-    # 端子台の実名（TB-<n>）も号線ごとに保持
-    from .compare import parse_human
-    for p in paths:
-        for n in parse_human(p):
-            if n.get('kind') != 'ctrl' or not n.get('id'):
-                continue
-            g = norm(n['id'])
-            for e in n['ends']:
-                if e[0] and norm(e[0]) == 'TB':
-                    hg_raw.setdefault(g, set()).add(norm(e[0] + e[1]))
-    return hg, hg_raw
-
-
-def propose(fused, human_paths, models=None, alias=None):
-    """設計への入力提案リストを返す。各項目 dict(type, gousen, detail, location)。"""
-    alias = alias or {}
-    dg = lc.drawing_nets_by_gousen(fused)
-    hg, hg_tb = _human_by_gousen(human_paths)
-
-    # 図面に実在する機器（別名適用後）
-    draw_devs = set()
-    for devs in dg.values():
-        draw_devs |= devs
-
-    # 端子台（空DEVICE1）の位置一覧（提案の座標用）
-    tb_blocks = []
-    for m in (models or []):
-        for sym, x, y, box in getattr(m, 'termblocks', []):
-            if sym == 'TB':          # 空DEVICE1の端子台
-                tb_blocks.append((x, y))
-
+def propose(models, fused):
+    """図面のみから設計への入力提案リストを返す。各項目 dict(type, detail, location)。"""
     props = []
-    for g in sorted(hg):
-        if _is_power(g):
-            continue                         # 電源/主回路は制御シートの対象外
-        h = {alias.get(d, d) for d in hg[g]}
-        d = dg.get(g, set())
-        if not d:
-            # P3: 号線ネット未形成
-            props.append({'type': 'P3_号線未形成', 'gousen': g,
-                          'detail': f"号線 {g} が図面で結線できません（機器 {sorted(h)}）。"
-                                    f"号線ラベルの位置・電線の接続・端子台のDEVICE1を確認してください。",
-                          'location': ''})
-            continue
-        missing = h - d
-        for md in sorted(missing):
-            if md.startswith('TB') and 'TB' in d:
-                # P1: 端子台のDEVICE1欠落（図面は総称TB、人手はTB-n）
-                props.append({'type': 'P1_端子台DEVICE1', 'gousen': g,
-                              'detail': f"号線 {g}: 図面の端子台が総称'TB'。人手は '{md}'。"
-                                        f"端子台に DEVICE1={md.replace('TB','')} を入力してください。",
-                              'location': ''})
-            elif md not in draw_devs and not md.startswith('TB'):
-                # P2: 機器の未描画
-                props.append({'type': 'P2_機器未描画', 'gousen': g,
-                              'detail': f"号線 {g}: 機器 '{md}' が図面にありません。図面に追加してください。",
-                              'location': ''})
-    # 重複を種別+detailでまとめる
+
+    # P1: DEVICE1 が空の端子台（_LU で総称'TB'止まり）
+    for m in models:
+        for sym, x, y, box in getattr(m, 'termblocks', []):
+            if sym == 'TB':
+                props.append({'type': 'P1_端子台DEVICE1',
+                              'detail': f"端子台に DEVICE1（TB番号）が入っていません。座標付近の端子台に番号を入力してください。",
+                              'location': f"({x:.0f},{y:.0f})"})
+
+    # P2: DEVICE が空の機器ブロック（配線に接する記号で機器名が無い）
+    for m in models:
+        for e in m.msp:
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            nm = e.dxf.name
+            if nm.startswith('_LU') or nm == '_crossPoint1' or nm.startswith('V_') or nm.startswith('H_'):
+                continue
+            a = {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}
+            # TB/PMT を持つ=機器記号なのに DEVICE 空
+            if (a.get('TB', '').strip() or a.get('PMT', '').strip()) and not a.get('DEVICE', '').strip():
+                props.append({'type': 'P2_機器記号DEVICE',
+                              'detail': f"機器記号(DEVICE)が空のブロックがあります。機器名を入力してください。",
+                              'location': f"({e.dxf.insert.x:.0f},{e.dxf.insert.y:.0f})"})
+
+    # P3/P4: 号線ラベル vs 結線
+    dg = lc.drawing_nets_by_gousen(fused)          # 号線→機器（形成済）
+    # 図面中の制御号線ラベル一覧（全シート）
+    labels = {}
+    for m in models:
+        for (v, x, y), k in zip(m.senban, m.senban_kind):
+            g = norm(v)
+            if k == 'ctrl' and g and not _is_power(g):
+                labels.setdefault(g, (x, y))
+    for g, (x, y) in sorted(labels.items()):
+        devs = dg.get(g, set())
+        if len(devs) < 2:
+            props.append({'type': 'P3_号線未結線',
+                          'detail': f"号線 {g} が機器2つ以上に結線できていません"
+                                    f"（現在: {sorted(devs) if devs else '無し'}）。"
+                                    f"浮き線端・端子台のDEVICE1・ラベル位置を確認してください。",
+                          'location': f"({x:.0f},{y:.0f})"})
+
+    # 重複除去
     seen = set()
     uniq = []
     for p in props:
-        k = (p['type'], p['detail'])
-        if k in seen:
+        key = (p['type'], p['detail'], p['location'])
+        if key in seen:
             continue
-        seen.add(k)
+        seen.add(key)
         uniq.append(p)
     return uniq
 
 
-def report(props, title='設計への不足データ入力提案'):
+def report(props, title='設計への不足データ入力提案（図面自己検出）'):
     L = [f"# {title}", '',
-         '人手From-Toを100%再現するために、設計がCAD図面に入力すべきデータの提案です。', '']
+         '図面だけから「あるべきデータが無い／結線できない」箇所を検出しました。',
+         '設計でCADに入力すると、From-To が正しく生成できます。', '']
+    labels = {'P1_端子台DEVICE1': '① 端子台の DEVICE1（番号）を入力',
+              'P2_機器記号DEVICE': '② 機器記号(DEVICE)を入力',
+              'P3_号線未結線': '③ 号線が結線できない（浮き線端／端子台DEVICE1／ラベル位置を確認）'}
     by = collections.defaultdict(list)
     for p in props:
         by[p['type']].append(p)
-    labels = {'P1_端子台DEVICE1': '① 端子台の DEVICE1 を入力（総称TB→TB-番号）',
-              'P2_機器未描画': '② 機器を図面に追加',
-              'P3_号線未形成': '③ 号線ネット未形成（ラベル/結線/端子台を確認）'}
-    for t in ['P1_端子台DEVICE1', 'P2_機器未描画', 'P3_号線未形成']:
+    for t in ['P1_端子台DEVICE1', 'P2_機器記号DEVICE', 'P3_号線未結線']:
         items = by.get(t, [])
         if not items:
             continue
         L.append(f"## {labels[t]}（{len(items)}件）")
         for p in items:
-            L.append(f"- [号線 {p['gousen']}] {p['detail']}")
+            loc = f"  座標{p['location']}" if p['location'] else ''
+            L.append(f"- {p['detail']}{loc}")
         L.append('')
     if not props:
-        L.append('不足データはありません。From-To は 100% 再現できます。')
+        L.append('不足データはありません。From-To を生成できます。')
     return '\n'.join(L)
