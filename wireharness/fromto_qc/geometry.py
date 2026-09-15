@@ -110,6 +110,7 @@ class DrawingModel:
         self.msp = self.doc.modelspace()
         self.terminals = self._terminals()
         self.devices = self._devices()
+        self.termblocks = self._term_blocks()
         self.segments = self._wire_segments()
         raw_sb = self._senban()
         # senban は (号線, x, y) の3要素で公開（後方互換）。kind は並行リストで保持。
@@ -183,6 +184,35 @@ class DrawingModel:
                 box = (ins.x - 18, ins.y - 18, ins.x + 18, ins.y + 18)
             devs.append(Device(sym, ins.x, ins.y, box))
         return devs
+
+    # ---- 端子台（_LU, DEVICE空欄も接続先として拾う）----
+    def _term_blocks(self):
+        """端子台ブロック(_LU*)を接続先として収集。DEVICE属性が空の端子台も拾う。
+        ラベルあり(_terminals/_devicesで既に拾える)は除外。
+        戻り: [(sym, x, y, box), ...]  sym は 'TB-<番号>'（DEVICE1があれば）または 'TB'。
+        """
+        out = []
+        for e in self.msp:
+            if e.dxftype() != 'INSERT' or not e.dxf.name.startswith('_LU'):
+                continue
+            a = {at.dxf.tag: at.dxf.text for at in e.attribs} if e.attribs else {}
+            dev = (a.get('DEVICE', '') or '').strip()
+            if dev and dev not in SKIP_DEVICES:
+                continue                      # ラベル済み端子台は既存処理で拾う
+            d1 = (a.get('DEVICE1', '') or '').strip()
+            sym = f"TB-{d1}" if d1 else 'TB'   # 空欄は総称TB（正確な番号付与はCAD側で）
+            ins = e.dxf.insert
+            deg = e.dxf.rotation or 0
+            try:
+                l, t, r, b = [float(x) for x in a.get('PMT', '').split(',')[:4]]
+                cs = [_rot(l, t, deg), _rot(r, t, deg), _rot(l, b, deg), _rot(r, b, deg)]
+                xs = [ins.x + c[0] for c in cs]
+                ys = [ins.y + c[1] for c in cs]
+                box = (min(xs) - 5, min(ys) - 5, max(xs) + 5, max(ys) + 5)
+            except Exception:
+                box = (ins.x - 15, ins.y - 15, ins.x + 15, ins.y + 15)
+            out.append((sym, ins.x, ins.y, box))
+        return out
 
     # ---- 電線（直接 + ブロック展開）----
     def _wire_segments(self):
@@ -346,6 +376,14 @@ class DrawingModel:
             for nd in node_list:
                 if x0 <= nd[0] <= x1 and y0 <= nd[1] <= y1:
                     comp_footdev[uf.find(qn(nd))].add(dv.sym)
+
+        # 端子台(_LU, DEVICE空欄含む) → ボックスに電線端点が入る成分へ 'TB' を接続先付与。
+        # これで内部L_CONTROLと外部L_OUTSIDEの境界にある端子台が接続先として数えられ、
+        # 43-102 のような1機器ネットが {43-102, TB} になって形成される。
+        for sym, tx, ty, (bx0, by0, bx1, by1) in getattr(self, 'termblocks', []):
+            for nd in node_list:
+                if bx0 <= nd[0] <= bx1 and by0 <= nd[1] <= by1:
+                    comp_footdev[uf.find(qn(nd))].add(sym)
 
         # 成分ごとの号線ラベル（連結後のrootで引き直す。連結でrootがずれるため）
         # ここも端点最寄りではなくセグメント最寄りで割当（_label_root と同一基準）。
