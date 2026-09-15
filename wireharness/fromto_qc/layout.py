@@ -34,6 +34,7 @@ class Layout:
         self.msp = self.doc.modelspace()
         self.devices = self._devices()          # norm(name) -> (x,y)
         self.hducts = self._hducts()            # 水平ダクトの Y 中心（昇順）
+        self.vducts = self._vducts()            # 垂直ダクトの X 中心（昇順）
         self.panels = self._panels()            # [(x0,x1), ...] 盤のX範囲
 
     def _devices(self):
@@ -68,6 +69,26 @@ class Layout:
                 merged[-1] = (merged[-1] + y) / 2
             else:
                 merged.append(y)
+        return merged
+
+    def _vducts(self):
+        xs = []
+        for e in self.msp:
+            if e.dxftype() == 'LINE' and e.dxf.layer == 'DCT':
+                if abs(e.dxf.start.x - e.dxf.end.x) < 5:
+                    xs.append((e.dxf.start.x + e.dxf.end.x) / 2)
+            elif e.dxftype() == 'LWPOLYLINE' and e.dxf.layer == 'DCT':
+                pts = [(x, y) for x, y, *_ in e.get_points()]
+                for p, q in zip(pts, pts[1:]):
+                    if abs(p[0] - q[0]) < 5:
+                        xs.append((p[0] + q[0]) / 2)
+        xs.sort()
+        merged = []
+        for x in xs:
+            if merged and abs(x - merged[-1]) < 60:
+                merged[-1] = (merged[-1] + x) / 2
+            else:
+                merged.append(x)
         return merged
 
     def _panels(self):
