@@ -18,7 +18,11 @@
 import collections
 
 # 主回路の遮断器（LUG/相バス側）
-MAIN_DEVICES = {'MCCB', 'ELCB', 'ELB', 'LBS', 'ACB'}
+MAIN_DEVICES = {'MCCB', 'ELCB', 'ELB', 'LBS', 'ACB', 'CP'}
+# R-D（端子ベース・実データで確認）: LUG=主回路入力端子, WAGO=警報補助端子
+LUG_TERMS = {'1', '3', '5'}                       # 主回路入力(R/S/T)→LUG(大銅端子)
+WAGO_TERMS = {'ALa', 'ALc', 'EALa', 'EALc',
+              'ALA', 'ALC', 'EALA', 'EALC'}        # 警報補助接点→WAGO
 # 扉付けになりやすい操作器・表示灯の記号接頭
 DOOR_DEVICES = {'WL', 'RL', 'GL', 'YL', 'OL', 'BZ', 'BS', 'PB', 'PBS', 'AM', 'VM', 'COS', 'SL'}
 DEFAULT_WIRE = 'KIV'      # 制御既定
@@ -82,20 +86,29 @@ def _sym(ep):
     return ep[0] + ('-' + ep[1] if ep[1] else '')
 
 
-def apply_layout_rules(rows, layout):
-    """R-D 盤間→LUG/WAGO, R-E ダクト方向 を内部配置図から付与。
-    配置図に機器が無ければ判定不能（検図へ）。"""
+def apply_marker_rules(rows):
+    """R-D（端子ベース）: 実データ確認済ルールで LUG/WAGO を付与（内部配置図不要）。
+      LUG  … 主回路遮断器の入力端子(1/3/5)に接続する電線端
+      WAGO … 遮断器の警報補助端子(ALa/ALc)に接続する電線端
+    """
     for r in rows:
-        fa, fb = _sym(r['from']), _sym(r['to'])
-        # R-D: 盤間判定
-        cross = layout.is_cross_panel(fa, fb)
-        if cross:
-            main = _is_main(r['from'][0]) or _is_main(r['to'][0])
-            mk = 'LUG' if main else 'WAGO'
+        mk = ''
+        for dev, no, term in (r['from'], r['to']):
+            t = (term or '').strip()
+            if _is_main(dev) and t in LUG_TERMS:
+                mk = 'LUG'
+            elif t in WAGO_TERMS:
+                mk = 'WAGO'
+        if mk:
             r['marker'] = (r['marker'] + '+' + mk).strip('+') if r['marker'] else mk
-        # R-E: ダクト方向（各端の機器で判定）
-        r['dir_from'] = layout.duct_direction(fa)
-        r['dir_to'] = layout.duct_direction(fb)
+    return rows
+
+
+def apply_layout_rules(rows, layout):
+    """R-E ダクト方向 を内部配置図から付与（LUG/WAGOは端子ベースのR-Dで別途付与）。"""
+    for r in rows:
+        r['dir_from'] = layout.duct_direction(_sym(r['from']))
+        r['dir_to'] = layout.duct_direction(_sym(r['to']))
     return rows
 
 
@@ -109,6 +122,7 @@ def generate(logical_nets, layout=None):
         eps = net.get('endpoints', [])
         rows += expand_net(gid, eps, net.get('kind', 'ctrl'), net.get('size', ''))
     rows = apply_terminal_relay(rows)
+    rows = apply_marker_rules(rows)          # R-D 端子ベース LUG/WAGO（配置図不要）
     defects = []
     if layout is not None:
         rows = apply_layout_rules(rows, layout)
