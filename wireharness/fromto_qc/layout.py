@@ -36,6 +36,8 @@ class Layout:
         self.hducts = self._hducts()            # 水平ダクトの Y 中心（昇順）
         self.vducts = self._vducts()            # 垂直ダクトの X 中心（昇順）
         self.panels = self._panels()            # [(x0,x1), ...] 盤のX範囲
+        # 図面枠の区分記号（作業者が盤上で機器を探すための位置グリッド）
+        self.rows, self.cols = self._frame()    # rows: [(letter,y),..] cols: [(num,x),..]
 
     def _devices(self):
         out = {}
@@ -108,6 +110,130 @@ class Layout:
             prev = x
         panels.append((start - 100, prev + 100))
         return panels
+
+    def _frame(self):
+        """図面枠の区分記号を読み取る。
+        行記号(A,B,C..) … 左右の枠縁に等間隔で並ぶ単独アルファベット → (letter, y)
+        列記号(1,2,3..) … 上下の枠縁に等間隔で並ぶ単独数字         → (num, x)
+        記号はブロック内に描かれることが多いのでINSERTも展開して走査する。
+        枠が見つからなければ空リスト（zone_of等は None を返す）。
+        """
+        import re
+        try:
+            emin = self.doc.header.get('$EXTMIN')
+            emax = self.doc.header.get('$EXTMAX')
+            x0, y0 = emin[0], emin[1]
+            x1, y1 = emax[0], emax[1]
+        except Exception:
+            xs = [p[0] for p in self.devices.values()] or [0]
+            ys = [p[1] for p in self.devices.values()] or [0]
+            x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        w = max(x1 - x0, 1.0)
+        h = max(y1 - y0, 1.0)
+        mx = 0.06 * w          # 縁とみなす帯幅（左右6%）
+        my = 0.06 * h          # 縁とみなす帯幅（上下6%）
+
+        def texts():
+            for e in self.msp:
+                yield e
+                if e.dxftype() == 'INSERT':
+                    try:
+                        for ve in e.virtual_entities():
+                            yield ve
+                    except Exception:
+                        pass
+
+        def txt(e):
+            t = e.dxftype()
+            try:
+                if t == 'TEXT':
+                    return (e.dxf.text or '').strip(), e.dxf.insert.x, e.dxf.insert.y
+                if t == 'MTEXT':
+                    s = re.sub(r'\\[A-Za-z][^;]*;', '', (e.text or '')).replace('{', '').replace('}', '').strip()
+                    return s, e.dxf.insert.x, e.dxf.insert.y
+            except Exception:
+                pass
+            return None, None, None
+
+        letters = {}                       # letter -> list of y（左右縁）
+        bottom, top = {}, {}               # num -> list of x（上下それぞれの縁）
+        for e in texts():
+            s, x, y = txt(e)
+            if s is None:
+                continue
+            if re.fullmatch(r'[A-Za-zＡ-Ｚ]', s):
+                if x <= x0 + mx or x >= x1 - mx:      # 左右の縁 → 行記号
+                    letters.setdefault(s.upper(), []).append(y)
+            elif re.fullmatch(r'[0-9]{1,2}', s):
+                if y <= y0 + my:                      # 下の縁 → 列記号
+                    bottom.setdefault(s, []).append(x)
+                elif y >= y1 - my:                    # 上の縁 → 列記号
+                    top.setdefault(s, []).append(x)
+
+        def med(v):
+            v = sorted(v)
+            return v[len(v) // 2]
+
+        rows = sorted(((L, med(ys)) for L, ys in letters.items()), key=lambda r: -r[1])   # 上(大y)→下
+
+        def build_cols(edge):
+            # 数字→縁上のx中央値。数字の昇順にxが単調増加する列だけ採用（表内の数字＝同一xを排除）。
+            pts = sorted(((int(n), n, med(xs)) for n, xs in edge.items()), key=lambda r: r[0])
+            keep = []
+            for _, n, x in pts:
+                if keep and x <= keep[-1][1] + 1.0:   # 前の列より右に無い＝枠でない
+                    continue
+                keep.append((n, x))
+            return keep
+
+        cb, ct = build_cols(bottom), build_cols(top)
+        cols = cb if len(cb) >= len(ct) else ct       # 列がより多く並ぶ縁を採用
+        return rows, cols
+
+    def zone_at(self, x, y):
+        """座標(x,y)が入る行記号(A,B,..)を返す。枠が無ければ None。"""
+        if not self.rows:
+            return None
+        # 各行の中心yに最も近い記号
+        best = None
+        bd = 1e18
+        for L, cy in self.rows:
+            d = abs(cy - y)
+            if d < bd:
+                bd = d
+                best = L
+        return best
+
+    def col_at(self, x, y):
+        """座標(x,y)が入る列記号(1,2,..)を返す。枠が無ければ None。"""
+        if not self.cols:
+            return None
+        best = None
+        bd = 1e18
+        for n, cx in self.cols:
+            d = abs(cx - x)
+            if d < bd:
+                bd = d
+                best = n
+        return best
+
+    def cell_at(self, x, y):
+        """座標(x,y)のグリッドセル 'F-7' を返す。行のみ有れば 'F'。無ければ ''。"""
+        r = self.zone_at(x, y)
+        c = self.col_at(x, y)
+        if r and c:
+            return f"{r}-{c}"
+        return r or ''
+
+    def zone_of(self, name):
+        """機器の行記号(A,B,..)。配置図に無ければ None。"""
+        p = self.device_pos(name)
+        return self.zone_at(*p) if p else None
+
+    def cell_of(self, name):
+        """機器のグリッドセル 'F-7'（作業者が盤上で探す位置）。無ければ ''。"""
+        p = self.device_pos(name)
+        return self.cell_at(*p) if p else ''
 
     # ---- 提供メソッド ----
     def device_pos(self, name):
