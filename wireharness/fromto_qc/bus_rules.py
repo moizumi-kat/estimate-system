@@ -33,8 +33,9 @@ TEMPLATE_PATH = os.path.join(_DIR, 'bus_templates.json')
 # 号線名 = 回路番号 + 相(R/S/T) + 連番。例 102S, 1R, 1R1, 22T。
 PHASE_RE = re.compile(r'^(?P<ckt>\d*)(?P<ph>[RST])(?P<sub>\d*)$')
 BREAKERS = {'MCCB', 'ELCB', 'ELB', 'CP', 'ACB', 'LBS'}
-# 源流・保護側（母線の下流機器として繋がない＝過剰結線の主因）
-SOURCE_SIDE = BREAKERS | {'F', 'SPD', 'LUG', 'WAGO', 'CABLE', 'BOX'}
+# 源流・保護側＋端子台（母線の下流機器として繋がない＝過剰結線の主因）
+# TB(端子台)は相バス membership が文脈依存で誤検出の主因のため精度優先では除外。
+SOURCE_SIDE = BREAKERS | {'F', 'SPD', 'LUG', 'WAGO', 'CABLE', 'BOX', 'TB'}
 # 遮断器 相→出力端子（3φ標準）。学習で上書きされるが既定を持つ。
 DEFAULT_OUT = {'R': '2', 'S': '4', 'T': '6'}
 DEFAULT_IN = {'R': '1', 'S': '3', 'T': '5'}
@@ -186,7 +187,10 @@ def generate(models, templates=None, precision=True):
         members = []
         for base, dev, no in cdevs:
             if base in BREAKERS:
-                term = bo.get(f"{base}|{ph}") or DEFAULT_OUT.get(ph, '')
+                # 遮断器の相出力は数字端子(2/4/6)のみ採用。学習が非数字(警報端子等)なら既定へ。
+                term = bo.get(f"{base}|{ph}", '')
+                if not term.isdigit():
+                    term = DEFAULT_OUT.get(ph, '')
                 members.append((dev, no, term))
                 continue
             if precision and base in SOURCE_SIDE:    # 源流・保護側は下流に繋がない
