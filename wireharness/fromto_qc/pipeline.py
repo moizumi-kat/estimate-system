@@ -4,8 +4,9 @@
 1本で ①design_proposal ②geometry/logical ③rules_engine+layout+main_circuit を
 オーケストレーションし、設計提案・From-To・ハーネスシートを出す。
 """
-from .geometry import DrawingModel
+from .geometry import DrawingModel, norm
 from . import harness, design_proposal, rules_engine, layout as layout_mod
+from . import bus_rules
 
 # 学習ストア（検図フィードバック）。リポジトリ直下の kenzu_store を任意で利用。
 try:
@@ -69,6 +70,20 @@ def run(seq_paths, skel_paths=None, layout_path=None, seiban=''):
             pass
     # ② 論理 From-To
     logical = _logical_from_fused(fused)
+    # ②-b 母線（相バス・電源）ルール生成で号線の無い母線を補完（precision優先・誤配線ゼロ方針）。
+    #     学習テンプレ(bus_templates.json)が無ければ何も足さない（安全）。
+    bus_added = 0
+    try:
+        bus_nets = bus_rules.generate(models, precision=True)
+        for g, mem in bus_nets.items():
+            gg = norm(g)
+            if gg in logical:                       # 抽出済みは尊重（上書きしない）
+                continue
+            logical[gg] = {'endpoints': [(d, n, t) for d, n, t in mem],
+                           'kind': 'main', 'size': '', 'source': 'bus_rule'}
+            bus_added += 1
+    except Exception:
+        pass
     # ③ 物理ハーネス生成
     lay = None
     if layout_path:
@@ -81,7 +96,7 @@ def run(seq_paths, skel_paths=None, layout_path=None, seiban=''):
             'harness_rows': rows, 'defects': defects, 'run_id': run_id,
             'learned': {'suppressed': sorted(suppress),
                         'naming_count': len(learned.get('naming', {}))},
-            'summary': {'号線': len(logical), '生成電線': len(rows),
+            'summary': {'号線': len(logical), '母線生成': bus_added, '生成電線': len(rows),
                         '設計提案': len(proposals), '検図(配置図不足)': len(defects),
                         **rules_engine.summary(rows)}}
 
