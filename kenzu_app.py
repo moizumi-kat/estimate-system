@@ -158,6 +158,30 @@ def _kenzu_run(seq, skel, layout, table, ai=False):
     return findings
 
 
+def _proposal_findings(models):
+    """図面のみの不足データ検出(design_proposal)＋学習不具合ルール → kenzu形式findings。
+    人手データ不要。学習した誤検知抑制も反映。"""
+    try:
+        from wireharness.fromto_qc import design_proposal as dp, harness
+        paths = [m.path for m in models]
+        fused = harness.fuse(paths, [], None)
+        try:
+            suppress = kenzu_store.learned().get('suppress', set())
+        except Exception:
+            suppress = set()
+        out = []
+        for p in dp.propose(models, fused, suppress=suppress):
+            out.append({'rule': p['type'], 'severity': 'med', 'confidence': 'med',
+                        '場所': p.get('location', ''), '問題': p['detail'],
+                        '提案': '設計に入力を依頼してください。',
+                        '根拠': '不足データ検出(design_proposal/学習)'})
+        return out
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return []
+
+
 @app.route('/api/health')
 def health():
     return jsonify(ok=True, app='kenzu',
@@ -182,6 +206,7 @@ def api_kenzu():
         layout = buckets['layout']
         table = buckets['table']
         findings = _kenzu_run(seq, skel, layout, table, ai)
+        findings += _proposal_findings(seq + skel)   # ①不足データ検出＋学習不具合ルール
         # 二重指摘の除去(同一 rule/場所/問題)
         seen = set()
         uniq = []
@@ -245,6 +270,89 @@ def api_feedback():
 def api_stats():
     """バージョンアップ判断用の集計（ルール別 是正/誤検知/見逃し、適合率など）。"""
     return jsonify(kenzu_store.stats())
+
+
+@app.route('/api/review', methods=['POST'])
+@login_required
+def api_review():
+    """現場レビュー: 検知結果を製造が採用/却下/保留 → 採用分を設計提案書に、判定を学習へ。
+    body(JSON): {run_id, decisions:{fid:{action:'採用'|'却下'|'保留', note}}}"""
+    from wireharness.fromto_qc import review
+    d = request.get_json(silent=True) or {}
+    run = kenzu_store.get_run(d.get('run_id') or '')
+    if not run:
+        return jsonify(error='run_id が不明です'), 400
+    res = review.submit(d.get('run_id'), run.get('findings', []),
+                        d.get('decisions', {}), user=(session.get('user') or '現場'))
+    report = review.design_report(res['to_design'],
+                                  seiban=(run.get('meta', {}) or {}).get('seiban', ''))
+    return jsonify(ok=True, to_design=res['to_design'],
+                   rejected=len(res['rejected']), held=len(res['held']),
+                   design_report=report)
+
+
+@app.route('/api/generate', methods=['POST'])
+@login_required
+def api_generate():
+    """検図OK後: 図面→ハーネスシート(制御/主回路)を人手フォーマットで生成して返す。"""
+    from wireharness.fromto_qc import (pipeline, main_circuit as mc, rules_engine,
+                                       output_sheet as osh, sheet_classify as sc)
+    files = request.files.getlist('file') or ([request.files['file']] if 'file' in request.files else [])
+    if not files:
+        return jsonify(error='ファイルがありません(DXF/ZIP)'), 400
+    seiban = request.form.get('seiban', '')
+    models, warnings, tmps = _kenzu_models(files)
+    try:
+        if not models:
+            return jsonify(error='読み込めるDXFがありません', warnings=warnings), 400
+        buckets = sc.classify_files(models)
+        seq = [m.path for m in buckets['seq']]
+        skel = [m.path for m in buckets['skel']]
+        lay = buckets['layout'][0].path if buckets['layout'] else None
+        res = pipeline.run(seq, skel, lay, seiban=seiban)
+        control_sheet = osh.control_sheet(res['harness_rows'], seiban)
+        # 主回路(遮断器リストは本番では器具表から。ここでは生成の枠のみ)
+        main_sheet = osh.main_sheet([], seiban)
+        return jsonify(ok=True, seiban=seiban, summary=res['summary'],
+                       proposals=len(res['proposals']), defects=res['defects'],
+                       control_sheet=control_sheet, main_sheet=main_sheet,
+                       warnings=warnings)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify(error=str(e), warnings=warnings), 500
+    finally:
+        for p in tmps:
+            try:
+                os.unlink(p)
+            except Exception:
+                pass
+
+
+@app.route('/api/naming', methods=['POST'])
+@login_required
+def api_naming():
+    """名称読み替えの確定を学習: {draw_name, harness_name}。"""
+    d = request.get_json(silent=True) or {}
+    if not d.get('draw_name') or not d.get('harness_name'):
+        return jsonify(error='draw_name と harness_name が必要'), 400
+    m = kenzu_store.save_naming(d['draw_name'], d['harness_name'], user=(session.get('user') or ''))
+    return jsonify(ok=True, naming_count=len(m))
+
+
+@app.route('/api/defect_rule', methods=['POST'])
+@login_required
+def api_defect_rule():
+    """見逃し事例から不具合ルールを学習: {if_base, need_base, name, kind?}。"""
+    from wireharness.fromto_qc import defect_rules
+    d = request.get_json(silent=True) or {}
+    if not d.get('if_base') or not d.get('need_base'):
+        return jsonify(error='if_base と need_base が必要'), 400
+    rid = defect_rules.learn_from_missed(d['if_base'], d['need_base'],
+                                         name=d.get('name', ''),
+                                         kind=d.get('kind', 'require_with'),
+                                         user=(session.get('user') or ''))
+    return jsonify(ok=True, rule_id=rid)
 
 
 @app.route('/')
