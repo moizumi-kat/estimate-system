@@ -33,13 +33,18 @@ TEMPLATE_PATH = os.path.join(_DIR, 'bus_templates.json')
 # 号線名 = 回路番号 + 相(R/S/T) + 連番。例 102S, 1R, 1R1, 22T。
 PHASE_RE = re.compile(r'^(?P<ckt>\d*)(?P<ph>[RST])(?P<sub>\d*)$')
 BREAKERS = {'MCCB', 'ELCB', 'ELB', 'CP', 'ACB', 'LBS'}
+# 源流・保護側（母線の下流機器として繋がない＝過剰結線の主因）
+SOURCE_SIDE = BREAKERS | {'F', 'SPD', 'LUG', 'WAGO', 'CABLE', 'BOX'}
 # 遮断器 相→出力端子（3φ標準）。学習で上書きされるが既定を持つ。
 DEFAULT_OUT = {'R': '2', 'S': '4', 'T': '6'}
 DEFAULT_IN = {'R': '1', 'S': '3', 'T': '5'}
+MIN_SUPPORT = 2                # 下流機器端子: この回数以上学習された型だけ採用
 
 
 def _base(sym):
-    return ''.join(ch for ch in str(sym).split('-')[0] if not ch.isdigit()).upper()
+    """機器の型名（DEVICE値）。ANSI番号型(52/51/43…)や 86X 等を保つため数字は削らない。
+    DEVICEとDEVICE1は別属性なので型名側に回路番号は含まれない前提。"""
+    return str(sym).split('-')[0].strip().upper()
 
 
 def _parse_human(path):
@@ -82,7 +87,8 @@ def learn(human_paths):
     templates = {
         'breaker_out': {f"{b}|{ph}": cnt.most_common(1)[0][0]
                         for (b, ph), cnt in out_term.items() if cnt},
-        'dev_term': {f"{b}|{ph}": cnt.most_common(1)[0][0]
+        # 端子とその支持度(学習回数)を保持 → generate で低支持を除外し精度確保
+        'dev_term': {f"{b}|{ph}": [cnt.most_common(1)[0][0], sum(cnt.values())]
                      for (b, ph), cnt in dev_term.items() if cnt},
     }
     try:
@@ -137,33 +143,57 @@ def devices_by_circuit(models):
     return out
 
 
-def generate(models, templates=None):
+def _dev_term(dt, base, ph):
+    """学習テンプレから (base,phase)→端子 を返す。支持度<MIN_SUPPORTは不採用。
+    旧形式(端子のみ文字列)にも後方互換。無ければ None。"""
+    v = dt.get(f"{base}|{ph}")
+    if v is None:
+        return None
+    if isinstance(v, list):
+        term, sup = v[0], v[1]
+        return term if sup >= MIN_SUPPORT else None
+    return v
+
+
+def generate(models, templates=None, precision=True):
     """図面のSOUラベル＋回路機器＋学習テンプレ → 母線ネット {号線: [(dev,no,term)]}。
-    生成方針: 各母線 {ckt}{phase} に、その回路の
-      - 遮断器 を相出力端子(学習: R→2,S→4,T→6)で
-      - 下流機器 を学習した(種別×相→端子)で
-    接続する。回路的に正しい母線を決定論生成する（人手完全一致は狙わない）。
+    precision=True（既定・推奨）:
+      - 副母線(連番付き 1R1/1R2 等)は生成しない（枝分かれはルールで追えず過剰結線の主因）
+      - 下流は「負荷側の葉機器」のみ（源流・保護側=遮断器/ヒューズ/SPD等は繋がない）
+      - 学習支持度が低い端子は使わない
+    precision=False: 従来の広い生成（recall優先・人が削る運用）。
+    回路的に正しい母線を決定論生成する（人手完全一致は狙わない）。
     """
     templates = templates or load_templates()
     bo = dict(templates.get('breaker_out', {}))
     dt = dict(templates.get('dev_term', {}))
-    labels = sou_labels(models)
     circ = devices_by_circuit(models)
     nets = {}
-    for g in labels:
+    for g in sou_labels(models):
         m = PHASE_RE.match(g)
-        ckt, ph = m.group('ckt'), m.group('ph')
+        ckt, ph, sub = m.group('ckt'), m.group('ph'), m.group('sub')
         if not ckt:
             continue
+        if precision and sub:                        # 副母線は生成しない
+            continue
+        cdevs = circ.get(ckt, [])
+        # 主幹/分配回路（遮断器が複数 or MAIN）は入力側・多段で不規則→生成しない
+        if precision:
+            nbrk = sum(1 for b, d, n in cdevs if b in BREAKERS)
+            is_main = any('MAIN' in n.upper() for b, d, n in cdevs if b in BREAKERS)
+            if nbrk != 1 or is_main:
+                continue
         members = []
-        for base, dev, no in circ.get(ckt, []):
+        for base, dev, no in cdevs:
             if base in BREAKERS:
                 term = bo.get(f"{base}|{ph}") or DEFAULT_OUT.get(ph, '')
                 members.append((dev, no, term))
-            else:
-                key = f"{base}|{ph}"
-                if key in dt:                       # 学習にある下流機器だけ接続（過剰結線を抑制）
-                    members.append((dev, no, dt[key]))
+                continue
+            if precision and base in SOURCE_SIDE:    # 源流・保護側は下流に繋がない
+                continue
+            term = _dev_term(dt, base, ph)
+            if term is not None:                     # 学習にある葉機器だけ接続
+                members.append((dev, no, term))
         if len(members) >= 2:
             nets[g] = members
     return nets
