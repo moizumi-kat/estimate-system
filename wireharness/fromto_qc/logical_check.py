@@ -25,8 +25,12 @@ def _dev_norm(sym):
     return norm(sym)
 
 
-def drawing_nets_by_gousen(fused):
-    """wire-trace 融合結果 → {号線(norm): 機器集合(norm)}。"""
+def drawing_nets_by_gousen(fused, aliases=None):
+    """wire-trace 融合結果 → {号線(norm): 機器集合(norm)}。
+    aliases: {norm(実機器名): set(別名)}。制御リレーのロケータ文字等を等価語として
+    機器集合に加える（人手が文字参照するため照合recallが上がる）。locator.alias_map参照。
+    """
+    aliases = aliases or {}
     out = {}
     for sid, n in fused['nets'].items():
         g = norm(sid)
@@ -34,6 +38,9 @@ def drawing_nets_by_gousen(fused):
             continue
         devs = {_dev_norm(d) for d in n['devices']}
         devs = {d for d in devs if d and d not in PASSTHROUGH}
+        for d in list(devs):
+            if d in aliases:
+                devs |= aliases[d]
         if devs:
             out.setdefault(g, set()).update(devs)
     return out

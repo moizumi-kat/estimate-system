@@ -113,6 +113,25 @@ def _letter(i):
     return s
 
 
+def _digits(s):
+    m = re.search(r'(\d+)$', str(s))
+    return m.group(1) if m else ''
+
+
+def alias_map(layout=None, dct_paths=None):
+    """制御リレーの実機器名 → ロケータ別名集合 {文字, 文字+回路番号}。
+    人手ハーネスはリレーを「文字」や「文字+回路」で参照するため、照合・出力で
+    実機器名と等価に扱えるようにする。-DCTがあればソフト採番、無ければ位置ベース。
+    戻り: {norm(実機器名): set(別名)}。
+    """
+    loc = Locator(layout=layout, dct_paths=dct_paths)
+    out = {}
+    for dev, L in loc.letter_of.items():
+        Ln = norm(L)
+        out[dev] = {Ln, norm(Ln + _digits(dev))}
+    return out
+
+
 class Locator:
     """ロケータ文字の参照。
     -DCT図面があれば ソフトの採番を完全一致で再現（DEVICE1='rail-letter'を読む）。
