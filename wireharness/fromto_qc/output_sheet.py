@@ -38,10 +38,11 @@ def _endpoints_by_gousen(rows):
     return byg, meta
 
 
-def control_sheet(rows, seiban=''):
-    """制御ハーネスシート（号線でグループ化）→ 人手フォーマット文字列。"""
+def control_sheet(rows, seiban='', title='配線情報リスト'):
+    """ハーネスシート（号線でグループ化）→ 人手フォーマット文字列。
+    title は先頭行の見出し（既定は元データと同じ '配線情報リスト'）。"""
     byg, meta = _endpoints_by_gousen(rows)
-    out = ['"配線情報リスト（制御）"', '', '', '\t\t\t\t\t\t\t\t\t' + seiban]
+    out = [f'"{title}"', '', '', '\t\t\t\t\t\t\t\t\t' + seiban]
     cur = None
     for g, eps in byg.items():
         wtype, size = meta[g]
@@ -70,6 +71,40 @@ def main_sheet(main_rows, seiban=''):
         out.append(_row(gousen=color, size=(marker or size), dev=f[0], no=f[1], term=f[2]))
         out.append(_row(gousen=color, size=size, dev=t[0], no=t[1], term=t[2]))
     return '\n'.join(out) + '\n'
+
+
+def _is_main_row(r):
+    """行が主回路か（相バス R/S/T 号線 or 主回路電線 HIV or kind=main）。"""
+    import re
+    g = str(r.get('gousen', ''))
+    return (r.get('kind') == 'main' or r.get('wtype') == 'HIV'
+            or bool(re.match(r'^\d*[RST]\d*$', g)))
+
+
+def split_control_main(rows):
+    """生成ハーネス行を 制御 / 主回路 に分割。"""
+    ctrl = [r for r in rows if not _is_main_row(r)]
+    main = [r for r in rows if _is_main_row(r)]
+    return ctrl, main
+
+
+def write_control_main(rows, out_dir, seiban=''):
+    """制御・主回路を別ファイルで、cp932(本番)とUTF-8(画面確認)両方で書き出す。
+    戻り: dict(制御_cp932, 主回路_cp932, 制御_utf8, 主回路_utf8)。"""
+    import os
+    ctrl, main = split_control_main(rows)
+    outs = {}
+    for tag, rs in [('制御', ctrl), ('主回路', main)]:
+        text = control_sheet(rs, seiban, title=f'配線情報リスト（{tag}）')
+        p932 = os.path.join(out_dir, f'{seiban}_{tag}ハーネスシート.txt')
+        putf = os.path.join(out_dir, f'{seiban}_{tag}ハーネスシート_UTF8.txt')
+        with open(p932, 'w', encoding='cp932', errors='replace') as f:
+            f.write(text)
+        with open(putf, 'w', encoding='utf-8') as f:
+            f.write(text)
+        outs[f'{tag}_cp932'] = p932
+        outs[f'{tag}_utf8'] = putf
+    return outs
 
 
 def write_sheets(control_rows, main_rows, out_dir, seiban=''):

@@ -61,7 +61,7 @@ def expand_net(gid, endpoints, kind='ctrl', size=''):
     eps = [endpoints[i] for i in order]
     for i in range(len(eps) - 1):
         a, b = eps[i], eps[i + 1]
-        rows.append({'gousen': gid, 'size': size, 'wtype': wtype,
+        rows.append({'gousen': gid, 'size': size, 'wtype': wtype, 'kind': kind,
                      'from': a, 'to': b,
                      'door_from': _is_door(a[0]), 'door_to': _is_door(b[0]),
                      'marker': '', 'cell_from': '', 'cell_to': '',
