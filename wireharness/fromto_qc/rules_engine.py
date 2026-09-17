@@ -64,7 +64,8 @@ def expand_net(gid, endpoints, kind='ctrl', size=''):
         rows.append({'gousen': gid, 'size': size, 'wtype': wtype,
                      'from': a, 'to': b,
                      'door_from': _is_door(a[0]), 'door_to': _is_door(b[0]),
-                     'marker': '', 'cell_from': '', 'cell_to': ''})
+                     'marker': '', 'cell_from': '', 'cell_to': '',
+                     'loc_from': '', 'loc_to': ''})
     return rows
 
 
@@ -106,12 +107,21 @@ def apply_marker_rules(rows):
 
 def apply_layout_rules(rows, layout):
     """R-E ダクト方向 を内部配置図から付与（LUG/WAGOは端子ベースのR-Dで別途付与）。
-    併せて盤上の位置記号（区分グリッド セル 'F-7'）を付与し、作業者が機器を探しやすくする。"""
+    併せて盤上の位置記号（区分グリッド セル 'F-7'）と、制御リレー/タイマの
+    ロケータ文字（位置ベース自動採番 A,B,C…）を付与し、作業者が機器を探しやすくする。"""
+    try:
+        from .locator import Locator
+        loc = Locator(layout)
+    except Exception:
+        loc = None
     for r in rows:
         r['dir_from'] = layout.duct_direction(_sym(r['from']))
         r['dir_to'] = layout.duct_direction(_sym(r['to']))
         r['cell_from'] = layout.cell_of(_sym(r['from']))   # 盤上の位置記号（行×列）
         r['cell_to'] = layout.cell_of(_sym(r['to']))
+        if loc is not None:
+            r['loc_from'] = loc.letter(_sym(r['from']))    # 制御リレー/タイマのロケータ文字
+            r['loc_to'] = loc.letter(_sym(r['to']))
     return rows
 
 
