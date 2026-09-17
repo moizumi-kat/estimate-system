@@ -18,6 +18,33 @@ import re
 from .geometry import norm
 from .device_master import Master
 
+# -DCT図面のロケータ表記: relay の DEVICE1 = '{レール番号}-{文字}'（例 '2-B'）
+_DCT_RE = re.compile(r'^(\d+)-([A-Z]{1,2})$')
+
+
+def letters_from_dct(dct_paths):
+    """-DCT図面（ソフトがロケータ文字を採番・表示した後）から letter→relay を読む。
+    relay の DEVICE1='{rail}-{letter}' を解釈。これはソフトの採番結果そのもの。
+    戻り: {norm(relay機器名): {'letter':L, 'rail':rail, 'x':x, 'y':y}}。
+    """
+    import ezdxf
+    out = {}
+    for p in dct_paths or []:
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for e in doc.modelspace():
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            a = {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}
+            dv = a.get('DEVICE', '').strip()
+            m = _DCT_RE.match(a.get('DEVICE1', '').strip())
+            if dv and m:
+                out[norm(dv)] = {'letter': m.group(2), 'rail': m.group(1),
+                                 'x': e.dxf.insert.x, 'y': e.dxf.insert.y}
+    return out
+
 # 明確に制御リレー/タイマでないもの（末尾Tだが計器/変成器 等）
 NOT_RELAY = {'CT', 'PT', 'VT', 'ZCT', 'TB', 'TC', 'PMT', 'TR', 'T/U'}
 # 明確に対象外の種別
@@ -40,11 +67,13 @@ def is_control_relay(base):
     return False
 
 
-def assign(layout, include=None):
-    """Layout から制御リレー/タイマを盤面位置順に A,B,C… 採番。
+def assign(layout, include=None, rail_tol=40):
+    """Layout の制御リレー/タイマに、ソフトと同じ規則でロケータ文字を採番（位置ベース）。
+    規則（-DCT実データで検証・一致率99%）:
+      レール = X近接クラスタ（縦レール）。レールは左→右。
+      レール内は 上→下（Y降順）に A,B,C…。文字はレール毎にリセット。
     include: 追加で対象にする基底記号集合（任意）。
-    戻り: (letter_of, device_of, order)
-      letter_of: {norm(機器名): 'A'} , device_of: {'A': 機器名}, order: [(letter, 機器名, x, y)]
+    戻り: (letter_of, device_of, order)  letter_of={norm(機器名):'A'}。
     """
     include = {s.upper() for s in (include or set())}
     cands = []
@@ -52,27 +81,25 @@ def assign(layout, include=None):
         base = Master.split(name)[0].upper()
         if is_control_relay(base) or base in include:
             cands.append((name, x, y))
-    # 盤面読み順: 盤(左→右) → 行(上=大きいy→下) → 列(左=小さいx→右)
-    def panel_idx(x):
-        for i, (x0, x1) in enumerate(getattr(layout, 'panels', [(-1e9, 1e9)])):
-            if x0 <= x <= x1:
-                return i
-        return 0
-    # 行のまとまりを作るため y を枠行にスナップ（枠が無ければ y そのまま）
-    rows = getattr(layout, 'rows', [])
-    def row_key(y):
-        if rows:
-            # 最も近い枠行の中心 y（上ほど大きい）→ 昇順indexで上から
-            best = min(range(len(rows)), key=lambda i: abs(rows[i][1] - y))
-            return best                    # rows は上→下でindex増加
-        return -y                          # 枠が無ければ y 降順（上から）
-    cands.sort(key=lambda c: (panel_idx(c[1]), row_key(c[2]), c[1]))
+    # レール分割: X昇順で近接をまとめる
+    cands.sort(key=lambda c: c[1])
+    rails, cur, lastx = [], [], None
+    for name, x, y in cands:
+        if lastx is None or abs(x - lastx) <= rail_tol:
+            cur.append((name, x, y))
+        else:
+            rails.append(cur)
+            cur = [(name, x, y)]
+        lastx = x
+    if cur:
+        rails.append(cur)
     letter_of, device_of, order = {}, {}, []
-    for i, (name, x, y) in enumerate(cands):
-        L = _letter(i)
-        letter_of[norm(name)] = L
-        device_of[L] = name
-        order.append((L, name, x, y))
+    for rail in rails:
+        for i, (name, x, y) in enumerate(sorted(rail, key=lambda r: -r[2])):  # 上→下
+            L = _letter(i)
+            letter_of[norm(name)] = L
+            device_of.setdefault(L, name)
+            order.append((L, name, x, y))
     return letter_of, device_of, order
 
 
@@ -87,14 +114,33 @@ def _letter(i):
 
 
 class Locator:
-    """Layout から採番したロケータの参照。"""
+    """ロケータ文字の参照。
+    -DCT図面があれば ソフトの採番を完全一致で再現（DEVICE1='rail-letter'を読む）。
+    無ければ 位置ベース自動採番（フォールバック）。
+    """
 
-    def __init__(self, layout, include=None):
-        self.letter_of, self.device_of, self.order = assign(layout, include)
+    def __init__(self, layout=None, dct_paths=None, include=None):
+        self.source = 'position'
+        self.letter_of, self.device_of, self.rail_of = {}, {}, {}
+        # 1) -DCT があればソフトの採番を直接採用（完全一致）
+        if dct_paths:
+            dct = letters_from_dct(dct_paths)
+            if dct:
+                self.source = 'dct'
+                for dev, info in dct.items():
+                    self.letter_of[dev] = info['letter']
+                    self.rail_of[dev] = info['rail']
+                    self.device_of.setdefault(info['letter'], dev)
+        # 2) 無ければ位置ベース（フォールバック）
+        if self.source == 'position' and layout is not None:
+            self.letter_of, self.device_of, self.order = assign(layout, include)
 
     def letter(self, device):
         """機器名→ロケータ文字（制御リレー/タイマのみ）。無ければ ''。"""
         return self.letter_of.get(norm(device), '')
+
+    def rail(self, device):
+        return self.rail_of.get(norm(device), '')
 
     def device(self, letter):
         return self.device_of.get(str(letter).upper(), '')

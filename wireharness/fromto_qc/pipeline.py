@@ -38,7 +38,7 @@ def _logical_from_fused(fused):
     return out
 
 
-def run(seq_paths, skel_paths=None, layout_path=None, seiban=''):
+def run(seq_paths, skel_paths=None, layout_path=None, seiban='', dct_paths=None):
     """通しパイプライン実行。戻り: dict(proposals, logical, harness_rows, defects, summary, run_id)。
     検図の指摘は kenzu_store に記録され run_id が発行される。設計の判定
     （kenzu_store.add_feedback / save_naming）が次回の学習に反映される。"""
@@ -91,7 +91,7 @@ def run(seq_paths, skel_paths=None, layout_path=None, seiban=''):
             lay = layout_mod.Layout(layout_path)
         except Exception:
             lay = None
-    rows, defects = rules_engine.generate(logical, lay)
+    rows, defects = rules_engine.generate(logical, lay, dct_paths=dct_paths)
     return {'proposals': proposals, 'logical': logical,
             'harness_rows': rows, 'defects': defects, 'run_id': run_id,
             'learned': {'suppressed': sorted(suppress),

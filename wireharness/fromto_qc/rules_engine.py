@@ -105,13 +105,14 @@ def apply_marker_rules(rows):
     return rows
 
 
-def apply_layout_rules(rows, layout):
+def apply_layout_rules(rows, layout, dct_paths=None):
     """R-E ダクト方向 を内部配置図から付与（LUG/WAGOは端子ベースのR-Dで別途付与）。
     併せて盤上の位置記号（区分グリッド セル 'F-7'）と、制御リレー/タイマの
-    ロケータ文字（位置ベース自動採番 A,B,C…）を付与し、作業者が機器を探しやすくする。"""
+    ロケータ文字を付与。ロケータは -DCT図面があればソフトの採番を完全一致で再現、
+    無ければ位置ベース（-DCTと99%一致）で採番する。"""
     try:
         from .locator import Locator
-        loc = Locator(layout)
+        loc = Locator(layout, dct_paths=dct_paths)
     except Exception:
         loc = None
     for r in rows:
@@ -125,9 +126,10 @@ def apply_layout_rules(rows, layout):
     return rows
 
 
-def generate(logical_nets, layout=None):
+def generate(logical_nets, layout=None, dct_paths=None):
     """論理From-To（{号線: {'endpoints':[(dev,no,term)], 'kind','size'}}）→ 物理ハーネス行。
     R-A/B/C/F を適用。layout を渡すと R-D(LUG/WAGO)・R-E(ダクト方向) も適用。
+    dct_paths: -DCT図面（ロケータ文字採番済）。あればソフト採番を完全一致で反映。
     戻り: (rows, defects)  defects=配置図に無い機器（検図で設計へ）。
     """
     rows = []
@@ -138,7 +140,7 @@ def generate(logical_nets, layout=None):
     rows = apply_marker_rules(rows)          # R-D 端子ベース LUG/WAGO（配置図不要）
     defects = []
     if layout is not None:
-        rows = apply_layout_rules(rows, layout)
+        rows = apply_layout_rules(rows, layout, dct_paths)
         devs = set()
         for net in logical_nets.values():
             for d, n, t in net.get('endpoints', []):
