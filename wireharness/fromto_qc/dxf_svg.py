@@ -32,13 +32,49 @@ def _flatten(entities, depth=0):
     return out
 
 
+def _visible_attribs(msp, doc):
+    """INSERTのブロック属性(ATTRIB)のうち、実図に表示される文字を返す。
+    表示可否: flags のビット1(=invisible)が立っていない、かつレイヤがON。
+    機器名(DEVICE)・線番(線番)・端子(TERMINAL)・注釈(CMNTJ)等が該当。"""
+    out = []
+    for ins in msp.query('INSERT'):
+        if not ins.attribs:
+            continue
+        for a in ins.attribs:
+            try:
+                if a.dxf.flags & 1:            # invisible 属性(管理用: MAKER/CODE/PMT 等)
+                    continue
+                t = (a.dxf.text or '').strip()
+                if not t:
+                    continue
+                lay = doc.layers.get(a.dxf.layer) if a.dxf.layer else None
+                if lay is not None and not lay.is_on():
+                    continue
+                ha = a.dxf.get('halign', 0)
+                va = a.dxf.get('valign', 0)
+                if (ha or va) and a.dxf.hasattr('align_point'):
+                    px, py = a.dxf.align_point.x, a.dxf.align_point.y
+                else:
+                    px, py = a.dxf.insert.x, a.dxf.insert.y
+                anchor = 'middle' if ha in (1, 4) else 'end' if ha == 2 else 'start'
+                out.append({'x': px, 'y': py, 'h': a.dxf.height or 20,
+                            'rot': a.dxf.rotation or 0, 'text': t,
+                            'anchor': anchor, 'tag': a.dxf.tag, 'layer': a.dxf.layer})
+            except Exception:
+                continue
+    return out
+
+
 def render(paths, extents=None):
     """paths(DXF複数) を1枚のSVGボディにまとめて返す。
     戻り: {'body':str, 'xmin','ymin','xmax','ymax','w','h', 'labels':[...]} """
     ents = []
+    attrs = []
     for p in paths:
         doc = ezdxf.readfile(p)
-        ents += _flatten(doc.modelspace())
+        msp = doc.modelspace()
+        ents += _flatten(msp)
+        attrs += _visible_attribs(msp, doc)
 
     # 範囲
     xs, ys = [], []
@@ -157,6 +193,17 @@ def render(paths, extents=None):
             s = html.escape(s)
             tr = f' transform="rotate({-rot} {X(x)} {Y(y)})"' if rot else ''
             out.append(f'<text class="tx" x="{X(x)}" y="{Y(y)}" font-size="{round(hh,1)}"{tr}>{s}</text>')
+
+    # ブロック属性の表示文字（機器名・線番・端子・注釈）
+    for a in attrs:
+        s = html.escape(a['text'])
+        x, y = X(a['x']), Y(a['y'])
+        tag = a['tag']
+        cls = 'sn' if tag == '線番' else ('dv' if tag in ('DEVICE', 'DEVICE1', 'DEVICE2') else
+              ('tm' if tag.startswith('TERMINAL') else 'tx'))
+        tr = f' transform="rotate({-a["rot"]} {x} {y})"' if a['rot'] else ''
+        out.append(f'<text class="{cls}" x="{x}" y="{y}" font-size="{round(a["h"],1)}" '
+                   f'text-anchor="{a["anchor"]}"{tr}>{s}</text>')
 
     return {'body': '\n'.join(out), 'xmin': xmin, 'ymin': ymin, 'xmax': xmax,
             'ymax': ymax, 'w': round(w, 1), 'h': round(h, 1)}
