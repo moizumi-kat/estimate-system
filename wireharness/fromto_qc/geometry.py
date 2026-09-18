@@ -31,6 +31,7 @@ WIRE_LAYERS = {'L_CONTROL', 'L_CONTROL_H', 'L_MAIN', 'L_OUTSIDE', 'L_EARTH', 'DE
 POINT_TOL = 5          # 同一節点判定
 TERMINAL_TOL = 15      # 端子台_LU*の中継結合
 SENBAN_SEG_MAXDIST = 250   # 線番→配線の割当
+FOOT_MARGIN = 0        # 機器外形枠の距離マージン（人の「端点と部品の距離」判断に対応。調整可）
 # 端子/機器としてカウントしない付属・銘板系
 SKIP_DEVICES = {'銘板', '端子ｶﾊﾞｰ', 'TB取付金具', 'ﾊﾝﾄﾞﾙ', '系統情報',
                 'CABLE', 'CABLE1', 'CABLE2', 'CH', 'CP', 'CPMAIN1', '補助接点ﾕﾆｯﾄ',
@@ -366,7 +367,10 @@ class DrawingModel:
             if abs(nn[0] - tm.x) + abs(nn[1] - tm.y) <= tol * 3:
                 comp_terms[uf.find(qn(nn))].append(tm)
 
-        # 端子を持たない機器(スケルトンのMCCB等) → 外形枠に電線端点が入る成分へ
+        # 端子を持たない機器(スケルトンのMCCB等) → 外形枠に電線端点が入る成分へ。
+        # 人は「線の末端と部品の距離」で結線判断するため、枠を FOOT_MARGIN だけ広げて
+        # 枠のわずか外にある電線端点も接続とみなす（取りこぼし=未結線Aの主因を回収）。
+        M = FOOT_MARGIN
         no_term = {t.device for t in self.terminals}
         comp_footdev = collections.defaultdict(set)
         for dv in self.devices:
@@ -374,7 +378,7 @@ class DrawingModel:
                 continue
             x0, y0, x1, y1 = dv.box
             for nd in node_list:
-                if x0 <= nd[0] <= x1 and y0 <= nd[1] <= y1:
+                if x0 - M <= nd[0] <= x1 + M and y0 - M <= nd[1] <= y1 + M:
                     comp_footdev[uf.find(qn(nd))].add(dv.sym)
 
         # 端子台(_LU, DEVICE空欄含む) → ボックスに電線端点が入る成分へ 'TB' を接続先付与。
@@ -382,7 +386,7 @@ class DrawingModel:
         # 43-102 のような1機器ネットが {43-102, TB} になって形成される。
         for sym, tx, ty, (bx0, by0, bx1, by1) in getattr(self, 'termblocks', []):
             for nd in node_list:
-                if bx0 <= nd[0] <= bx1 and by0 <= nd[1] <= by1:
+                if bx0 - M <= nd[0] <= bx1 + M and by0 - M <= nd[1] <= by1 + M:
                     comp_footdev[uf.find(qn(nd))].add(sym)
 
         # 成分ごとの号線ラベル（連結後のrootで引き直す。連結でrootがずれるため）
