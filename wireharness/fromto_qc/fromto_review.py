@@ -110,6 +110,71 @@ def build_review(seq_paths, skel_paths=None, layout_path=None, seiban='', dct_pa
             'summary': {'確定': len(confirmed), '要確認': len(review)}}
 
 
+def _sidn(s):
+    import re
+    return re.sub(r'[^0-9A-Z]', '', str(s).upper())
+
+
+def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dct_paths=None):
+    """現場ツール(実図面上で確認)用データ。シート毎に 図面SVG＋未確定号線マーカー＋
+    近傍機器の候補ボックス を同一座標系で返す。
+    戻り: {seiban, sheets:[{name,w,h,xmin,ymax,body,review:[...],confirmed:[gousen...]}], summary}
+    """
+    from . import dxf_svg
+    skel_paths = skel_paths or []
+    fused = harness.fuse(seq_paths, skel_paths, layout_path)
+    # 号線を 自動確定 / 要確認 に仕分け（fusedベース）
+    confirmed_g, net_of = set(), {}
+    for sid, net in fused['nets'].items():
+        net_of[_sidn(sid)] = net
+        devs = {norm(d) for d in net.get('devices', []) if d != 'TB'}
+        if len(devs) >= 2:
+            confirmed_g.add(_sidn(sid))
+
+    sheets = []
+    total_review = 0
+    files = [('制御', p) for p in seq_paths] + [('主回路', p) for p in skel_paths]
+    for idx, (grp, p) in enumerate(files):
+        m = DrawingModel(p)
+        rend = dxf_svg.render([p])
+        devs = m.devices
+        seen_g = set()
+        review = []
+        for (v, x, y), k in zip(m.senban, m.senban_kind):
+            g = _sidn(v)
+            if not g or g in seen_g:
+                continue
+            seen_g.add(g)
+            if g in confirmed_g:
+                continue
+            net = net_of.get(g)
+            cur = _fromto(v, net)['endpoints'] if net else []
+            review.append({'gousen': v, 'kind': k,
+                           'label': {'x': round(x, 1), 'y': round(y, 1)},
+                           'current': cur,
+                           'candidates': _nearest_devices(x, y, devs)})
+        total_review += len(review)
+        confirmed_here = sorted({net_of[g]['id'] for (v, x, y) in
+                                 [(vv, xx, yy) for (vv, xx, yy), kk in zip(m.senban, m.senban_kind)]
+                                 for g in [_sidn(v)] if g in confirmed_g and g in net_of})
+        # 図面上でタップできるよう全機器ボックスも持たせる（候補外でも選べる）
+        dev_boxes = []
+        seen_dev = set()
+        for dv in devs:
+            if dv.sym in seen_dev:
+                continue
+            seen_dev.add(dv.sym)
+            dev_boxes.append({'sym': dv.sym, 'box': [round(v, 1) for v in dv.box]})
+        sheets.append({'name': f"{grp}{idx+1}", 'group': grp,
+                       'w': rend['w'], 'h': rend['h'],
+                       'xmin': rend['xmin'], 'ymax': rend['ymax'],
+                       'body': rend['body'], 'review': review,
+                       'devices': dev_boxes, 'confirmed': confirmed_here})
+    return {'seiban': seiban, 'sheets': sheets,
+            'summary': {'自動確定': len(confirmed_g), '要確認': total_review,
+                        'シート': len(sheets)}}
+
+
 def apply_resolutions(reviewdata, decisions):
     """作業者の解決を反映し、確定 From-To 一覧を返す（＝Aアドオンが書き出すべきデータ）。
     decisions: {gousen: {'endpoints':[{device,no,terminal}], 'note':...}} 作業者が確定した端点。
