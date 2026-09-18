@@ -467,7 +467,9 @@ class DrawingModel:
             cnt = collections.Counter(v for v, _ in labs)
             sid = cnt.most_common(1)[0][0]
             kind = dict((v, k) for v, k in labs).get(sid, 'ctrl')
-            if len(devs) < 2 and len(terms) < 2:
+            # 1機器の成分も残す（渡り/別シートで同一号線が1機器ずつ出る場合、
+            # ここで捨てると harness.fuse の号線マージができない）。空だけ除外。
+            if not devs and not terms:
                 continue
             nodes = [(t.x, t.y) for t in terms] or [(0, 0)]
             nets.append({'id': sid, 'kind': kind, 'terminals': terms,
