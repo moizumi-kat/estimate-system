@@ -39,13 +39,26 @@ def propose(models, fused, suppress=None, aliases=None):
     suppress = suppress or set()
     props = []
 
-    # P1: DEVICE1 が空の端子台（_LU で総称'TB'止まり）
+    # P1: DEVICE1 が空/未入力('*'等)の端子台。番号が無いと結線先を特定できず未結線になる。
+    from .geometry import UNFILLED_DEVICE1
     for m in models:
         for sym, x, y, box in getattr(m, 'termblocks', []):
             if sym == 'TB':
                 props.append({'type': 'P1_端子台DEVICE1',
                               'detail': f"端子台に DEVICE1（TB番号）が入っていません。座標付近の端子台に番号を入力してください。",
                               'location': f"({x:.0f},{y:.0f})"})
+        # _LU/端子台ブロックで DEVICE1 が '*' 等のプレースホルダ（未入力）
+        for e in m.msp:
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            if not (e.dxf.name.startswith('_LU') or
+                    {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}.get('DEVICE', '') == 'TB'):
+                continue
+            a = {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}
+            if a.get('DEVICE1', '') in UNFILLED_DEVICE1:
+                props.append({'type': 'P1_端子台DEVICE1',
+                              'detail': f"端子台の DEVICE1 が '{a.get('DEVICE1')}'（未入力）です。TB番号を入力してください（結線先の特定に必須）。",
+                              'location': f"({e.dxf.insert.x:.0f},{e.dxf.insert.y:.0f})"})
 
     # P2: DEVICE が空の機器ブロック（配線に接する記号で機器名が無い）
     for m in models:

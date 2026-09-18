@@ -34,6 +34,14 @@ SENBAN_SEG_MAXDIST = 250   # 線番→配線の割当
 FOOT_MARGIN = 0        # 機器外形枠の距離マージン（人の「端点と部品の距離」判断に対応。調整可）
 MUTUAL_NEAREST = False  # 相互最近傍で結線判定。全製番で効果なし＋一部を悪化(成分の誤併合)のため既定OFF。実装は保持
 MUTUAL_MAXDIST = 120   # 相互最近傍を認める最大距離（これ以上離れていれば結線しない）
+# 端子台DEVICE1が「未入力」とみなす値（設計が番号を入れていないプレースホルダ）
+UNFILLED_DEVICE1 = {'*', '＊', '?', '？', '-', 'ー', '−', '‐'}
+
+
+def _mk_sym(dev, d1):
+    """機器記号を生成。DEVICE1が未入力('*'等)なら番号なし（総称化）。"""
+    d1 = (d1 or '').strip()
+    return f"{dev}-{d1}" if d1 and d1 not in UNFILLED_DEVICE1 else dev
 # 端子/機器としてカウントしない付属・銘板系
 SKIP_DEVICES = {'銘板', '端子ｶﾊﾞｰ', 'TB取付金具', 'ﾊﾝﾄﾞﾙ', '系統情報',
                 'CABLE', 'CABLE1', 'CABLE2', 'CH', 'CP', 'CPMAIN1', '補助接点ﾕﾆｯﾄ',
@@ -133,7 +141,7 @@ class DrawingModel:
             dev = a.get('DEVICE', '')
             if not dev or dev in SKIP_DEVICES:
                 continue
-            sym = f"{dev}-{a.get('DEVICE1','')}" if a.get('DEVICE1') else dev
+            sym = _mk_sym(dev, a.get('DEVICE1',''))
             ins = e.dxf.insert
             deg = e.dxf.rotation or 0
             names = []
@@ -173,7 +181,7 @@ class DrawingModel:
             dev = a.get('DEVICE', '')
             if not dev or dev in SKIP_DEVICES:
                 continue
-            sym = f"{dev}-{a.get('DEVICE1','')}" if a.get('DEVICE1') else dev
+            sym = _mk_sym(dev, a.get('DEVICE1',''))
             ins = e.dxf.insert
             deg = e.dxf.rotation or 0
             box = None
@@ -203,7 +211,8 @@ class DrawingModel:
             if dev and dev not in SKIP_DEVICES:
                 continue                      # ラベル済み端子台は既存処理で拾う
             d1 = (a.get('DEVICE1', '') or '').strip()
-            sym = f"TB-{d1}" if d1 else 'TB'   # 空欄は総称TB（正確な番号付与はCAD側で）
+            # 空欄・プレースホルダ('*'等)は「番号未入力」とみなし総称TB（→ P1で設計へ提案）
+            sym = f"TB-{d1}" if d1 and d1 not in UNFILLED_DEVICE1 else 'TB'
             ins = e.dxf.insert
             deg = e.dxf.rotation or 0
             try:
