@@ -32,6 +32,8 @@ POINT_TOL = 5          # 同一節点判定
 TERMINAL_TOL = 15      # 端子台_LU*の中継結合
 SENBAN_SEG_MAXDIST = 250   # 線番→配線の割当
 FOOT_MARGIN = 0        # 機器外形枠の距離マージン（人の「端点と部品の距離」判断に対応。調整可）
+MUTUAL_NEAREST = True  # 相互最近傍で結線判定（線端の最近傍機器と機器の最近傍線端が一致→結線）
+MUTUAL_MAXDIST = 120   # 相互最近傍を認める最大距離（これ以上離れていれば結線しない）
 # 端子/機器としてカウントしない付属・銘板系
 SKIP_DEVICES = {'銘板', '端子ｶﾊﾞｰ', 'TB取付金具', 'ﾊﾝﾄﾞﾙ', '系統情報',
                 'CABLE', 'CABLE1', 'CABLE2', 'CH', 'CP', 'CPMAIN1', '補助接点ﾕﾆｯﾄ',
@@ -388,6 +390,42 @@ class DrawingModel:
             for nd in node_list:
                 if bx0 - M <= nd[0] <= bx1 + M and by0 - M <= nd[1] <= by1 + M:
                     comp_footdev[uf.find(qn(nd))].add(sym)
+
+        # 相互最近傍による結線（茂泉様提案）: 枠内包含で拾えない端点を、
+        # 「線端の最近傍機器」と「機器の最近傍線端」が一致するペアだけ結線する。
+        # 固定公差に頼らず誤結線を避ける。端子を持たない機器の外形枠に対して適用。
+        if MUTUAL_NEAREST and node_list:
+            def pt_box_dist(px, py, box):
+                x0, y0, x1, y1 = box
+                dx = max(x0 - px, 0, px - x1)
+                dy = max(y0 - py, 0, py - y1)
+                return (dx * dx + dy * dy) ** 0.5
+            foot = [dv for dv in self.devices if dv.sym not in no_term]
+            if foot:
+                # 機器→最近傍線端
+                dev_near = {}
+                for dv in foot:
+                    best = None
+                    bd = MUTUAL_MAXDIST
+                    for nd in node_list:
+                        d = pt_box_dist(nd[0], nd[1], dv.box)
+                        if d < bd:
+                            bd = d
+                            best = nd
+                    if best is not None:
+                        dev_near[dv.sym] = best
+                # 線端→最近傍機器
+                for nd in node_list:
+                    best = None
+                    bd = MUTUAL_MAXDIST
+                    for dv in foot:
+                        d = pt_box_dist(nd[0], nd[1], dv.box)
+                        if d < bd:
+                            bd = d
+                            best = dv.sym
+                    # 相互一致（機器の最近傍線端＝この線端）なら結線
+                    if best is not None and dev_near.get(best) == nd:
+                        comp_footdev[uf.find(qn(nd))].add(best)
 
         # 成分ごとの号線ラベル（連結後のrootで引き直す。連結でrootがずれるため）
         # ここも端点最寄りではなくセグメント最寄りで割当（_label_root と同一基準）。
