@@ -31,9 +31,10 @@ def _is_power(g):
                      '102R', '102S', 'RC1', 'SC1'))
 
 
-def propose(models, fused, suppress=None):
+def propose(models, fused, suppress=None, aliases=None):
     """図面のみから設計への入力提案リストを返す。各項目 dict(type, detail, location)。
     suppress: 誤検知が多く学習で抑制された指摘種別(P1_...等)の集合。該当種別は出さない。
+    aliases: locator.alias_map（実機器名→ロケータ別名）。リレーの結線判定に用いる。
     """
     suppress = suppress or set()
     props = []
@@ -61,19 +62,27 @@ def propose(models, fused, suppress=None):
                               'detail': f"機器記号(DEVICE)が空のブロックがあります。機器名を入力してください。",
                               'location': f"({e.dxf.insert.x:.0f},{e.dxf.insert.y:.0f})"})
 
-    # P3/P4: 号線ラベル vs 結線
-    dg = lc.drawing_nets_by_gousen(fused)          # 号線→機器（形成済）
-    # 図面中の制御号線ラベル一覧（全シート）
+    # P3/P5: 号線ラベル vs 結線（From-To 100%被覆のため、全ラベルの未結線を漏れなく提案）
+    dg = lc.drawing_nets_by_gousen(fused, aliases=aliases)   # 号線→機器（ロケータ別名込）
+    # 図面中の全号線ラベル（制御 ctrl と 主回路/母線 main の SOU）を種別付きで収集
     labels = {}
     for m in models:
         for (v, x, y), k in zip(m.senban, m.senban_kind):
             g = norm(v)
-            if k == 'ctrl' and g and not _is_power(g):
-                labels.setdefault(g, (x, y))
-    for g, (x, y) in sorted(labels.items()):
+            if g:
+                labels.setdefault(g, (x, y, k))
+    for g, (x, y, k) in sorted(labels.items()):
         devs = dg.get(g, set())
-        if len(devs) < 2:
-            props.append({'type': 'P3_号線未結線',
+        if len(devs) >= 2:
+            continue
+        if k == 'main' or _is_power(g):
+            props.append({'type': 'P5_母線未結線', 'gousen': g,
+                          'detail': f"母線/電源 号線 {g} が機器2つ以上に結線できていません"
+                                    f"（現在: {sorted(devs) if devs else '無し'}）。"
+                                    f"スケルトンの結線（SOU/母線→機器端子）を確認・入力してください。",
+                          'location': f"({x:.0f},{y:.0f})"})
+        else:
+            props.append({'type': 'P3_号線未結線', 'gousen': g,
                           'detail': f"号線 {g} が機器2つ以上に結線できていません"
                                     f"（現在: {sorted(devs) if devs else '無し'}）。"
                                     f"浮き線端・端子台のDEVICE1・ラベル位置を確認してください。",
@@ -116,11 +125,12 @@ def report(props, title='設計への不足データ入力提案（図面自己�
          '設計でCADに入力すると、From-To が正しく生成できます。', '']
     labels = {'P1_端子台DEVICE1': '① 端子台の DEVICE1（番号）を入力',
               'P2_機器記号DEVICE': '② 機器記号(DEVICE)を入力',
-              'P3_号線未結線': '③ 号線が結線できない（浮き線端／端子台DEVICE1／ラベル位置を確認）'}
+              'P3_号線未結線': '③ 号線が結線できない（浮き線端／端子台DEVICE1／ラベル位置を確認）',
+              'P5_母線未結線': '④ 母線/電源号線が結線できない（スケルトンのSOU/母線→端子を確認）'}
     by = collections.defaultdict(list)
     for p in props:
         by[p['type']].append(p)
-    for t in ['P1_端子台DEVICE1', 'P2_機器記号DEVICE', 'P3_号線未結線']:
+    for t in ['P1_端子台DEVICE1', 'P2_機器記号DEVICE', 'P3_号線未結線', 'P5_母線未結線']:
         items = by.get(t, [])
         if not items:
             continue

@@ -54,8 +54,15 @@ def run(seq_paths, skel_paths=None, layout_path=None, seiban='', dct_paths=None)
     # ② 抽出
     fused = harness.fuse(seq_paths, skel_paths, layout_path)
     models = [DrawingModel(p) for p in seq_paths + skel_paths]
+    # ロケータ別名（リレーの結線判定・照合に用いる）
+    try:
+        from . import locator, layout as _lay
+        _lo = _lay.Layout(layout_path) if layout_path else None
+        aliases = locator.alias_map(layout=_lo, dct_paths=dct_paths)
+    except Exception:
+        aliases = {}
     # ① 設計への不足データ提案（図面のみ・学習で抑制を反映）
-    proposals = design_proposal.propose(models, fused, suppress=suppress)
+    proposals = design_proposal.propose(models, fused, suppress=suppress, aliases=aliases)
     # 実行を記録（設計の判定＝フィードバックを後で紐付けられるよう run_id を発行）
     run_id = None
     if kenzu_store is not None:
