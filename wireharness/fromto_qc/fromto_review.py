@@ -120,16 +120,34 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
     近傍機器の候補ボックス を同一座標系で返す。
     戻り: {seiban, sheets:[{name,w,h,xmin,ymax,body,review:[...],confirmed:[gousen...]}], summary}
     """
+    import math
     from . import dxf_svg
     skel_paths = skel_paths or []
     fused = harness.fuse(seq_paths, skel_paths, layout_path)
+    # 端子台ラグ（_LU 等）の座標を全シートから集める（線端が端子台に載る接続の判定用）
+    tb_lugs = []
+    for p in seq_paths + skel_paths:
+        for (sym, x, y, box) in getattr(DrawingModel(p), 'termblocks', []):
+            tb_lugs.append((x, y))
+
+    def touches_tb(net, tol=130):
+        for t in net.get('terminals', []):
+            for (lx, ly) in tb_lugs:
+                if math.hypot(t.x - lx, t.y - ly) < tol:
+                    return True
+        return False
+
     # 号線を 自動確定 / 要確認 に仕分け（fusedベース）
-    confirmed_g, net_of = set(), {}
+    # 「機器2つ以上」または「機器1つ＋端子台ラグに接続(＝device→TB の1本)」を結線済とする
+    confirmed_g, net_of, tb_g = set(), {}, set()
     for sid, net in fused['nets'].items():
         net_of[_sidn(sid)] = net
         devs = {norm(d) for d in net.get('devices', []) if d != 'TB'}
         if len(devs) >= 2:
             confirmed_g.add(_sidn(sid))
+        elif len(devs) >= 1 and touches_tb(net):
+            confirmed_g.add(_sidn(sid))
+            tb_g.add(_sidn(sid))       # device→端子台（端子台番号は別途確認）
 
     sheets = []
     total_review = 0
@@ -172,7 +190,7 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
                        'devices': dev_boxes, 'confirmed': confirmed_here})
     return {'seiban': seiban, 'sheets': sheets,
             'summary': {'自動確定': len(confirmed_g), '要確認': total_review,
-                        'シート': len(sheets)}}
+                        'うち機器→端子台': len(tb_g), 'シート': len(sheets)}}
 
 
 def apply_resolutions(reviewdata, decisions):
