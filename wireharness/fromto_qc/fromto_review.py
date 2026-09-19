@@ -115,6 +115,38 @@ def _sidn(s):
     return re.sub(r'[^0-9A-Z]', '', str(s).upper())
 
 
+# 要確認オレンジの分類（種類別の色分け＋確認すべきこと）
+CATEGORIES = {
+    'tb':     {'label': '端子台番号 未記入', 'color': '#d1453b',
+               'reason': '線は端子台に来ていますが、端子の番号（何番か）が空です。番号を確認・入力してください。'},
+    'bus':    {'label': '単線母線／相', 'color': '#7b3fb5',
+               'reason': '単線の母線／相（R/S/T等）です。この母線に繋がる機器を確認してください。'},
+    'watari': {'label': '渡り／別シート', 'color': '#1f74c4',
+               'reason': '同じ号線が別位置／別シートにもあります。渡りで繋がる相手を確認してください。'},
+    'float':  {'label': '浮き線端', 'color': '#e0820a',
+               'reason': '線端がどこにも届いていません。繋がる機器・端子を確認してください。'},
+}
+
+
+def _classify(g, kind, cur, x, y, net, label_count, near_unfilled_tb):
+    """要確認号線を種類分け→(cat, reason)。"""
+    import re
+    ndev = len({e['device'] for e in cur}) if cur else 0
+    is_power = bool(re.match(r'^\d*[RST]\d*$', g)) or g[-1:] in ('R', 'S', 'T')
+    # ① 単線母線／相（主回路・電源）
+    if kind == 'main' or is_power:
+        return 'bus', CATEGORIES['bus']['reason']
+    # ② 端子台に来ているが番号未記入
+    pts = [(t.x, t.y) for t in (net.get('terminals', []) if net else [])] + [(x, y)]
+    if any(near_unfilled_tb(px, py) for px, py in pts):
+        return 'tb', CATEGORIES['tb']['reason']
+    # ③ 渡り／別シート（同番号が複数箇所）
+    if label_count.get(g, 0) >= 2 and ndev >= 1:
+        return 'watari', CATEGORIES['watari']['reason']
+    # ④ 浮き線端
+    return 'float', CATEGORIES['float']['reason']
+
+
 def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dct_paths=None):
     """現場ツール(実図面上で確認)用データ。シート毎に 図面SVG＋未確定号線マーカー＋
     近傍機器の候補ボックス を同一座標系で返す。
@@ -122,13 +154,36 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
     """
     import math
     from . import dxf_svg
+    from .geometry import UNFILLED_DEVICE1
     skel_paths = skel_paths or []
     fused = harness.fuse(seq_paths, skel_paths, layout_path)
-    # 端子台ラグ（_LU 等）の座標を全シートから集める（線端が端子台に載る接続の判定用）
-    tb_lugs = []
+    # 端子台ラグ（_LU 等）の座標＋番号記入状況を全シートから集める
+    tb_lugs = []              # (x, y)
+    tb_lugs_full = []         # (x, y, filled?)  filled=DEVICE1が入っている
+    label_count = {}          # 号線ラベルの出現箇所数（渡り/別シート判定）
     for p in seq_paths + skel_paths:
-        for (sym, x, y, box) in getattr(DrawingModel(p), 'termblocks', []):
+        dm = DrawingModel(p)
+        for (sym, x, y, box) in getattr(dm, 'termblocks', []):
             tb_lugs.append((x, y))
+        for e in dm.msp:
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            nm = e.dxf.name
+            a = {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}
+            if nm.startswith('_LU') or a.get('DEVICE', '') == 'TB':
+                d1 = a.get('DEVICE1', '')
+                filled = bool(d1) and d1 not in UNFILLED_DEVICE1
+                tb_lugs_full.append((e.dxf.insert.x, e.dxf.insert.y, filled))
+        for (v, x, y), k in zip(dm.senban, dm.senban_kind):
+            g = _sidn(v)
+            if g:
+                label_count[g] = label_count.get(g, 0) + 1
+
+    def _near_unfilled_tb(px, py, tol=140):
+        for (lx, ly, filled) in tb_lugs_full:
+            if not filled and math.hypot(px - lx, py - ly) < tol:
+                return True
+        return False
 
     def touches_tb(net, tol=130):
         for t in net.get('terminals', []):
@@ -180,9 +235,11 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
                 continue
             net = net_of.get(g)
             cur = _fromto(v, net)['endpoints'] if net else []
+            cat, reason = _classify(g, k, cur, x, y, net, label_count,
+                                    _near_unfilled_tb)
             review.append({'gousen': v, 'kind': k,
                            'label': {'x': round(x, 1), 'y': round(y, 1)},
-                           'current': cur,
+                           'current': cur, 'cat': cat, 'reason': reason,
                            'candidates': _nearest_devices(x, y, devs)})
         total_review += len(review)
         confirmed_here = sorted({net_of[g]['id'] for (v, x, y) in
@@ -201,9 +258,16 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
                        'xmin': rend['xmin'], 'ymax': rend['ymax'],
                        'body': rend['body'], 'review': review,
                        'devices': dev_boxes, 'confirmed': confirmed_here})
+    catcount = {}
+    for s in sheets:
+        for r in s['review']:
+            catcount[r['cat']] = catcount.get(r['cat'], 0) + 1
     return {'seiban': seiban, 'sheets': sheets,
+            'categories': {k: {'label': v['label'], 'color': v['color']}
+                           for k, v in CATEGORIES.items()},
             'summary': {'自動確定': len(confirmed_g), '要確認': total_review,
-                        'うち機器→端子台': len(tb_g), 'シート': len(sheets)}}
+                        'うち機器→端子台': len(tb_g), '種類別': catcount,
+                        'シート': len(sheets)}}
 
 
 def apply_resolutions(reviewdata, decisions):
