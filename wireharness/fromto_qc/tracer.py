@@ -27,6 +27,27 @@ def _pt_seg(p, a, b):
     return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 
 
+def _attach_connectors(m, segs, find, comp_dev, tol=70):
+    """コネクタ(DEVICE=CP)・場外参照を接続端点として拾う。
+    CPはハーネスで場外(別シート/ケーブル)への接続端。線端がCP位置の近くにあれば接続。"""
+    conns = []
+    for e in m.msp:
+        if e.dxftype() != 'INSERT' or not e.attribs:
+            continue
+        a = {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}
+        if a.get('DEVICE', '') == 'CP':
+            sym = 'CP' + ('-' + a['DEVICE1'] if a.get('DEVICE1') else '')
+            conns.append((sym, e.dxf.insert.x, e.dxf.insert.y))
+    if not conns:
+        return
+    for i, (p1, p2) in enumerate(segs):
+        c = find(i)
+        for p in (p1, p2):
+            for (sym, cx, cy) in conns:
+                if math.hypot(p[0] - cx, p[1] - cy) < tol:
+                    comp_dev[c].add(sym)
+
+
 def _attach_devices_by_box(m, segs, find, comp_dev, margin=15):
     """線端が機器の外形枠に入る/接する場合、その機器を成分に接続（単線図の端子無し機器対策）。
     どの成分か曖昧にならないよう、枠に入る線端が属する成分にのみ付ける。"""
@@ -99,6 +120,7 @@ def trace(path, tol=TOL):
             comp_dev[c].add('TB')
     # 単線図(主回路)対策: 線端が機器の枠に入る＝その機器に接続（端子ピンが無い機器を拾う）
     _attach_devices_by_box(m, segs, find, comp_dev)
+    _attach_connectors(m, segs, find, comp_dev)
 
     # 号線ラベル → 成分 → 機器集合
     out = collections.defaultdict(set)
@@ -174,6 +196,7 @@ def trace_detail(path, tol=TOL, gap_max=95):
         if c is not None:
             comp_dev[c].add('TB')
     _attach_devices_by_box(m, segs, find, comp_dev)
+    _attach_connectors(m, segs, find, comp_dev)
 
     # 近接ギャップ候補: 各成分の端点近く(tol〜gap_max)に、成分外の機器端子があるか
     comp_suggest = collections.defaultdict(list)
