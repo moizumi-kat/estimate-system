@@ -123,12 +123,14 @@ CATEGORIES = {
                'reason': '単線の母線／相（R/S/T等）です。この母線に繋がる機器を確認してください。'},
     'watari': {'label': '渡り／別シート', 'color': '#1f74c4',
                'reason': '同じ号線が別位置／別シートにもあります。渡りで繋がる相手を確認してください。'},
+    'near':   {'label': '近接ギャップ（ほぼ接続）', 'color': '#0f9488',
+               'reason': '線端が機器端子のすぐ近くにあります（わずかに届いていない）。ここに繋がるか確認してください。'},
     'float':  {'label': '浮き線端', 'color': '#e0820a',
                'reason': '線端がどこにも届いていません。繋がる機器・端子を確認してください。'},
 }
 
 
-def _classify(g, kind, cur, x, y, net, label_count, near_unfilled_tb):
+def _classify(g, kind, cur, x, y, net, label_count, near_unfilled_tb, suggest_of):
     """要確認号線を種類分け→(cat, reason)。"""
     import re
     ndev = len({e['device'] for e in cur}) if cur else 0
@@ -143,7 +145,12 @@ def _classify(g, kind, cur, x, y, net, label_count, near_unfilled_tb):
     # ③ 渡り／別シート（同番号が複数箇所）
     if label_count.get(g, 0) >= 2 and ndev >= 1:
         return 'watari', CATEGORIES['watari']['reason']
-    # ④ 浮き線端
+    # ④ 近接ギャップ（線端のすぐ近くに相手の機器端子がある＝ほぼ接続・相手提示）
+    sug = suggest_of.get(_sidn(g)) or []
+    if sug:
+        names = '／'.join(f"{k}（約{int(gap)}mm）" for k, gap in sug[:2])
+        return 'near', f"線端のすぐ近くに {names} があります。ここに繋がるか確認してください（ほぼ接続）。"
+    # ⑤ 浮き線端
     return 'float', CATEGORIES['float']['reason']
 
 
@@ -192,9 +199,11 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
                     return True
         return False
 
-    # 作図規約トレーサ（ドット交差・T字・端子台ラグを規約どおり結線）で号線→機器を得る
+    # 作図規約トレーサ（ドット交差・T字・端子台ラグを規約どおり結線）で号線→機器＋近接候補を得る
     from . import tracer
-    traced = tracer.trace_seiban(seq_paths + skel_paths)
+    traced_detail = tracer.trace_seiban_detail(seq_paths + skel_paths)
+    traced = {g: d['devices'] for g, d in traced_detail.items()}
+    suggest_of = {_sidn(g): d['suggest'] for g, d in traced_detail.items() if d['suggest']}
 
     # 号線を 自動確定 / 要確認 に仕分け（fusedベース＋規約トレーサ）
     # 「機器2つ以上」または「機器1つ＋端子台ラグに接続(＝device→TB の1本)」を結線済とする
@@ -236,10 +245,11 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
             net = net_of.get(g)
             cur = _fromto(v, net)['endpoints'] if net else []
             cat, reason = _classify(g, k, cur, x, y, net, label_count,
-                                    _near_unfilled_tb)
+                                    _near_unfilled_tb, suggest_of)
             review.append({'gousen': v, 'kind': k,
                            'label': {'x': round(x, 1), 'y': round(y, 1)},
                            'current': cur, 'cat': cat, 'reason': reason,
+                           'suggest': [s[0] for s in (suggest_of.get(g) or [])],
                            'candidates': _nearest_devices(x, y, devs)})
         total_review += len(review)
         confirmed_here = sorted({net_of[g]['id'] for (v, x, y) in

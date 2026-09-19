@@ -101,6 +101,113 @@ def trace_seiban(paths, tol=TOL):
     return dict(merged)
 
 
+def trace_detail(path, tol=TOL, gap_max=95):
+    """号線ごとに 結線機器 と『近接ギャップの相手候補』を返す。
+    近接ギャップ = 線の端点の近く(安全許容 tol 超〜gap_max)に、まだ繋がっていない機器端子がある
+    （＝わずかに届いていないだけで、ほぼ接続）。戻り: {号線: {'devices':set, 'suggest':[(機器:端子, gap)]}}
+    """
+    m = DrawingModel(path)
+    segs = [(p1, p2) for (p1, p2) in m.segments]
+    dots = [(e.dxf.insert.x, e.dxf.insert.y) for e in m.msp
+            if e.dxftype() == 'INSERT' and e.dxf.name == CROSS_DOT]
+    par = list(range(len(segs)))
+
+    def find(a):
+        while par[a] != a:
+            par[a] = par[par[a]]
+            a = par[a]
+        return a
+
+    def uni(a, b):
+        par[find(a)] = find(b)
+
+    for i, (p1, p2) in enumerate(segs):
+        for j in range(i + 1, len(segs)):
+            q1, q2 = segs[j]
+            if min(_pt_seg(p1, q1, q2), _pt_seg(p2, q1, q2),
+                   _pt_seg(q1, p1, p2), _pt_seg(q2, p1, p2)) < tol:
+                uni(i, j)
+    for d in dots:
+        thr = [i for i, (a, b) in enumerate(segs) if _pt_seg(d, a, b) < tol]
+        for k in range(1, len(thr)):
+            uni(thr[0], thr[k])
+
+    comp_dev = collections.defaultdict(set)
+    comp_pts = collections.defaultdict(list)
+    for i, (p1, p2) in enumerate(segs):
+        comp_pts[find(i)] += [p1, p2]
+
+    def comp_near(p, t):
+        best, bd = None, t
+        for i, (a, b) in enumerate(segs):
+            dd = _pt_seg(p, a, b)
+            if dd < bd:
+                bd, best = dd, i
+        return find(best) if best is not None else None
+
+    for t in m.terminals:
+        c = comp_near((t.x, t.y), tol * 2.5)
+        if c is not None:
+            comp_dev[c].add(t.device)
+    for (sym, x, y, box) in getattr(m, 'termblocks', []):
+        c = comp_near((x, y), tol * 3.5)
+        if c is not None:
+            comp_dev[c].add('TB')
+
+    # 近接ギャップ候補: 各成分の端点近く(tol〜gap_max)に、成分外の機器端子があるか
+    comp_suggest = collections.defaultdict(list)
+    for comp, pts in comp_pts.items():
+        own = comp_dev.get(comp, set())
+        seen = set()
+        for p in pts:
+            best = None
+            bd = gap_max
+            for t in m.terminals:
+                if t.device in own:
+                    continue
+                dd = math.hypot(p[0] - t.x, p[1] - t.y)
+                if tol < dd < bd:
+                    bd, best = dd, t
+            if best is not None:
+                key = best.device + (':' + best.name if best.name and best.name != '?' else '')
+                if key not in seen:
+                    seen.add(key)
+                    comp_suggest[comp].append((key, round(bd, 1)))
+
+    out = {}
+    for (v, x, y), k in zip(m.senban, m.senban_kind):
+        g = norm(v)
+        if not g:
+            continue
+        c = comp_near((x, y), 200)
+        if c is None:
+            continue
+        d = out.setdefault(g, {'devices': set(), 'suggest': []})
+        d['devices'] |= comp_dev.get(c, set())
+        d['suggest'] += comp_suggest.get(c, [])
+    return out
+
+
+def trace_seiban_detail(paths, tol=TOL):
+    merged = {}
+    for p in paths:
+        for g, d in trace_detail(p, tol=tol).items():
+            m = merged.setdefault(g, {'devices': set(), 'suggest': []})
+            m['devices'] |= d['devices']
+            m['suggest'] += d['suggest']
+    # suggest を距離順・重複除去
+    for g, d in merged.items():
+        seen = set()
+        uniq = []
+        for key, gap in sorted(d['suggest'], key=lambda x: x[1]):
+            if key in seen:
+                continue
+            seen.add(key)
+            uniq.append((key, gap))
+        d['suggest'] = uniq[:3]
+    return merged
+
+
 def is_formed(devs):
     """結線済判定: 非TB機器2つ以上、または 機器1つ＋端子台(device→TB の1本)。"""
     nd = {d for d in devs if d != 'TB'}
