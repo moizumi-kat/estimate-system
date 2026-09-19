@@ -1,0 +1,107 @@
+# -*- coding: utf-8 -*-
+"""作図規約に忠実な等電位ノード・トレーサ（茂泉様の読み方ルール）。
+
+ルール:
+  ① 接続ドット(_crossPoint1)のある交差 = 接続。無い交差 = ただの交差(非接続)。
+  ② 線の端点が 別の線/機器端子/端子台ラグ に載る = 接続（T字・継続・端点接続）。
+  ③ ドットの無い交差(線が互いに突き抜ける)は接続しない（誤結線防止）。
+
+線は端点どうし・端点→線・ドット交差 でのみ繋ぎ、端子(機器)・端子台ラグを端点として拾う。
+戻り: {号線: set(機器名 or 'TB')}
+"""
+import math
+import collections
+from .geometry import DrawingModel, norm
+
+TOL = 18
+CROSS_DOT = '_crossPoint1'
+
+
+def _pt_seg(p, a, b):
+    (px, py), (ax, ay), (bx, by) = p, a, b
+    dx, dy = bx - ax, by - ay
+    L2 = dx * dx + dy * dy
+    if L2 == 0:
+        return math.hypot(px - ax, py - ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / L2))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def trace(path, tol=TOL):
+    """1シートを規約どおり辿り、号線→機器集合 を返す。"""
+    m = DrawingModel(path)
+    segs = [(p1, p2) for (p1, p2) in m.segments]
+    # 接続ドット
+    dots = [(e.dxf.insert.x, e.dxf.insert.y) for e in m.msp
+            if e.dxftype() == 'INSERT' and e.dxf.name == CROSS_DOT]
+
+    par = list(range(len(segs)))
+
+    def find(a):
+        while par[a] != a:
+            par[a] = par[par[a]]
+            a = par[a]
+        return a
+
+    def uni(a, b):
+        par[find(a)] = find(b)
+
+    # ② 端点→端点 / 端点→線（T字・継続）。交差(内部×内部)は繋がない。
+    for i, (p1, p2) in enumerate(segs):
+        for j in range(i + 1, len(segs)):
+            q1, q2 = segs[j]
+            if min(_pt_seg(p1, q1, q2), _pt_seg(p2, q1, q2),
+                   _pt_seg(q1, p1, p2), _pt_seg(q2, p1, p2)) < tol:
+                uni(i, j)
+
+    # ① 接続ドットのある交差だけ、そのドットを通る線を結ぶ
+    for d in dots:
+        through = [i for i, (a, b) in enumerate(segs) if _pt_seg(d, a, b) < tol]
+        for k in range(1, len(through)):
+            uni(through[0], through[k])
+
+    # 端子(機器)・端子台ラグ を最寄り線成分へ
+    comp_dev = collections.defaultdict(set)
+
+    def comp_near(p, t):
+        best, bd = None, t
+        for i, (a, b) in enumerate(segs):
+            dd = _pt_seg(p, a, b)
+            if dd < bd:
+                bd, best = dd, i
+        return find(best) if best is not None else None
+
+    for t in m.terminals:
+        c = comp_near((t.x, t.y), tol * 2.5)
+        if c is not None:
+            comp_dev[c].add(t.device)
+    for (sym, x, y, box) in getattr(m, 'termblocks', []):
+        c = comp_near((x, y), tol * 3.5)
+        if c is not None:
+            comp_dev[c].add('TB')
+
+    # 号線ラベル → 成分 → 機器集合
+    out = collections.defaultdict(set)
+    for (v, x, y), k in zip(m.senban, m.senban_kind):
+        g = norm(v)
+        if not g:
+            continue
+        c = comp_near((x, y), 200)
+        if c is not None:
+            out[g] |= comp_dev.get(c, set())
+    return dict(out)
+
+
+def trace_seiban(paths, tol=TOL):
+    """複数シートを号線でマージ。戻り {号線: set(機器 or 'TB')}"""
+    merged = collections.defaultdict(set)
+    for p in paths:
+        for g, devs in trace(p, tol=tol).items():
+            merged[g] |= devs
+    return dict(merged)
+
+
+def is_formed(devs):
+    """結線済判定: 非TB機器2つ以上、または 機器1つ＋端子台(device→TB の1本)。"""
+    nd = {d for d in devs if d != 'TB'}
+    return len(nd) >= 2 or (len(nd) >= 1 and 'TB' in devs)

@@ -137,7 +137,11 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
                     return True
         return False
 
-    # 号線を 自動確定 / 要確認 に仕分け（fusedベース）
+    # 作図規約トレーサ（ドット交差・T字・端子台ラグを規約どおり結線）で号線→機器を得る
+    from . import tracer
+    traced = tracer.trace_seiban(seq_paths + skel_paths)
+
+    # 号線を 自動確定 / 要確認 に仕分け（fusedベース＋規約トレーサ）
     # 「機器2つ以上」または「機器1つ＋端子台ラグに接続(＝device→TB の1本)」を結線済とする
     confirmed_g, net_of, tb_g = set(), {}, set()
     for sid, net in fused['nets'].items():
@@ -148,6 +152,15 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
         elif len(devs) >= 1 and touches_tb(net):
             confirmed_g.add(_sidn(sid))
             tb_g.add(_sidn(sid))       # device→端子台（端子台番号は別途確認）
+    # 規約トレーサで結線できた号線も確定に追加（ドットのある交差・T字・端子台を反映）
+    for g, devs in traced.items():
+        if tracer.is_formed(devs):
+            gg = _sidn(g)
+            if gg not in confirmed_g:
+                confirmed_g.add(gg)
+                if {d for d in devs if d != 'TB'} and 'TB' in devs and len(
+                        {d for d in devs if d != 'TB'}) < 2:
+                    tb_g.add(gg)
 
     sheets = []
     total_review = 0
