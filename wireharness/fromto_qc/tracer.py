@@ -48,6 +48,44 @@ def _attach_connectors(m, segs, find, comp_dev, tol=70):
                     comp_dev[c].add(sym)
 
 
+_FRAME_LAYERS = {'TEMPLATE', 'ZUWAKU', 'INS_WAKU', 'TEMPLATE_HIDDEN', 'Defpoints',
+                 'B_BOX', 'Dr_BOX', 'S_BOX', 'FA2_FRAME'}
+
+
+def _attach_boxes(m, segs, find, comp_dev, margin=12):
+    """線端が『描かれた四角形(機器・信号ボックス等)』の枠に入る場合、その箱を機器として接続。
+    DEVICE属性の無い素の四角形(例: DC4-20mA信号ボックス)を拾う。枠(外形線)や巨大な枠は除外。"""
+    boxes = []
+    for e in m.msp:
+        if e.dxftype() != 'LWPOLYLINE':
+            continue
+        if e.dxf.layer in _FRAME_LAYERS:
+            continue
+        pts = [(x, y) for x, y, *_ in e.get_points()]
+        # 閉フラグ or 始点≒終点（頂点重複で閉じた矩形）を「閉」とみなす
+        closed = bool(e.closed) or (len(pts) >= 4 and
+                                    math.hypot(pts[0][0] - pts[-1][0], pts[0][1] - pts[-1][1]) < 2)
+        if not closed or not (4 <= len(pts) <= 6):
+            continue
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        w, h = max(xs) - min(xs), max(ys) - min(ys)
+        if not (30 < w < 1500 and 8 < h < 1500):
+            continue
+        boxes.append((min(xs), min(ys), max(xs), max(ys)))
+    if not boxes:
+        return
+    ep = []
+    for i, (p1, p2) in enumerate(segs):
+        c = find(i)
+        ep += [(p1[0], p1[1], c), (p2[0], p2[1], c)]
+    for (x0, y0, x1, y1) in boxes:
+        cx, cy = round((x0 + x1) / 2), round((y0 + y1) / 2)
+        for (ex, ey, c) in ep:
+            if x0 - margin <= ex <= x1 + margin and y0 - margin <= ey <= y1 + margin:
+                comp_dev[c].add(f'BOX@{cx},{cy}')
+
+
 def _attach_devices_by_box(m, segs, find, comp_dev, margin=15):
     """線端が機器の外形枠に入る/接する場合、その機器を成分に接続（単線図の端子無し機器対策）。
     どの成分か曖昧にならないよう、枠に入る線端が属する成分にのみ付ける。"""
@@ -121,6 +159,7 @@ def trace(path, tol=TOL):
     # 単線図(主回路)対策: 線端が機器の枠に入る＝その機器に接続（端子ピンが無い機器を拾う）
     _attach_devices_by_box(m, segs, find, comp_dev)
     _attach_connectors(m, segs, find, comp_dev)
+    _attach_boxes(m, segs, find, comp_dev)
 
     # 号線ラベル → 成分 → 機器集合
     out = collections.defaultdict(set)
@@ -197,6 +236,7 @@ def trace_detail(path, tol=TOL, gap_max=95):
             comp_dev[c].add('TB')
     _attach_devices_by_box(m, segs, find, comp_dev)
     _attach_connectors(m, segs, find, comp_dev)
+    _attach_boxes(m, segs, find, comp_dev)
 
     # 近接ギャップ候補: 各成分の端点近く(tol〜gap_max)に、成分外の機器端子があるか
     comp_suggest = collections.defaultdict(list)
