@@ -229,13 +229,16 @@ class DrawingModel:
 
     def _decide_wire_layers(self):
         """このシートで結線に使う電線レイヤを決める。
-        制御シート(L_CONTROL有)では L_MAIN は端子ストリップ/母線であり、別号線を橋渡し
-        して号線を潰す（実データ 5-21071 で確認）。よって制御シートでは L_MAIN を除外する。
-        スケルトン(L_CONTROL無)では主回路号線が L_MAIN に乗るため従来通り含める。"""
-        has_ctrl = any(e.dxftype() in ('LINE', 'LWPOLYLINE')
-                       and e.dxf.layer in ('L_CONTROL', 'L_CONTROL_H')
-                       for e in self.msp)
-        return (WIRE_LAYERS - {'L_MAIN'}) if has_ctrl else set(WIRE_LAYERS)
+        制御シート(L_CONTROLが主体)では L_MAIN は端子ストリップ/母線であり、別号線を橋渡し
+        して号線を潰す（実データ 5-21071 で確認）。よって“制御が主体のシート”では L_MAIN を除外。
+        スケルトン(主回路)は主回路導体が L_MAIN に乗る（L_MAINが主体）ので含める。
+        判定は本数の多寡で行う（L_CONTROL が数本あるだけのスケルトンを誤除外しないため）。"""
+        n_ctrl = sum(1 for e in self.msp if e.dxftype() in ('LINE', 'LWPOLYLINE')
+                     and e.dxf.layer in ('L_CONTROL', 'L_CONTROL_H'))
+        n_main = sum(1 for e in self.msp if e.dxftype() in ('LINE', 'LWPOLYLINE')
+                     and e.dxf.layer == 'L_MAIN')
+        ctrl_dominant = n_ctrl > n_main
+        return (WIRE_LAYERS - {'L_MAIN'}) if ctrl_dominant else set(WIRE_LAYERS)
 
     # ---- 電線（直接 + ブロック展開）----
     def _wire_segments(self):

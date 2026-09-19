@@ -27,6 +27,24 @@ def _pt_seg(p, a, b):
     return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 
 
+def _attach_devices_by_box(m, segs, find, comp_dev, margin=15):
+    """線端が機器の外形枠に入る/接する場合、その機器を成分に接続（単線図の端子無し機器対策）。
+    どの成分か曖昧にならないよう、枠に入る線端が属する成分にのみ付ける。"""
+    devs = getattr(m, 'devices', [])
+    # segsのインデックス→成分。端点を成分付きで持つ
+    ep = []  # (x, y, comp)
+    for i, (p1, p2) in enumerate(segs):
+        c = find(i)
+        ep.append((p1[0], p1[1], c))
+        ep.append((p2[0], p2[1], c))
+    for d in devs:
+        x0, y0, x1, y1 = min(d.box[0], d.box[2]), min(d.box[1], d.box[3]), \
+            max(d.box[0], d.box[2]), max(d.box[1], d.box[3])
+        for (ex, ey, c) in ep:
+            if x0 - margin <= ex <= x1 + margin and y0 - margin <= ey <= y1 + margin:
+                comp_dev[c].add(d.sym)
+
+
 def trace(path, tol=TOL):
     """1シートを規約どおり辿り、号線→機器集合 を返す。"""
     m = DrawingModel(path)
@@ -79,6 +97,8 @@ def trace(path, tol=TOL):
         c = comp_near((x, y), tol * 3.5)
         if c is not None:
             comp_dev[c].add('TB')
+    # 単線図(主回路)対策: 線端が機器の枠に入る＝その機器に接続（端子ピンが無い機器を拾う）
+    _attach_devices_by_box(m, segs, find, comp_dev)
 
     # 号線ラベル → 成分 → 機器集合
     out = collections.defaultdict(set)
@@ -153,6 +173,7 @@ def trace_detail(path, tol=TOL, gap_max=95):
         c = comp_near((x, y), tol * 3.5)
         if c is not None:
             comp_dev[c].add('TB')
+    _attach_devices_by_box(m, segs, find, comp_dev)
 
     # 近接ギャップ候補: 各成分の端点近く(tol〜gap_max)に、成分外の機器端子があるか
     comp_suggest = collections.defaultdict(list)
