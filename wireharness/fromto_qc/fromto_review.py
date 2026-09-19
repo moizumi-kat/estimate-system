@@ -123,11 +123,39 @@ CATEGORIES = {
                'reason': '単線の母線／相（R/S/T等）です。この母線に繋がる機器を確認してください。'},
     'watari': {'label': '渡り／別シート', 'color': '#1f74c4',
                'reason': '同じ号線が別位置／別シートにもあります。渡りで繋がる相手を確認してください。'},
+    'offsheet': {'label': '別シート/ケーブル先（ハーネス突合）', 'color': '#0f9488',
+                 'reason': 'コネクタ/中継の先（別シート/ケーブル）です。ハーネスで相手を突き合わせました。'},
     'near':   {'label': '近接ギャップ（ほぼ接続）', 'color': '#0f9488',
                'reason': '線端が機器端子のすぐ近くにあります（わずかに届いていない）。ここに繋がるか確認してください。'},
     'float':  {'label': '浮き線端', 'color': '#e0820a',
                'reason': '線端がどこにも届いていません。繋がる機器・端子を確認してください。'},
 }
+
+
+def _harness_farside(devices, hwires):
+    """号線が到達した機器(devices)について、ハーネスで反対側の 機器:端子 を引く。
+    CP(コネクタ)・中継・端子台の『別シート/ケーブル先』を突き合わせるのに使う。"""
+    dn = {norm(d) for d in devices}
+    out = []
+    seen = set()
+    for a, b in hwires:
+        ka = norm(a['dev'] + ('-' + a['num'] if a['num'] else ''))
+        kb = norm(b['dev'] + ('-' + b['num'] if b['num'] else ''))
+
+        def sym(e):
+            s = e['dev'] + ('-' + e['num'] if e['num'] else '')
+            return s + (':' + e['term'] if e['term'] else '')
+        if ka in dn and kb not in dn:
+            k = sym(b)
+            if k not in seen:
+                seen.add(k)
+                out.append(k)
+        elif kb in dn and ka not in dn:
+            k = sym(a)
+            if k not in seen:
+                seen.add(k)
+                out.append(k)
+    return out[:6]
 
 
 def _classify(g, kind, cur, x, y, net, label_count, near_unfilled_tb, suggest_of):
@@ -154,7 +182,8 @@ def _classify(g, kind, cur, x, y, net, label_count, near_unfilled_tb, suggest_of
     return 'float', CATEGORIES['float']['reason']
 
 
-def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dct_paths=None):
+def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dct_paths=None,
+                     harness_paths=None):
     """現場ツール(実図面上で確認)用データ。シート毎に 図面SVG＋未確定号線マーカー＋
     近傍機器の候補ボックス を同一座標系で返す。
     戻り: {seiban, sheets:[{name,w,h,xmin,ymax,body,review:[...],confirmed:[gousen...]}], summary}
@@ -204,6 +233,20 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
     traced_detail = tracer.trace_seiban_detail(seq_paths + skel_paths)
     traced = {g: d['devices'] for g, d in traced_detail.items()}
     suggest_of = {_sidn(g): d['suggest'] for g, d in traced_detail.items() if d['suggest']}
+    # ハーネス突き合わせ（CP/中継/端子台の別シート・ケーブル先の相手を引く）
+    hwires = []
+    if harness_paths:
+        try:
+            from . import equipotential
+            hwires = equipotential.parse_harness(harness_paths)
+        except Exception:
+            hwires = []
+    farside_of = {}
+    if hwires:
+        for g, devs in traced.items():
+            fs = _harness_farside(devs, hwires)
+            if fs:
+                farside_of[_sidn(g)] = fs
 
     # 号線を 自動確定 / 要確認 に仕分け（fusedベース＋規約トレーサ）
     # 「機器2つ以上」または「機器1つ＋端子台ラグに接続(＝device→TB の1本)」を結線済とする
@@ -246,10 +289,21 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
             cur = _fromto(v, net)['endpoints'] if net else []
             cat, reason = _classify(g, k, cur, x, y, net, label_count,
                                     _near_unfilled_tb, suggest_of)
+            # ハーネス突き合わせで別シート/ケーブル先の相手が引けたら offsheet に格上げ
+            far = farside_of.get(g)
+            harness_ref = []
+            if far:
+                harness_ref = far
+                dev_here = sorted({d for d in traced.get(g, set()) if not str(d).startswith('BOX@')})
+                cat = 'offsheet'
+                reason = ('コネクタ/中継の先（別シート/ケーブル）です。ハーネスでの相手：'
+                          + '／'.join(far[:4]) + ('…' if len(far) > 4 else '')
+                          + f'（この図側: {"・".join(dev_here) if dev_here else "―"}）')
             review.append({'gousen': v, 'kind': k,
                            'label': {'x': round(x, 1), 'y': round(y, 1)},
                            'current': cur, 'cat': cat, 'reason': reason,
                            'suggest': [s[0] for s in (suggest_of.get(g) or [])],
+                           'harness_ref': harness_ref,
                            'candidates': _nearest_devices(x, y, devs)})
         total_review += len(review)
         confirmed_here = sorted({net_of[g]['id'] for (v, x, y) in
