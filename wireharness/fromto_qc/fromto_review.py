@@ -358,17 +358,24 @@ def apply_resolutions(reviewdata, decisions):
 
 
 def export_spec():
-    """From-To 出力データ仕様（Aアドオンが図面へ書き出す形式）を返す（ドキュメント用）。"""
+    """From-To 出力データ仕様（Aアドオンが図面へ書き出す形式）の要約を返す。
+    詳細仕様は wireharness/docs/fromto_addon_spec.md を参照。"""
     return {
-        'per_wire_xdata': {
-            'GOUSEN': '号線（線番/相番号）',
-            'FROM': '接続元 機器記号-端子（例 52-102-4）',
-            'TO': '接続先 機器記号-端子（例 TB-102）',
-            'WTYPE': '電線種別（KIV/HIV）', 'SIZE': '電線サイズ',
-            'COLOR': '色', 'DUCT': 'ダクト方向（上/下/左/右/扉）',
+        'spec_doc': 'wireharness/docs/fromto_addon_spec.md',
+        'node_schema': {  # ① 等電位ノード（号線＝ノード名・第一級データ）
+            'gousen': '号線（＝等電位ノード名）',
+            'kind': 'main/ctrl/earth',
+            'members': '[{device, terminal}]  このノードに繋がる 機器:端子（母線は複数）',
+            'wire_type/size/color': '電線種別/サイズ/色',
         },
-        'per_terminal_attr': {'CONNECT_GOUSEN': 'この端子が接続する号線'},
+        'wire_schema_optional': {  # ② 物理配線（渡り・非一意・無ければ規則生成）
+            'gousen': '号線', 'wires': '[{from:{device,terminal}, to:{device,terminal}}]',
+        },
+        'write_methods': {
+            'A-1': '電線に XData（GOUSEN/FROM/TO/WTYPE/SIZE/COLOR/DUCT）',
+            'A-2': '端子に属性 CONNECT_GOUSEN=号線（号線でまとまる端子集合＝ノード）',
+        },
         'locator': {'DEVICE1': "'レール-文字'（既存 -DCT と同一）"},
-        'note': 'B(Python+Web UI)で確定した From-To と同一スキーマを、A(BricsCADアドオン)が'
-                '図面のXData/属性へ書き出す。読み手(Python後段)は同じ構造を消費する。',
+        'note': '幾何抽出は精度不十分（検証済）。設計が持つ結線意図を構造データで渡すのが確実。'
+                '製造側(本システム)は①ノードを受け取り、②渡りを規則生成して物理ハーネスを作る。',
     }
