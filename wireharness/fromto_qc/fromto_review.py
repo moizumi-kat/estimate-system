@@ -268,6 +268,15 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
                 if {d for d in devs if d != 'TB'} and 'TB' in devs and len(
                         {d for d in devs if d != 'TB'}) < 2:
                     tb_g.add(gg)
+    # ハーネス突合で相手が判明した号線（機器に到達＋別シート/ケーブル先が確定）は確認不要＝自動確定
+    #   例: RC1/SC1/RF1/SF1（MCCB到達＋中継端子台先が確定）, 101R/102R（CP先が確定）。
+    harness_g = set()
+    for gg, fs in farside_of.items():
+        # この図側で実機器(非TB/非BOX)に到達しているものだけ（当てずっぽうを避ける）
+        here = {d for d in traced.get(gg, set()) if d != 'TB' and not str(d).startswith('BOX@')}
+        if here and gg not in confirmed_g:
+            confirmed_g.add(gg)
+            harness_g.add(gg)
 
     sheets = []
     total_review = 0
@@ -330,8 +339,8 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
             'categories': {k: {'label': v['label'], 'color': v['color']}
                            for k, v in CATEGORIES.items()},
             'summary': {'自動確定': len(confirmed_g), '要確認': total_review,
-                        'うち機器→端子台': len(tb_g), '種類別': catcount,
-                        'シート': len(sheets)}}
+                        'うち機器→端子台': len(tb_g), 'うちハーネス突合': len(harness_g),
+                        '種類別': catcount, 'シート': len(sheets)}}
 
 
 def apply_resolutions(reviewdata, decisions):
