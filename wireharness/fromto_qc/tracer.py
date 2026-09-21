@@ -27,6 +27,58 @@ def _pt_seg(p, a, b):
     return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 
 
+def _seg_ori(a, b):
+    return 'V' if abs(a[0] - b[0]) < abs(a[1] - b[1]) else 'H'
+
+
+def _oriented_senban(m):
+    """号線ラベルを向き付きで返す [(号線, x, y, 'V'/'H'/None)]。
+    V_SENBAN=縦線ラベル / H_SENBAN=横線ラベル。向きに一致する線だけに対応付けるため。"""
+    out = []
+    for e in m.msp:
+        if e.dxftype() == 'INSERT' and e.dxf.name in ('V_SENBAN', 'H_SENBAN'):
+            g = ''
+            for at in (e.attribs or []):
+                if at.dxf.tag == '線番':
+                    g = norm(at.dxf.text or '')
+            if g:
+                out.append((g, e.dxf.insert.x, e.dxf.insert.y,
+                            'V' if e.dxf.name == 'V_SENBAN' else 'H'))
+    return out
+
+
+def _assign_gousen(m, segs, find, max_ori=130, max_any=200):
+    """号線ラベル→成分。向きが分かる場合は一致する線のみ(<=max_ori)に対応付け、誤associateを防ぐ。
+    向き不明のラベルは従来どおり最近傍(<=max_any)。戻り: {号線: comp}"""
+    labs = _oriented_senban(m)
+    known = {(g, round(x), round(y)) for g, x, y, o in labs}
+
+    def nearest(p, ori, maxd):
+        best, bd = None, maxd
+        for i, (a, b) in enumerate(segs):
+            if ori and _seg_ori(a, b) != ori:
+                continue
+            d = _pt_seg(p, a, b)
+            if d < bd:
+                bd, best = d, i
+        return find(best) if best is not None else None
+
+    out = collections.defaultdict(set)
+    for g, x, y, ori in labs:
+        c = nearest((x, y), ori, max_ori)
+        if c is not None:
+            out[g].add(c)   # 同一号線が複数箇所に出る場合は全成分を集める
+    # 向き情報の無い号線ラベル(m.senban)も補完（向き付きに無いもののみ）
+    for (v, x, y), k in zip(m.senban, m.senban_kind):
+        g = norm(v)
+        if not g or (g, round(x), round(y)) in known or g in out:
+            continue
+        c = nearest((x, y), None, max_any)
+        if c is not None:
+            out[g].add(c)
+    return out
+
+
 def _attach_connectors(m, segs, find, comp_dev, tol=70):
     """コネクタ(DEVICE=CP)・場外参照を接続端点として拾う。
     CPはハーネスで場外(別シート/ケーブル)への接続端。線端がCP位置の近くにあれば接続。"""
@@ -161,14 +213,10 @@ def trace(path, tol=TOL):
     _attach_connectors(m, segs, find, comp_dev)
     _attach_boxes(m, segs, find, comp_dev)
 
-    # 号線ラベル → 成分 → 機器集合
+    # 号線ラベル → 成分（向き一致で誤associate防止） → 機器集合
     out = collections.defaultdict(set)
-    for (v, x, y), k in zip(m.senban, m.senban_kind):
-        g = norm(v)
-        if not g:
-            continue
-        c = comp_near((x, y), 200)
-        if c is not None:
+    for g, comps in _assign_gousen(m, segs, find).items():
+        for c in comps:
             out[g] |= comp_dev.get(c, set())
     return dict(out)
 
@@ -259,16 +307,11 @@ def trace_detail(path, tol=TOL, gap_max=95):
                     comp_suggest[comp].append((key, round(bd, 1)))
 
     out = {}
-    for (v, x, y), k in zip(m.senban, m.senban_kind):
-        g = norm(v)
-        if not g:
-            continue
-        c = comp_near((x, y), 200)
-        if c is None:
-            continue
+    for g, comps in _assign_gousen(m, segs, find).items():
         d = out.setdefault(g, {'devices': set(), 'suggest': []})
-        d['devices'] |= comp_dev.get(c, set())
-        d['suggest'] += comp_suggest.get(c, [])
+        for c in comps:
+            d['devices'] |= comp_dev.get(c, set())
+            d['suggest'] += comp_suggest.get(c, [])
     return out
 
 
