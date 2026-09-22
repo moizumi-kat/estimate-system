@@ -162,7 +162,9 @@ def _classify(g, kind, cur, x, y, net, label_count, near_unfilled_tb, suggest_of
     """要確認号線を種類分け→(cat, reason)。"""
     import re
     ndev = len({e['device'] for e in cur}) if cur else 0
-    is_power = bool(re.match(r'^\d*[RST]\d*$', g)) or g[-1:] in ('R', 'S', 'T')
+    # 相/母線パターン: 単純なR/S/T、末尾R/S/T/N、制御電源(xACR/xACN/xGCR/xGCN 等 …C[RN])
+    is_power = (bool(re.match(r'^\d*[RST]\d*$', g)) or g[-1:] in ('R', 'S', 'T', 'N')
+                or bool(re.search(r'C[RN]$', g)))
     # ① 単線母線／相（主回路・電源）
     if kind == 'main' or is_power:
         return 'bus', CATEGORIES['bus']['reason']
