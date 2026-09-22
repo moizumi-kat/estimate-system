@@ -114,27 +114,30 @@ def _attach_boxes(m, segs, find, comp_dev, margin=12):
         if e.dxf.layer in _FRAME_LAYERS:
             continue
         pts = [(x, y) for x, y, *_ in e.get_points()]
-        # 閉フラグ or 始点≒終点（頂点重複で閉じた矩形）を「閉」とみなす
-        closed = bool(e.closed) or (len(pts) >= 4 and
-                                    math.hypot(pts[0][0] - pts[-1][0], pts[0][1] - pts[-1][1]) < 2)
-        if not closed or not (4 <= len(pts) <= 6):
+        if not (4 <= len(pts) <= 6):
             continue
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         w, h = max(xs) - min(xs), max(ys) - min(ys)
-        if not (30 < w < 1500 and 8 < h < 1500):
+        # 閉フラグ or 始点≒終点（頂点重複で閉じた矩形）を「閉」とみなす
+        closed = bool(e.closed) or math.hypot(pts[0][0] - pts[-1][0], pts[0][1] - pts[-1][1]) < 2
+        # 細長い端子ストリップ(幅広・薄い)は開いたU字ポリラインが多いので閉判定を要求しない
+        strip = (w >= 800 and h < 90 and w < 2600)
+        compact = closed and (30 < w < 1500 and 8 < h < 1500)
+        if not (strip or compact):
             continue
-        boxes.append((min(xs), min(ys), max(xs), max(ys)))
+        # ストリップは線が手前で止まる作図が多いので接続許容を広げる
+        boxes.append((min(xs), min(ys), max(xs), max(ys), 60 if strip else margin))
     if not boxes:
         return
     ep = []
     for i, (p1, p2) in enumerate(segs):
         c = find(i)
         ep += [(p1[0], p1[1], c), (p2[0], p2[1], c)]
-    for (x0, y0, x1, y1) in boxes:
+    for (x0, y0, x1, y1, mg) in boxes:
         cx, cy = round((x0 + x1) / 2), round((y0 + y1) / 2)
         for (ex, ey, c) in ep:
-            if x0 - margin <= ex <= x1 + margin and y0 - margin <= ey <= y1 + margin:
+            if x0 - mg <= ex <= x1 + mg and y0 - mg <= ey <= y1 + mg:
                 comp_dev[c].add(f'BOX@{cx},{cy}')
 
 
