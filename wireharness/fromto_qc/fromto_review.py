@@ -129,7 +129,57 @@ CATEGORIES = {
                'reason': '線端が機器端子のすぐ近くにあります（わずかに届いていない）。ここに繋がるか確認してください。'},
     'float':  {'label': '浮き線端', 'color': '#e0820a',
                'reason': '線端がどこにも届いていません。繋がる機器・端子を確認してください。'},
+    'external': {'label': '外部・予備（確認不要）', 'color': '#7a8899',
+                 'reason': '扉・遠方盤・外部・予備など、盤外/別ハーネスで結線される号線です（不備ではありません）。'},
 }
+
+# 「盤外/別ハーネスで結線される（＝不備ではない）」ことを示す図面注記
+_EXTERNAL_KEYWORDS = ('予備', '遠方', '外部', '別盤', '手元', '扉', '別置', '盤外')
+
+
+def _external_annotation_pts(paths):
+    """各図面から 予備/遠方盤/外部/扉 等の注記位置を集める。→ [(x, y, 語), ...]"""
+    import ezdxf
+    pts = []
+    for p in paths:
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for e in doc.modelspace():
+            if e.dxftype() not in ('TEXT', 'MTEXT'):
+                continue
+            try:
+                v = (e.dxf.text if e.dxftype() == 'TEXT' else e.plain_text()) or ''
+            except Exception:
+                v = ''
+            for kw in _EXTERNAL_KEYWORDS:
+                if kw in v:
+                    pts.append((e.dxf.insert.x, e.dxf.insert.y, kw))
+                    break
+    return pts
+
+
+def _harness_gousen_counts(harness_paths, gousen_ids):
+    """ハーネス台帳(cp932 tab)を素読みし、各号線ID(_sidn)が何本の端点行に現れるかを数える。
+    ≥2 なら「台帳が From-To を完備」＝この図での未結線は不備ではない（盤外/扉/渡り）。
+    戻り: {号線ID: 端点行数}"""
+    import csv
+    counts = {}
+    want = set(gousen_ids)
+    for p in harness_paths or []:
+        try:
+            rows = list(csv.reader(open(p, encoding='cp932', errors='replace'), delimiter='\t'))
+        except Exception:
+            continue
+        for r in rows:
+            hit = {_sidn(c) for c in r if c and c.strip()}
+            for gid in (hit & want):
+                # 端子番号(1〜2桁の数字)との誤マッチを避ける（号線は3桁以上 or 英字含み）
+                if gid.isdigit() and len(gid) < 3:
+                    continue
+                counts[gid] = counts.get(gid, 0) + 1
+    return counts
 
 
 def _harness_farside(devices, hwires):
@@ -280,6 +330,18 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
             confirmed_g.add(gg)
             harness_g.add(gg)
 
+    # 全図面の号線ID（台帳突合の対象）。label_count のキーが全号線IDに相当。
+    all_gids = set(label_count.keys())
+    # ① ハーネス台帳が From-To を完備(≥2端点)している号線は、この図で未結線でも不備ではない
+    hcounts = _harness_gousen_counts(harness_paths, all_gids)
+    external_g = set()
+    for gid, n in hcounts.items():
+        if n >= 2 and gid not in confirmed_g:
+            confirmed_g.add(gid)
+            harness_g.add(gid)
+    # ② 予備/遠方盤/外部/扉 等の注記が号線ラベル近傍にある号線は「盤外・予備」＝確認不要
+    ext_pts = _external_annotation_pts(seq_paths + skel_paths)
+
     sheets = []
     total_review = 0
     files = [('制御', p) for p in seq_paths] + [('主回路', p) for p in skel_paths]
@@ -295,6 +357,10 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
                 continue
             seen_g.add(g)
             if g in confirmed_g:
+                continue
+            # 号線ラベル近傍に 予備/遠方盤/外部/扉 の注記 → 盤外・予備＝確認不要（不備ではない）
+            if any(math.hypot(x - ex, y - ey) < 260 for ex, ey, _ in ext_pts):
+                external_g.add(g)
                 continue
             net = net_of.get(g)
             cur = _fromto(v, net)['endpoints'] if net else []
@@ -342,6 +408,7 @@ def build_floor_data(seq_paths, skel_paths=None, layout_path=None, seiban='', dc
                            for k, v in CATEGORIES.items()},
             'summary': {'自動確定': len(confirmed_g), '要確認': total_review,
                         'うち機器→端子台': len(tb_g), 'うちハーネス突合': len(harness_g),
+                        '外部・予備(確認不要)': len(external_g),
                         '種類別': catcount, 'シート': len(sheets)}}
 
 

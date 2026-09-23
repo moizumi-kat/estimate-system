@@ -397,6 +397,10 @@ def trace_detail(path, tol=TOL, gap_max=95):
         for c in comps:
             d['devices'] |= comp_dev.get(c, set())
             d['suggest'] += comp_suggest.get(c, [])
+    # 母線（長い L_MAIN 線）に繋がる機器を母線号線ノードに追加（要確認→自動確定化）
+    for g, devs in _bus_members(m, segs, find, comp_dev, tol).items():
+        d = out.setdefault(g, {'devices': set(), 'suggest': []})
+        d['devices'] |= devs
     return out
 
 
