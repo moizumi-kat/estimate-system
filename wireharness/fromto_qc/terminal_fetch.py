@@ -59,9 +59,14 @@ def resolve(parts, type_str=None, maker=None):
     if d:
         return d
     if type_str:
-        c = load_cache().get(type_str.strip().upper())
-        if c:
-            return c
+        t = type_str.strip().upper()
+        cache = load_cache()
+        # 完全一致 → 前方一致（型式サフィックス違いを吸収）
+        if t in cache:
+            return cache[t]
+        for key, entry in cache.items():
+            if t.startswith(key) or key.startswith(t):
+                return entry
     return None
 
 

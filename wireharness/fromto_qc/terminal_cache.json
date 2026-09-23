@@ -1,0 +1,146 @@
+{
+ "XS2-110": {
+  "parts": "ﾏﾙﾁﾒｰﾀ",
+  "maker": "ﾊｶﾙﾌﾟﾗｽ",
+  "terminals": [
+   {
+    "role": "voltage_input",
+    "names": [
+     "P1",
+     "P2",
+     "P3"
+    ]
+   },
+   {
+    "role": "ct_secondary",
+    "names": [
+     "1k",
+     "1l",
+     "2k",
+     "2l",
+     "3k",
+     "3l"
+    ]
+   },
+   {
+    "role": "aux_power",
+    "names": [
+     "電源1",
+     "電源2"
+    ]
+   },
+   {
+    "role": "analog_out",
+    "names": [
+     "CH1+",
+     "CH1-",
+     "CH2+",
+     "CH2-"
+    ]
+   },
+   {
+    "role": "comms_rs485",
+    "names": [
+     "485+",
+     "485-",
+     "SG"
+    ]
+   }
+  ],
+  "source": "ハカルプラス XS2-110取説(TK-17961) アナログ出力は図で確認, 主入力は標準3φ構成",
+  "confidence": "medium"
+ },
+ "XS3-110": {
+  "parts": "ﾏﾙﾁﾒｰﾀ",
+  "maker": "ﾊｶﾙﾌﾟﾗｽ",
+  "terminals": [
+   {
+    "role": "voltage_input",
+    "names": [
+     "P1",
+     "P2",
+     "P3"
+    ]
+   },
+   {
+    "role": "ct_secondary",
+    "names": [
+     "1k",
+     "1l",
+     "2k",
+     "2l",
+     "3k",
+     "3l"
+    ]
+   },
+   {
+    "role": "aux_power",
+    "names": [
+     "電源1",
+     "電源2"
+    ]
+   },
+   {
+    "role": "analog_out",
+    "names": [
+     "CH1+",
+     "CH1-",
+     "CH2+",
+     "CH2-"
+    ]
+   },
+   {
+    "role": "comms_rs485",
+    "names": [
+     "485+",
+     "485-",
+     "SG"
+    ]
+   }
+  ],
+  "source": "ハカルプラス XS2-110取説(TK-17961) アナログ出力は図で確認, 主入力は標準3φ構成",
+  "confidence": "medium"
+ },
+ "FRN": {
+  "parts": "INV",
+  "maker": "富士",
+  "confidence": "high",
+  "source": "富士 FRENIC-Mini C2 標準主回路端子(3φ200V)",
+  "split_series": true,
+  "terminals": [
+   {
+    "role": "line",
+    "side": "top",
+    "names": [
+     "L1/R",
+     "L2/S",
+     "L3/T"
+    ]
+   },
+   {
+    "role": "load",
+    "side": "bottom",
+    "names": [
+     "U",
+     "V",
+     "W"
+    ]
+   },
+   {
+    "role": "dc_link",
+    "names": [
+     "P(+)",
+     "N(-)",
+     "P1",
+     "DB"
+    ]
+   },
+   {
+    "role": "earth",
+    "names": [
+     "G"
+    ]
+   }
+  ]
+ }
+}
