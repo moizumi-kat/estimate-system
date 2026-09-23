@@ -317,6 +317,19 @@ def trace_nodes(path, tol=TOL):
         nd = nodes.setdefault(g, {'kind': 'ctrl', 'members': set(), 'devices': set()})
         nd['members'] |= mem
         nd['devices'] |= {d for (d, t, x, y) in mem}
+    # 主回路ノード: 号線ラベルの無い成分でも、機器2つ以上なら結線ノードとして出力する。
+    #   主回路(単線図)は相(SOU)で相ごとに1点しかラベルが無く、機器間セグメントは無名。
+    #   これらを 'M@<id>' で拾うと、幾何的に取れているフィーダ節点が欠落しない。
+    labeled = set()
+    for comps in _assign_gousen(m, segs, find).values():
+        labeled |= set(comps)
+    for comp, devs in comp_dev.items():
+        real = [d for d in devs if d != 'TB' and not str(d).startswith('BOX@')]
+        if comp in labeled or len(real) < 2:
+            continue
+        g = f"M@{comp}"
+        nodes[g] = {'kind': 'main', 'members': set(comp_terms.get(comp, set())),
+                    'devices': set(devs)}
     return nodes
 
 
