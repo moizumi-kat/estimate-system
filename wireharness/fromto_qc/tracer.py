@@ -159,6 +159,72 @@ def _attach_devices_by_box(m, segs, find, comp_dev, margin=15):
                 comp_dev[c].add(d.sym)
 
 
+BUS_MINLEN = 800   # 母線とみなす L_MAIN 線の最小長さ（短い L_MAIN=機器記号/端子枠を除外）
+
+
+def _bus_members(m, segs, find, comp_dev, tol=TOL):
+    """母線（長い L_MAIN 線＋その線上の号線ラベル）に繋がる機器を、その母線号線ノードに集める。
+
+    制御シートでは L_MAIN を配線追跡から除外している（端子ストリップと混在し号線を潰すため）。
+    そのため母線に繋がる機器が取りこぼれる。母線は「横に長い1つの端子」なので、
+    ここで別建てに拾う:
+      ・母線 = L_MAIN の長い線（BUS_MINLEN 超）。名前 = その線上に載る H/V_SENBAN 号線。
+      ・メンバー = 制御配線の端点が母線線上に“終端”する成分の機器（＝母線に結線）。
+        交差（線の途中を横切るだけ）は端点が線上に無いので拾わない＝規約どおり。
+    戻り: {母線号線: set(機器)}
+    過剰併合を避けるため、母線線は union-find に入れない（他号線を橋渡ししない）。
+    """
+    msp = m.msp
+
+    def ori(a, b):
+        return 'H' if abs(b[1] - a[1]) < abs(b[0] - a[0]) else 'V'
+
+    # 母線線を収集
+    mains = []
+    for e in msp:
+        if e.dxftype() == 'LINE' and e.dxf.layer == 'L_MAIN':
+            a = (round(e.dxf.start.x, 1), round(e.dxf.start.y, 1))
+            b = (round(e.dxf.end.x, 1), round(e.dxf.end.y, 1))
+            if math.hypot(b[0] - a[0], b[1] - a[1]) > BUS_MINLEN:
+                mains.append((a, b))
+    if not mains:
+        return {}
+
+    # 号線ラベル（母線名の候補）
+    sb = []
+    for e in msp:
+        if e.dxftype() == 'INSERT' and e.dxf.name in ('V_SENBAN', 'H_SENBAN') and e.attribs:
+            a = {at.dxf.tag: at.dxf.text for at in e.attribs}
+            v = (a.get('線番', '') or '').strip()
+            if v:
+                sb.append((v, e.dxf.name, e.dxf.insert.x, e.dxf.insert.y))
+
+    def within_span(p, a, b, pad=30):
+        return (min(a[0], b[0]) - pad <= p[0] <= max(a[0], b[0]) + pad
+                and min(a[1], b[1]) - pad <= p[1] <= max(a[1], b[1]) + pad)
+
+    out = collections.defaultdict(set)
+    for (a, b) in mains:
+        want = 'H_SENBAN' if ori(a, b) == 'H' else 'V_SENBAN'
+        name, bestd = None, 60
+        for v, nm, x, y in sb:
+            if nm != want:
+                continue
+            d = _pt_seg((x, y), a, b)
+            if d < bestd:
+                bestd, name = d, v
+        if not name:
+            continue
+        for i, (p1, p2) in enumerate(segs):
+            for p in (p1, p2):
+                if _pt_seg(p, a, b) < tol and within_span(p, a, b):
+                    out[name] |= comp_dev.get(find(i), set())
+        for t in m.terminals:
+            if _pt_seg((t.x, t.y), a, b) < tol and within_span((t.x, t.y), a, b):
+                out[name].add(t.device)
+    return dict(out)
+
+
 def trace(path, tol=TOL):
     """1シートを規約どおり辿り、号線→機器集合 を返す。"""
     m = DrawingModel(path)
@@ -221,6 +287,9 @@ def trace(path, tol=TOL):
     for g, comps in _assign_gousen(m, segs, find).items():
         for c in comps:
             out[g] |= comp_dev.get(c, set())
+    # 母線（長い L_MAIN 線）に繋がる機器を母線号線ノードに追加
+    for g, devs in _bus_members(m, segs, find, comp_dev, tol).items():
+        out[g] |= devs
     return dict(out)
 
 
