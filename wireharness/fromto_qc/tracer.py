@@ -162,7 +162,7 @@ def _attach_devices_by_box(m, segs, find, comp_dev, margin=15):
 BUS_MINLEN = 800   # 母線とみなす L_MAIN 線の最小長さ（短い L_MAIN=機器記号/端子枠を除外）
 
 
-def _bus_members(m, segs, find, comp_dev, tol=TOL):
+def _bus_members(m, segs, find, comp_dev, tol=TOL, comp_terms=None):
     """母線（長い L_MAIN 線＋その線上の号線ラベル）に繋がる機器を、その母線号線ノードに集める。
 
     制御シートでは L_MAIN を配線追跡から除外している（端子ストリップと混在し号線を潰すため）。
@@ -171,9 +171,12 @@ def _bus_members(m, segs, find, comp_dev, tol=TOL):
       ・母線 = L_MAIN の長い線（BUS_MINLEN 超）。名前 = その線上に載る H/V_SENBAN 号線。
       ・メンバー = 制御配線の端点が母線線上に“終端”する成分の機器（＝母線に結線）。
         交差（線の途中を横切るだけ）は端点が線上に無いので拾わない＝規約どおり。
-    戻り: {母線号線: set(機器)}
+    戻り:
+      comp_terms=None … {母線号線: set(機器)}
+      comp_terms あり … {母線号線: set((機器, 端子名))} 端子粒度
     過剰併合を避けるため、母線線は union-find に入れない（他号線を橋渡ししない）。
     """
+    term_mode = comp_terms is not None
     msp = m.msp
 
     def ori(a, b):
@@ -218,15 +221,19 @@ def _bus_members(m, segs, find, comp_dev, tol=TOL):
         for i, (p1, p2) in enumerate(segs):
             for p in (p1, p2):
                 if _pt_seg(p, a, b) < tol and within_span(p, a, b):
-                    out[name] |= comp_dev.get(find(i), set())
+                    if term_mode:
+                        out[name] |= comp_terms.get(find(i), set())
+                    else:
+                        out[name] |= comp_dev.get(find(i), set())
         for t in m.terminals:
             if _pt_seg((t.x, t.y), a, b) < tol and within_span((t.x, t.y), a, b):
-                out[name].add(t.device)
+                out[name].add((t.device, (t.name or '?')) if term_mode else t.device)
     return dict(out)
 
 
-def trace(path, tol=TOL):
-    """1シートを規約どおり辿り、号線→機器集合 を返す。"""
+def trace(path, tol=TOL, want_terms=False):
+    """1シートを規約どおり辿り、号線→機器集合 を返す。
+    want_terms=True のときは (号線→機器集合, 母線→[(機器,端子)]) のタプルを返す。"""
     m = DrawingModel(path)
     segs = [(p1, p2) for (p1, p2) in m.segments]
     # 接続ドット
@@ -269,14 +276,18 @@ def trace(path, tol=TOL):
                 bd, best = dd, i
         return find(best) if best is not None else None
 
+    # comp_terms: 成分→{(機器, 端子名)} 端子粒度（母線メンバー等で使用）
+    comp_terms = collections.defaultdict(set)
     for t in m.terminals:
         c = comp_near((t.x, t.y), tol * 2.5)
         if c is not None:
             comp_dev[c].add(t.device)
+            comp_terms[c].add((t.device, (t.name or '?')))
     for (sym, x, y, box) in getattr(m, 'termblocks', []):
         c = comp_near((x, y), tol * 3.5)
         if c is not None:
             comp_dev[c].add('TB')
+            comp_terms[c].add(('TB', sym.split('-', 1)[1] if '-' in sym else '?'))
     # 単線図(主回路)対策: 線端が機器の枠に入る＝その機器に接続（端子ピンが無い機器を拾う）
     _attach_devices_by_box(m, segs, find, comp_dev)
     _attach_connectors(m, segs, find, comp_dev)
@@ -290,6 +301,8 @@ def trace(path, tol=TOL):
     # 母線（長い L_MAIN 線）に繋がる機器を母線号線ノードに追加
     for g, devs in _bus_members(m, segs, find, comp_dev, tol).items():
         out[g] |= devs
+    if want_terms:
+        return dict(out), _bus_members(m, segs, find, comp_dev, tol, comp_terms)
     return dict(out)
 
 
