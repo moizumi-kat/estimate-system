@@ -41,3 +41,23 @@ def terminals(parts):
 
 def known_categories():
     return set(load().get('categories', {}).keys())
+
+
+def model(type_str):
+    """型式(TYPE)文字列 → 型式固有の端子定義（前方一致, 無ければ None）。
+    例: 'M8FM-N1LTR' → M8FM エントリ。多端子モジュール用。"""
+    t = (type_str or '').strip()
+    models = load().get('models', {})
+    for key, defn in models.items():
+        if t.upper().startswith(key.upper()):
+            return defn
+    return None
+
+
+def resolve(parts, type_str=None):
+    """端子情報を解決: まず型式固有(models)、無ければカテゴリ(categories)。無ければ None。"""
+    if type_str:
+        m = model(type_str)
+        if m:
+            return m
+    return category(parts)

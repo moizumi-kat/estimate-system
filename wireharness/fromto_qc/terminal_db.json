@@ -1,6 +1,19 @@
 {
   "_about": "部品カテゴリ(PARTS)別の端子トポロジDB。主回路のノード分割（直列素子で線側/負荷側を別ノードに分ける）と端子番号付与に使う。role=端子の役割, side=シンボル上の位置(top/bottom/left/right), split_series=導体を線側/負荷側で分断するか。標準(IEC/JIS)配列。型式固有の補助接点番号は必要時に datasheet で上書き。",
-  "_version": "0.1",
+  "_version": "0.2",
+  "_models_note": "型式固有の多端子モジュール。categories で表せない計測/通信/制御ユニット。source に取得元カタログ/マニュアルを記録。",
+  "models": {
+    "M8FM": {
+      "desc": "三菱 電子式電力量計 M8FMシリーズ（B/NET伝送機能付, 単相3線/三相3線）。カタログ結線図より。",
+      "maker": "三菱", "parts": "WHM",
+      "source": "三菱FA カタログ y0801_2204.pdf 結線図(表示例)",
+      "terminals": [
+        {"role": "voltage_input", "names": ["P1", "P2", "P3"]},
+        {"role": "ct_secondary", "names": ["1S", "1L", "3S", "3L"]},
+        {"role": "comms_bnet", "names": ["B/NET+", "B/NET-"]}
+      ]
+    }
+  },
   "categories": {
     "MCCB": {
       "desc": "配線用遮断器（寺崎/三菱等）。単線図では線側(上)→負荷側(下)。",
