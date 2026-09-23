@@ -3,6 +3,59 @@
   "_version": "0.2",
   "_models_note": "型式固有の多端子モジュール。categories で表せない計測/通信/制御ユニット。source に取得元カタログ/マニュアルを記録。",
   "models": {
+    "EMU4-BM": {
+      "desc": "三菱 EcoMonitorPlus 基本ユニット(電力計測経済品)。接続構成例より。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ y07521512.pdf 接続構成例",
+      "terminals": [
+        {"role": "voltage_input", "names": ["P1", "P2", "P3"]},
+        {"role": "aux_power", "names": ["MA", "MB"]},
+        {"role": "ct_secondary", "names": ["1K", "1L", "2K", "2L", "3K", "3L"]},
+        {"role": "comms_rs485", "names": ["485+", "485-", "SLD", "Ter"]},
+        {"role": "earth", "names": ["NC", "E"]}
+      ]
+    },
+    "EMU4-HM": {
+      "desc": "三菱 EcoMonitorPlus 基本ユニット(電力計測高機能品)。BMに外部入出力(接点/パルス/警報)を追加。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ y07521512.pdf",
+      "terminals": [
+        {"role": "voltage_input", "names": ["P1", "P2", "P3"]},
+        {"role": "aux_power", "names": ["MA", "MB"]},
+        {"role": "ct_secondary", "names": ["1K", "1L", "2K", "2L", "3K", "3L"]},
+        {"role": "comms_rs485", "names": ["485+", "485-", "SLD", "Ter"]},
+        {"role": "ext_io", "names": ["X1", "Y1", "Y2", "COM"]},
+        {"role": "earth", "names": ["NC", "E"]}
+      ]
+    },
+    "EMU4-A2": {
+      "desc": "三菱 EcoMonitorPlus 計測増設ユニット(同電圧系増設)。CT入力を増設。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ y07521512.pdf",
+      "terminals": [
+        {"role": "ct_secondary", "names": ["1K", "1L", "2K", "2L", "3K", "3L"]}
+      ]
+    },
+    "EMU2-D65": {
+      "desc": "三菱 表示ユニット。本体とは専用ケーブル接続（電力線ではない）。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ", "terminals": []
+    },
+    "EMU4-D65": {
+      "desc": "三菱 小形表示ユニット。本体と専用ケーブル接続。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ", "terminals": []
+    },
+    "EMU-CT": {
+      "desc": "三菱 分割形電流センサ(EMU-CT50/100/250/400/600-A)。1次は主線を貫通、2次kl→本体nK/nL。",
+      "maker": "三菱", "parts": "電流センサ",
+      "source": "三菱FA EcoMonitorPlusカタログ y07521512.pdf 接続構成例",
+      "split_series": false,
+      "terminals": [
+        {"role": "primary", "side": "through", "names": ["K", "L"]},
+        {"role": "secondary", "names": ["k", "l"]}
+      ]
+    },
     "M8FM": {
       "desc": "三菱 電子式電力量計 M8FMシリーズ（B/NET伝送機能付, 単相3線/三相3線）。カタログ結線図より。",
       "maker": "三菱", "parts": "WHM",
