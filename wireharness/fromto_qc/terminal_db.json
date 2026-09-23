@@ -56,6 +56,42 @@
         {"role": "secondary", "names": ["k", "l"]}
       ]
     },
+    "WR3400": {
+      "desc": "パナソニック フル2線式リモコン リレー制御用T/U(4回路)。伝送信号線＋4回路のリレー制御出力。",
+      "maker": "ﾊﾟﾅｿﾆｯｸ", "parts": "T/U",
+      "source": "Panasonic FAQ J233_086884_1.pdf (負荷ナンバー1-4固定)",
+      "terminals": [
+        {"role": "comms_signal", "names": ["信号", "シロ"]},
+        {"role": "relay_ctrl", "names": ["負荷1", "負荷2", "負荷3", "負荷4"]}
+      ]
+    },
+    "WR34169": {
+      "desc": "パナソニック フル2線式リモコン T/U付6Aリレーユニット(4回路)。伝送信号線＋4回路の6Aリレー開閉。",
+      "maker": "ﾊﾟﾅｿﾆｯｸ", "parts": "T/U付6Aﾘﾚｰﾕﾆｯﾄ",
+      "source": "Panasonic FAQ J233_086884_1.pdf",
+      "terminals": [
+        {"role": "comms_signal", "names": ["信号", "シロ"]},
+        {"role": "relay_load", "names": ["負荷1", "負荷2", "負荷3", "負荷4"]}
+      ]
+    },
+    "WR6166": {
+      "desc": "パナソニック 20Aフルパワーリモコンリレー(両切)。負荷開閉(両切)＋伝送信号線。端子番号は施工説明書要確認。",
+      "maker": "ﾊﾟﾅｿﾆｯｸ", "parts": "ﾘﾓｺﾝﾘﾚｰ",
+      "source": "Panasonic Vカタ/施工説明(役割レベル)",
+      "terminals": [
+        {"role": "load", "side": "both", "names": ["負荷1", "負荷2"]},
+        {"role": "comms_signal", "names": ["信号", "シロ"]}
+      ]
+    },
+    "WR6165": {
+      "desc": "パナソニック フルパワーリモコンリレー(WR6166系)。負荷開閉＋伝送信号線。",
+      "maker": "ﾊﾟﾅｿﾆｯｸ", "parts": "ﾘﾓｺﾝﾘﾚｰ",
+      "source": "Panasonic Vカタ(役割レベル)",
+      "terminals": [
+        {"role": "load", "side": "both", "names": ["負荷1", "負荷2"]},
+        {"role": "comms_signal", "names": ["信号", "シロ"]}
+      ]
+    },
     "M8FM": {
       "desc": "三菱 電子式電力量計 M8FMシリーズ（B/NET伝送機能付, 単相3線/三相3線）。カタログ結線図より。",
       "maker": "三菱", "parts": "WHM",
