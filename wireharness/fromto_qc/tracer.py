@@ -227,19 +227,21 @@ def _bus_members(m, segs, find, comp_dev, tol=TOL, comp_terms=None):
                         out[name] |= comp_dev.get(find(i), set())
         for t in m.terminals:
             if _pt_seg((t.x, t.y), a, b) < tol and within_span((t.x, t.y), a, b):
-                out[name].add((t.device, (t.name or '?')) if term_mode else t.device)
+                out[name].add((t.device, (t.name or '?'), round(t.x, 1), round(t.y, 1))
+                              if term_mode else t.device)
     return dict(out)
 
 
-def trace(path, tol=TOL, want_terms=False):
-    """1シートを規約どおり辿り、号線→機器集合 を返す。
-    want_terms=True のときは (号線→機器集合, 母線→[(機器,端子)]) のタプルを返す。"""
+def _build_components(path, tol=TOL):
+    """規約どおり成分(union-find)を作り、成分→機器/端子(座標付き)を返す共通処理。
+    戻り: dict(m, segs, find, comp_dev, comp_terms)
+      comp_dev[c]   = set(機器記号)
+      comp_terms[c] = set((機器, 端子名, x, y))  端子粒度＋座標
+    """
     m = DrawingModel(path)
     segs = [(p1, p2) for (p1, p2) in m.segments]
-    # 接続ドット
     dots = [(e.dxf.insert.x, e.dxf.insert.y) for e in m.msp
             if e.dxftype() == 'INSERT' and e.dxf.name == CROSS_DOT]
-
     par = list(range(len(segs)))
 
     def find(a):
@@ -258,15 +260,14 @@ def trace(path, tol=TOL, want_terms=False):
             if min(_pt_seg(p1, q1, q2), _pt_seg(p2, q1, q2),
                    _pt_seg(q1, p1, p2), _pt_seg(q2, p1, p2)) < tol:
                 uni(i, j)
-
     # ① 接続ドットのある交差だけ、そのドットを通る線を結ぶ
     for d in dots:
         through = [i for i, (a, b) in enumerate(segs) if _pt_seg(d, a, b) < tol]
         for k in range(1, len(through)):
             uni(through[0], through[k])
 
-    # 端子(機器)・端子台ラグ を最寄り線成分へ
     comp_dev = collections.defaultdict(set)
+    comp_terms = collections.defaultdict(set)
 
     def comp_near(p, t):
         best, bd = None, t
@@ -276,33 +277,73 @@ def trace(path, tol=TOL, want_terms=False):
                 bd, best = dd, i
         return find(best) if best is not None else None
 
-    # comp_terms: 成分→{(機器, 端子名)} 端子粒度（母線メンバー等で使用）
-    comp_terms = collections.defaultdict(set)
     for t in m.terminals:
         c = comp_near((t.x, t.y), tol * 2.5)
         if c is not None:
             comp_dev[c].add(t.device)
-            comp_terms[c].add((t.device, (t.name or '?')))
+            comp_terms[c].add((t.device, (t.name or '?'), round(t.x, 1), round(t.y, 1)))
     for (sym, x, y, box) in getattr(m, 'termblocks', []):
         c = comp_near((x, y), tol * 3.5)
         if c is not None:
             comp_dev[c].add('TB')
-            comp_terms[c].add(('TB', sym.split('-', 1)[1] if '-' in sym else '?'))
-    # 単線図(主回路)対策: 線端が機器の枠に入る＝その機器に接続（端子ピンが無い機器を拾う）
+            comp_terms[c].add(('TB', sym.split('-', 1)[1] if '-' in sym else '?',
+                               round(x, 1), round(y, 1)))
     _attach_devices_by_box(m, segs, find, comp_dev)
     _attach_connectors(m, segs, find, comp_dev)
     _attach_boxes(m, segs, find, comp_dev)
+    return {'m': m, 'segs': segs, 'find': find,
+            'comp_dev': comp_dev, 'comp_terms': comp_terms}
+
+
+def trace_nodes(path, tol=TOL):
+    """1シートを端子粒度で辿り、号線→ノード情報 を返す（§3.1 出力用）。
+    戻り: {号線: {'kind': 'ctrl'|'main', 'members': set((機器, 端子名, x, y)),
+                  'devices': set(機器)}}
+    母線メンバー・端子座標付き。"""
+    c = _build_components(path, tol)
+    m, segs, find = c['m'], c['segs'], c['find']
+    comp_dev, comp_terms = c['comp_dev'], c['comp_terms']
+    kind_of = {v: k for (v, x, y), k in zip(m.senban, m.senban_kind)}
+    nodes = {}
+    for g, comps in _assign_gousen(m, segs, find).items():
+        nd = nodes.setdefault(g, {'kind': kind_of.get(g, 'ctrl'),
+                                  'members': set(), 'devices': set()})
+        for comp in comps:
+            nd['members'] |= comp_terms.get(comp, set())
+            nd['devices'] |= comp_dev.get(comp, set())
+    # 母線（長い L_MAIN 線）メンバーを端子粒度で追加
+    bus_terms = _bus_members(m, segs, find, comp_dev, tol, _bus_comp_terms(comp_terms))
+    for g, mem in bus_terms.items():
+        nd = nodes.setdefault(g, {'kind': 'ctrl', 'members': set(), 'devices': set()})
+        nd['members'] |= mem
+        nd['devices'] |= {d for (d, t, x, y) in mem}
+    return nodes
+
+
+def _bus_comp_terms(comp_terms):
+    """comp_terms((dev,term,x,y)) を母線用の座標付きマップとして返す（そのまま利用）。"""
+    return comp_terms
+
+
+def trace(path, tol=TOL, want_terms=False):
+    """1シートを規約どおり辿り、号線→機器集合 を返す。
+    want_terms=True のときは (号線→機器集合, 母線→[(機器,端子)]) のタプルを返す。"""
+    c = _build_components(path, tol)
+    m, segs, find = c['m'], c['segs'], c['find']
+    comp_dev, comp_terms = c['comp_dev'], c['comp_terms']
 
     # 号線ラベル → 成分（向き一致で誤associate防止） → 機器集合
     out = collections.defaultdict(set)
     for g, comps in _assign_gousen(m, segs, find).items():
-        for c in comps:
-            out[g] |= comp_dev.get(c, set())
+        for c2 in comps:
+            out[g] |= comp_dev.get(c2, set())
     # 母線（長い L_MAIN 線）に繋がる機器を母線号線ノードに追加
     for g, devs in _bus_members(m, segs, find, comp_dev, tol).items():
         out[g] |= devs
     if want_terms:
-        return dict(out), _bus_members(m, segs, find, comp_dev, tol, comp_terms)
+        bus4 = _bus_members(m, segs, find, comp_dev, tol, comp_terms)
+        bus2 = {g: {(d, t) for (d, t, x, y) in mem} for g, mem in bus4.items()}
+        return dict(out), bus2
     return dict(out)
 
 
