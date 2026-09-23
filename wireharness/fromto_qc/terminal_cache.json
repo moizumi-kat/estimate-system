@@ -142,5 +142,256 @@
     ]
    }
   ]
+ },
+ "WRT3211": {
+  "parts": "接点入力T/U",
+  "maker": "ﾊﾟﾅｿﾆｯｸ",
+  "confidence": "medium",
+  "source": "Panasonic フル2線式リモコン(役割)",
+  "terminals": [
+   {
+    "role": "comms_signal",
+    "names": [
+     "信号",
+     "シロ"
+    ]
+   },
+   {
+    "role": "contact_in",
+    "names": [
+     "入力1",
+     "入力2",
+     "入力3",
+     "入力4",
+     "COM"
+    ]
+   }
+  ]
+ },
+ "WRT3224K": {
+  "parts": "接点入力T/U",
+  "maker": "ﾊﾟﾅｿﾆｯｸ",
+  "confidence": "medium",
+  "source": "Panasonic フル2線式リモコン(役割)",
+  "terminals": [
+   {
+    "role": "comms_signal",
+    "names": [
+     "信号",
+     "シロ"
+    ]
+   },
+   {
+    "role": "contact_in",
+    "names": [
+     "入力1",
+     "入力2",
+     "COM"
+    ]
+   }
+  ]
+ },
+ "NQX88304": {
+  "parts": "T/U",
+  "maker": "ﾊﾟﾅｿﾆｯｸ",
+  "confidence": "medium",
+  "source": "Panasonic フル2線式リモコン(役割)",
+  "terminals": [
+   {
+    "role": "comms_signal",
+    "names": [
+     "信号",
+     "シロ"
+    ]
+   },
+   {
+    "role": "relay_ctrl",
+    "names": [
+     "負荷1",
+     "負荷2",
+     "負荷3",
+     "負荷4"
+    ]
+   }
+  ]
+ },
+ "WRT2050K": {
+  "parts": "伝送ﾕﾆｯﾄ",
+  "maker": "ﾊﾟﾅｿﾆｯｸ",
+  "confidence": "medium",
+  "source": "Panasonic フル2線式リモコン(役割)",
+  "terminals": [
+   {
+    "role": "comms_signal",
+    "names": [
+     "信号",
+     "シロ"
+    ]
+   },
+   {
+    "role": "comms",
+    "names": [
+     "伝送+",
+     "伝送-"
+    ]
+   },
+   {
+    "role": "aux_power",
+    "names": [
+     "電源1",
+     "電源2"
+    ]
+   }
+  ]
+ },
+ "WRT3540K": {
+  "parts": "年間ﾌﾟﾛｸﾞﾗﾑﾀｲﾏﾕﾆｯﾄ",
+  "maker": "ﾊﾟﾅｿﾆｯｸ",
+  "confidence": "medium",
+  "source": "Panasonic フル2線式リモコン(役割)",
+  "terminals": [
+   {
+    "role": "comms_signal",
+    "names": [
+     "信号",
+     "シロ"
+    ]
+   },
+   {
+    "role": "aux_power",
+    "names": [
+     "電源1",
+     "電源2"
+    ]
+   }
+  ]
+ },
+ "WR2301": {
+  "parts": "ﾘﾓｺﾝﾄﾗﾝｽ",
+  "maker": "ﾊﾟﾅｿﾆｯｸ",
+  "confidence": "medium",
+  "source": "Panasonic リモコン変圧器(役割)",
+  "terminals": [
+   {
+    "role": "primary",
+    "names": [
+     "1次1",
+     "1次2"
+    ]
+   },
+   {
+    "role": "secondary",
+    "names": [
+     "2次1",
+     "2次2"
+    ]
+   }
+  ]
+ },
+ "WR2311": {
+  "parts": "ﾘﾓｺﾝﾄﾗﾝｽ",
+  "maker": "ﾊﾟﾅｿﾆｯｸ",
+  "confidence": "medium",
+  "source": "Panasonic リモコン変圧器(役割)",
+  "terminals": [
+   {
+    "role": "primary",
+    "names": [
+     "1次1",
+     "1次2"
+    ]
+   },
+   {
+    "role": "secondary",
+    "names": [
+     "2次1",
+     "2次2"
+    ]
+   }
+  ]
+ },
+ "WR3925": {
+  "parts": "信号線雷ｻｰｼﾞ防護ﾕﾆｯﾄ",
+  "maker": "ﾊﾟﾅｿﾆｯｸ",
+  "confidence": "medium",
+  "source": "Panasonic(役割)",
+  "terminals": [
+   {
+    "role": "comms_signal",
+    "names": [
+     "信号",
+     "シロ"
+    ]
+   },
+   {
+    "role": "earth",
+    "names": [
+     "E"
+    ]
+   }
+  ]
+ },
+ "DCR2": {
+  "parts": "DCR",
+  "maker": "富士",
+  "confidence": "high",
+  "source": "富士 DCリアクトル(FRENIC用) 標準",
+  "split_series": true,
+  "terminals": [
+   {
+    "role": "line",
+    "names": [
+     "P1"
+    ]
+   },
+   {
+    "role": "load",
+    "names": [
+     "P(+)"
+    ]
+   }
+  ]
+ },
+ "ACL-40C": {
+  "parts": "LNF",
+  "maker": "富士",
+  "confidence": "high",
+  "source": "富士 ACリアクトル/フィルタ 標準",
+  "split_series": true,
+  "terminals": [
+   {
+    "role": "line",
+    "side": "top",
+    "names": [
+     "R",
+     "S",
+     "T"
+    ]
+   },
+   {
+    "role": "load",
+    "side": "bottom",
+    "names": [
+     "U",
+     "V",
+     "W"
+    ]
+   }
+  ]
+ },
+ "HTS-22ES": {
+  "parts": "MCDT",
+  "maker": "WashiON",
+  "confidence": "low",
+  "source": "WashiON 電源切換制御装置(特殊品)。端子は図面上の端子台 MCDTnTBm 経由で結線。公開データシートに詳細端子なし=設計固有(フェーズA領域)",
+  "terminals": [
+   {
+    "role": "via_terminal_block",
+    "names": [
+     "TB2",
+     "TB3"
+    ]
+   }
+  ]
  }
 }
