@@ -10,6 +10,7 @@ world(DXF, y上向き) → svg(y下向き):  X = x - xmin,  Y = ymax - y
 import math
 import html
 import ezdxf
+from .geometry import promote_template_segments as _promote_template_segments
 
 WIRE_LAYERS = {'L_CONTROL', 'L_CONTROL_H', 'L_MAIN', 'L_OUTSIDE', 'L_EARTH', 'DENSEN', 'BOSEN'}
 SKIP_LAYERS = {'TEMPLATE', 'NOT_EXPORT', 'CENTER'}
@@ -70,11 +71,16 @@ def render(paths, extents=None):
     戻り: {'body':str, 'xmin','ymin','xmax','ymax','w','h', 'labels':[...]} """
     ents = []
     attrs = []
+    promoted = []   # TEMPLATE レイヤに描かれた実配線（号線付き／接続点接触）を可視化
     for p in paths:
         doc = ezdxf.readfile(p)
         msp = doc.modelspace()
         ents += _flatten(msp)
         attrs += _visible_attribs(msp, doc)
+        try:
+            promoted += _promote_template_segments(msp, WIRE_LAYERS)
+        except Exception:
+            pass
 
     # 範囲
     xs, ys = [], []
@@ -142,6 +148,12 @@ def render(paths, extents=None):
                 prims.append(('T', lay, ins.x, ins.y, h, 0, s.split('\n')[0]))
         except Exception:
             continue
+
+    # TEMPLATE レイヤの実配線（昇格分）を電線として描画対象に追加
+    for (a, b) in promoted:
+        acc(a[0], a[1])
+        acc(b[0], b[1])
+        prims.append(('L', 'L_CONTROL', a[0], a[1], b[0], b[1]))
 
     if extents:
         xmin, ymin, xmax, ymax = extents

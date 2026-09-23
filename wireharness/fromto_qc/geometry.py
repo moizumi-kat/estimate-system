@@ -74,6 +74,76 @@ def pt_seg_dist(px, py, ax, ay, bx, by):
     return math.hypot(px - (ax + tc * dx), py - (ay + tc * dy)), t
 
 
+# 設計が結線を TEMPLATE レイヤに描くことがある（例 5-21071 の DTX11/DTX21 →母線、号線213）。
+# TEMPLATE は機器記号の内部作図にも使われるため、無条件では拾わない。
+# 「実配線」と確実に言えるトップレベル線＝下記のいずれかを満たすものだけ昇格する:
+#   (a) 号線ラベル(V/H_SENBAN の『線番』)が線上に載っている
+#   (b) 端点が接続点ドット(_crossPoint1)に一致
+#   (c) 端点が実電線レイヤの線の端点に一致
+# 機器記号の作図は INSERT 内部(virtual)なのでトップレベル走査には現れず、混入しない。
+def promote_template_segments(msp, wire_layers, join_tol=20, label_tol=90):
+    """TEMPLATE レイヤのトップレベル線のうち、実配線と判定できるものを返す。
+    戻り: [((x1,y1),(x2,y2)), ...]（丸め済み）"""
+    # 参照点を収集
+    sb_pts = []          # 号線ラベル位置
+    dot_pts = []         # 接続点ドット位置
+    real_ends = []       # 実電線の端点
+    cand = []            # TEMPLATE 候補線分
+    for e in msp:
+        t = e.dxftype()
+        if t == 'INSERT':
+            nm = (e.dxf.name or '')
+            if nm.upper() == '_CROSSPOINT1':
+                dot_pts.append((e.dxf.insert.x, e.dxf.insert.y))
+            elif nm in ('V_SENBAN', 'H_SENBAN') and e.attribs:
+                a = {at.dxf.tag: at.dxf.text for at in e.attribs}
+                if (a.get('線番', '') or '').strip():
+                    sb_pts.append((e.dxf.insert.x, e.dxf.insert.y))
+        elif t in ('LINE', 'LWPOLYLINE'):
+            lay = e.dxf.layer
+            if lay in wire_layers:
+                if t == 'LINE':
+                    real_ends.append((e.dxf.start.x, e.dxf.start.y))
+                    real_ends.append((e.dxf.end.x, e.dxf.end.y))
+                else:
+                    pts = [(x, y) for x, y, *_ in e.get_points()]
+                    if pts:
+                        real_ends.append(pts[0])
+                        real_ends.append(pts[-1])
+            elif lay == 'TEMPLATE':
+                if t == 'LINE':
+                    cand.append([(e.dxf.start.x, e.dxf.start.y),
+                                 (e.dxf.end.x, e.dxf.end.y)])
+                else:
+                    pts = [(x, y) for x, y, *_ in e.get_points()]
+                    for p, q in zip(pts, pts[1:]):
+                        cand.append([p, q])
+
+    def near_any(p, pts, tol):
+        return any(math.hypot(p[0] - qx, p[1] - qy) < tol for qx, qy in pts)
+
+    out = []
+    for (a, b) in cand:
+        promote = False
+        # (a) 号線ラベルが線上に載る
+        for sx, sy in sb_pts:
+            d, tpos = pt_seg_dist(sx, sy, a[0], a[1], b[0], b[1])
+            if d < label_tol and -0.05 <= tpos <= 1.05:
+                promote = True
+                break
+        # (b)(c) 端点が接続点ドット／実電線端点に一致
+        if not promote:
+            for p in (a, b):
+                if near_any(p, dot_pts, join_tol) or near_any(p, real_ends, join_tol):
+                    promote = True
+                    break
+        if promote:
+            s = ((round(a[0], 1), round(a[1], 1)), (round(b[0], 1), round(b[1], 1)))
+            if s[0] != s[1]:
+                out.append(s)
+    return out
+
+
 class UF:
     def __init__(self):
         self.p = {}
@@ -123,13 +193,13 @@ class DrawingModel:
         self.devices = self._devices()
         self.termblocks = self._term_blocks()
         self.wire_layers = self._decide_wire_layers()
-        self.segments = self._wire_segments()
         raw_sb = self._senban()
         # senban は (号線, x, y) の3要素で公開（後方互換）。kind は並行リストで保持。
         #   kind='ctrl' … SENBANブロックの『線番』（制御号線）
         #   kind='main' … SOU属性（スケルトンの相/主回路ラベル）
         self.senban = [(v, x, y) for v, x, y, _ in raw_sb]
         self.senban_kind = [k for *_, k in raw_sb]
+        self.segments = self._wire_segments()
         self.nets = self._build_nets()
 
     # ---- 端子ピン ----
@@ -262,7 +332,10 @@ class DrawingModel:
                             add(ve)
                 except Exception:
                     pass
-        return [s for s in segs if s[0] != s[1]]
+        segs = [s for s in segs if s[0] != s[1]]
+        # TEMPLATE レイヤに描かれた実配線（号線ラベル付き／端点が接続点）を昇格して追加
+        segs += promote_template_segments(self.msp, self.wire_layers)
+        return segs
 
     def _senban(self):
         """号線(線番)ラベルを収集。図面により2系統あり、種別(kind)を付ける:
@@ -276,7 +349,11 @@ class DrawingModel:
             if e.dxftype() != 'INSERT' or not e.attribs:
                 continue
             a = {at.dxf.tag: at.dxf.text for at in e.attribs}
-            if e.dxf.layer == 'SENBAN' and a.get('線番', '').strip():
+            # 号線ラベルは通常 SENBAN レイヤ。ただし設計が TEMPLATE レイヤに描く号線もある
+            # （例 5-21071 の号線213＝DTX21→母線）。ブロック名(V/H_SENBAN)で確実に判定して拾う。
+            is_senban = (e.dxf.layer == 'SENBAN'
+                         or (e.dxf.name in ('V_SENBAN', 'H_SENBAN') and e.dxf.layer == 'TEMPLATE'))
+            if is_senban and a.get('線番', '').strip():
                 out.append((a['線番'].strip(), e.dxf.insert.x, e.dxf.insert.y, 'ctrl'))
             for j, k in enumerate(('SOU1', 'SOU2', 'SOU3')):
                 v = a.get(k, '').strip()
