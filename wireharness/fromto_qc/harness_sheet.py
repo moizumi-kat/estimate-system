@@ -206,10 +206,13 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
     のフル記載で出力する。図面に相手の無いコネクタ先/扉/外部を突合で補完。
     戻り: [{'gousen'(空可),'kind','size','wires':[{color,from,to}]}]（台帳書式）。"""
     skel_paths = skel_paths or []
-    # 図面で捕捉できた機器（アンカー判定用, 別名も登録）
+    # 図面で捕捉できた機器（アンカー判定用, 別名も登録）＋捕捉できた号線
     my_dev = set()
+    my_gousen = set()
     for p in list(seq_paths) + list(skel_paths):
         for g, nd in tracer.trace_nodes(p).items():
+            if not str(g).startswith('M@'):
+                my_gousen.add(norm(g))
             for (d, t, x, y) in nd['members']:
                 my_dev |= _name_aliases(norm(d))
 
@@ -218,7 +221,13 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
         cands = _name_aliases(key) | _name_aliases(norm(e['device']))
         for x in _expand_combined(key, my_dev):
             cands |= _name_aliases(x)
-        return bool(cands & my_dev)
+        if cands & my_dev:
+            return True
+        # 号線でもアンカー: 台帳の色欄/端子欄に号線が入る場合がある(母線→盤外電源 等)
+        for fld in ('color', 'terminal'):
+            if norm(e.get(fld, '')) in my_gousen and norm(e.get(fld, '')):
+                return True
+        return False
 
     out = []
     for w in _parse_harness_wires(harness_paths):
