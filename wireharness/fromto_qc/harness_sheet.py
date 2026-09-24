@@ -227,20 +227,62 @@ def _name_aliases(key):
     return out
 
 
+# 台帳=簡易名 と 図面ブロックの PARTS(部品種別) の対応（配電盤の計測回路で確立済）。
+# 台帳は入力の手間を省き記述名/記号を使うため、図面の部品種別クラスで拾う。
+# 配電盤の分岐回路一覧(結線図)は配線幾何が無く機器はINSERT属性で列挙されるため、
+# ブロック名簿(_sheet_roster)＋この種別対応でアンカーする。
+_CLASS_LEDGER = {
+    '電力監視': ('ｴﾈﾙｷﾞｰ', 'ﾓﾆﾀ', 'モニタ', 'エネルギー'),   # 電力監視機器(EMU) = 台帳'ｴﾈﾙｷﾞｰ ﾓﾆﾀ'
+    '電流センサ': ('CT',),                                     # 電流センサ = 台帳'CT'
+}
+
+
+def _sheet_roster(paths):
+    """図面(全シート)のINSERTブロック属性から機器名簿と部品種別を集める。
+    戻り: (device_keys:set[norm名(別名込)], classes:set[PARTS文字列])。
+    配線幾何を持たない一覧表シート(結線図)の機器も、実在するのでアンカー源になる。"""
+    devs = set()
+    classes = set()
+    _skip = {'回路', '番号', '種別／容量', '遮断器', '電圧', '負荷', '負荷名称', '容量', '(VA)'}
+    for p in paths or []:
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for e in doc.modelspace():
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in e.attribs}
+            dev = a.get('DEVICE1', '') or a.get('DEVICE', '')
+            if dev and dev not in _skip:
+                devs |= _name_aliases(norm(dev))
+            if a.get('PARTS'):
+                classes.add(a['PARTS'])
+    return devs, classes
+
+
 def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None):
     """実運用フロー: 図面抽出でアンカー（1機器でも捕捉）できた電線を、設計セット(台帳/他シート)
     のフル記載で出力する。図面に相手の無いコネクタ先/扉/外部を突合で補完。
     戻り: [{'gousen'(空可),'kind','size','wires':[{color,from,to}]}]（台帳書式）。"""
     skel_paths = skel_paths or []
+    all_paths = list(seq_paths) + list(skel_paths)
     # 図面で捕捉できた機器（アンカー判定用, 別名も登録）＋捕捉できた号線
     my_dev = set()
     my_gousen = set()
-    for p in list(seq_paths) + list(skel_paths):
+    for p in all_paths:
         for g, nd in tracer.trace_nodes(p).items():
             if not str(g).startswith('M@'):
                 my_gousen.add(norm(g))
             for (d, t, x, y) in nd['members']:
                 my_dev |= _name_aliases(norm(d))
+    # ブロック属性の機器名簿（配線幾何の無い一覧表シートの機器も拾う）＋部品種別クラス
+    roster, classes = _sheet_roster(all_paths)
+    my_dev |= roster
+    # 台帳の記述名を図面の部品種別クラスで拾う対応（計測回路など）
+    ledger_class_kw = tuple(
+        kw for cls, kws in _CLASS_LEDGER.items()
+        for kw in kws if any(cls in c for c in classes))
 
     def anchored(e):
         key = norm(e['device'] + ('-' + e['no'] if e['no'] else ''))
@@ -248,6 +290,10 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
         for x in _expand_combined(key, my_dev):
             cands |= _name_aliases(x)
         if cands & my_dev:
+            return True
+        # 部品種別クラスによるアンカー（台帳=記述名 vs 図面=部品種別）
+        dev = e.get('device', '')
+        if ledger_class_kw and any(kw in dev for kw in ledger_class_kw):
             return True
         # 号線でもアンカー: 台帳の色欄/端子欄に号線が入る場合がある(母線/扉配線/盤外電源 等)。
         # 台帳=基本回路名 vs 図面=枝番付き の差を _gousen_anchored で吸収。
