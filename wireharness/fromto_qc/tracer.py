@@ -11,7 +11,8 @@
 """
 import math
 import collections
-from .geometry import DrawingModel, norm
+from .geometry import DrawingModel, norm, UNFILLED_DEVICE1
+from . import terminal_db as _TDB
 
 TOL = 18
 CROSS_DOT = '_crossPoint1'
@@ -291,8 +292,61 @@ def _build_components(path, tol=TOL):
     _attach_devices_by_box(m, segs, find, comp_dev)
     _attach_connectors(m, segs, find, comp_dev)
     _attach_boxes(m, segs, find, comp_dev)
+    _attach_main_terminals(m, segs, find, comp_terms, comp_dev)
     return {'m': m, 'segs': segs, 'find': find,
             'comp_dev': comp_dev, 'comp_terms': comp_terms}
+
+
+def _attach_main_terminals(m, segs, find, comp_terms, comp_dev, margin=45):
+    """端子ピンを持たない主回路機器（MCCB/接触器/サーマル等, terminal_dbの直列素子）に、
+    線が来ている側から標準端子名を割り当てる。
+      上(box上辺)に線 → 線側 端子(例 MCCB 1/3/5)、下(box下辺)に線 → 負荷側(2/4/6)。
+    単線図では1接続=3相ぶんの端子。ノード(comp)に (機器, 端子名) を追加。"""
+    # sym -> (parts, type)
+    meta = {}
+    for e in m.msp:
+        if e.dxftype() != 'INSERT' or not e.attribs:
+            continue
+        a = {x.dxf.tag: (x.dxf.text or '').strip() for x in e.attribs}
+        dev = a.get('DEVICE', '')
+        if not dev:
+            continue
+        d1 = a.get('DEVICE1', '')
+        sym = f"{dev}-{d1}" if d1 and d1 not in UNFILLED_DEVICE1 else dev
+        meta[sym] = (a.get('PARTS', ''), a.get('TYPE', ''))
+    pinned = {t.device for t in m.terminals}
+    seen = set()
+    for dv in m.devices:
+        if dv.sym in pinned or dv.sym in seen:
+            continue
+        seen.add(dv.sym)
+        pt, ty = meta.get(dv.sym, ('', ''))
+        defn = _TDB.resolve(pt, ty)
+        if not defn or not defn.get('split_series'):
+            continue
+        x0, y0, x1, y1 = (min(dv.box[0], dv.box[2]), min(dv.box[1], dv.box[3]),
+                          max(dv.box[0], dv.box[2]), max(dv.box[1], dv.box[3]))
+        cx = (x0 + x1) / 2
+        line_names, load_names = [], []
+        for t in defn.get('terminals', []):
+            names = t.get('names_3p') or t.get('names') or []
+            if t.get('role') == 'line':
+                line_names = names
+            elif t.get('role') == 'load':
+                load_names = names
+        # 縦向き前提: 上辺=線側, 下辺=負荷側
+        for edge_y, names in ((y1, line_names), (y0, load_names)):
+            if not names:
+                continue
+            comps = set()
+            for i, (a, b) in enumerate(segs):
+                for p in (a, b):
+                    if abs(p[0] - cx) < margin and abs(p[1] - edge_y) < margin:
+                        comps.add(find(i))
+            for c in comps:
+                comp_dev[c].add(dv.sym)
+                for nm in names:
+                    comp_terms[c].add((dv.sym, nm, round(cx, 1), round(edge_y, 1)))
 
 
 def trace_nodes(path, tol=TOL):

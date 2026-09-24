@@ -105,20 +105,22 @@
   },
   "categories": {
     "MCCB": {
-      "desc": "配線用遮断器（寺崎/三菱等）。単線図では線側(上)→負荷側(下)。",
+      "desc": "配線用遮断器（寺崎/三菱等）。単線図では線側(上)1/3/5→負荷側(下)2/4/6。警報ALa/ALc。",
       "split_series": true,
       "poles": 3,
       "terminals": [
-        {"role": "line", "side": "top", "names_3p": ["R", "S", "T"]},
-        {"role": "load", "side": "bottom", "names_3p": ["U", "V", "W"]}
+        {"role": "line", "side": "top", "names_3p": ["1", "3", "5"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4", "6"]},
+        {"role": "aux", "side": "side", "names": ["ALa", "ALc"]}
       ]
     },
     "ELCB": {
-      "desc": "漏電遮断器。MCCBと同配列。",
+      "desc": "漏電遮断器。MCCBと同配列。線側1/3/5→負荷側2/4/6。",
       "split_series": true, "poles": 3,
       "terminals": [
-        {"role": "line", "side": "top", "names_3p": ["R", "S", "T"]},
-        {"role": "load", "side": "bottom", "names_3p": ["U", "V", "W"]}
+        {"role": "line", "side": "top", "names_3p": ["1", "3", "5"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4", "6"]},
+        {"role": "aux", "side": "side", "names": ["ALa", "ALc"]}
       ]
     },
     "MC": {
