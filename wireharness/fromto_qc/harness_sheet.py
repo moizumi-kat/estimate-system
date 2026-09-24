@@ -239,13 +239,16 @@ _CLASS_LEDGER = {
 
 def _sheet_roster(paths):
     """図面(全シート)のINSERTブロック属性から機器名簿と部品種別を集める。
-    戻り: (device_keys:set[norm名(別名込)], classes:set[PARTS文字列], earth:bool)。
+    戻り: (device_keys:set[norm名(別名込)], classes:set[PARTS文字列], earth:bool, nzs:bool)。
     配線幾何を持たない一覧表シート(結線図)の機器も、実在するのでアンカー源になる。
     earth = 接地母線(ETバー/L_EARTH層)の実在。ETバーは等電位なので、在れば
-    アース線は順序不問で採用してよい(茂泉様確認)。"""
+    アース線は順序不問で採用してよい(茂泉様確認)。
+    nzs = 単3中性線欠相保護(NCV)の実在。有れば中欠用TBが在る標準仕様(全製番で
+    「中欠用線あり⟺NCVあり」を実測確認)。"""
     devs = set()
     classes = set()
     earth = False
+    nzs = False           # 単3中性線欠相保護(NCV)=中欠用TBの有無を決める盤仕様
     _skip = {'回路', '番号', '種別／容量', '遮断器', '電圧', '負荷', '負荷名称', '容量', '(VA)'}
     for p in paths or []:
         try:
@@ -263,7 +266,10 @@ def _sheet_roster(paths):
                 devs |= _name_aliases(norm(dev))
             if a.get('PARTS'):
                 classes.add(a['PARTS'])
-    return devs, classes, earth
+            blob = ' '.join(a.values())
+            if '中性線欠相' in blob or '中欠' in blob or 'NCV' in blob:
+                nzs = True
+    return devs, classes, earth, nzs
 
 
 def _is_earth_end(e):
@@ -288,7 +294,7 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
             for (d, t, x, y) in nd['members']:
                 my_dev |= _name_aliases(norm(d))
     # ブロック属性の機器名簿（配線幾何の無い一覧表シートの機器も拾う）＋部品種別クラス
-    roster, classes, earth_present = _sheet_roster(all_paths)
+    roster, classes, earth_present, nzs_present = _sheet_roster(all_paths)
     my_dev |= roster
     # 台帳の記述名を図面の部品種別クラスで拾う対応（計測回路など）
     ledger_class_kw = tuple(
@@ -318,6 +324,10 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
         # ETバーは等電位なので端子順は不問(接続されていれば良い=茂泉様確認)。
         if earth_present and _is_earth_end(e):
             return True
+        # 中欠用: 図面に中性線欠相保護(NCV)が在れば中欠用TBは在る標準仕様。
+        # 「中欠用線あり⟺NCVあり」を全製番で実測確認。NCV在れば中欠用線を採用。
+        if nzs_present and '中欠' in dev:
+            return True
         # 号線でもアンカー: 台帳の色欄/端子欄に号線が入る場合がある(母線/扉配線/盤外電源 等)。
         # 台帳=基本回路名 vs 図面=枝番付き の差を _gousen_anchored で吸収。
         for fld in ('color', 'terminal'):
@@ -340,6 +350,26 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
                                'from': {'place': a['place'], 'device': a['device'], 'no': a['no'], 'terminal': a['terminal']},
                                'to': {'place': b['place'], 'device': b['device'], 'no': b['no'], 'terminal': b['terminal']}}]})
     return out
+
+
+def rule_errors(seq_paths, skel_paths=None, harness_paths=None):
+    """ハーネス生成ルールに反する箇所をエラーとして返す（黙って落とさない）。
+    現行ルール:
+      ・中欠用: 台帳に「中欠用」線が在るなら図面に中性線欠相保護(NCV)が在るはず。
+        NCVが無いのに中欠用が在れば矛盾 → エラー。
+    戻り: [{'rule','reason','wire'}]。空なら全てルール通り。"""
+    skel_paths = skel_paths or []
+    _, _, _earth, nzs = _sheet_roster(list(seq_paths) + list(skel_paths))
+    errs = []
+    for w in _parse_harness_wires(harness_paths):
+        devs = [e.get('device', '') for e in w['ends']]
+        if any('中欠' in d for d in devs) and not nzs:
+            e0 = w['ends'][0]
+            e1 = w['ends'][1] if len(w['ends']) > 1 else {}
+            errs.append({'rule': '中欠用', 'reason': '台帳に中欠用が在るが図面に中性線欠相保護(NCV)が無い',
+                         'wire': f"{e0.get('device')}-{e0.get('no')}:{e0.get('terminal')} <-> "
+                                 f"{e1.get('device','')}-{e1.get('no','')}:{e1.get('terminal','')}"})
+    return errs
 
 
 def place_map_from_harness(harness_paths):
