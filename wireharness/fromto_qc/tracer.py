@@ -317,25 +317,24 @@ def _attach_main_terminals(m, segs, find, comp_terms, comp_dev, margin=45):
         meta[sym] = (a.get('PARTS', ''), a.get('TYPE', ''))
     pinned = {t.device for t in m.terminals}
 
-    def comps_near(cx, cy):
-        s = set()
-        for i, (a, b) in enumerate(segs):
-            for p in (a, b):
-                if abs(p[0] - cx) < margin and abs(p[1] - cy) < margin:
-                    s.add(find(i))
-        return s
-
-    def comps_in_box(x0, y0, x1, y1):
-        s = set()
+    def _endpoints_in_box(x0, y0, x1, y1):
+        out = []
         for i, (a, b) in enumerate(segs):
             for p in (a, b):
                 if x0 - margin <= p[0] <= x1 + margin and y0 - margin <= p[1] <= y1 + margin:
-                    s.add(find(i))
-        return s
+                    out.append((p, find(i)))
+        return out
+
+    def comps_half(eps, ymid, upper):
+        """box近傍の線端のうち、上半分(upper=True)/下半分 の成分集合。"""
+        return {c for (p, c) in eps if (p[1] >= ymid) == upper}
+
+    def comps_all(eps):
+        return {c for (p, c) in eps}
 
     seen = set()
     for dv in m.devices:
-        if dv.sym in pinned or dv.sym in seen:
+        if dv.sym in seen:
             continue
         seen.add(dv.sym)
         pt, ty = meta.get(dv.sym, ('', ''))
@@ -348,24 +347,25 @@ def _attach_main_terminals(m, segs, find, comp_terms, comp_dev, margin=45):
         x0, y0, x1, y1 = (min(dv.box[0], dv.box[2]), min(dv.box[1], dv.box[3]),
                           max(dv.box[0], dv.box[2]), max(dv.box[1], dv.box[3]))
         cx = (x0 + x1) / 2
+        ymid = (y0 + y1) / 2
+        eps = _endpoints_in_box(x0, y0, x1, y1)
         for t in defn.get('terminals', []):
             names = t.get('names_3p') or t.get('names') or []
             if not names:
                 continue
             side = t.get('side', '')
             if side == 'top':
-                targets = [(cx, y1, comps_near(cx, y1))]
+                comps, ey = comps_half(eps, ymid, True), y1
             elif side == 'bottom':
-                targets = [(cx, y0, comps_near(cx, y0))]
+                comps, ey = comps_half(eps, ymid, False), y0
             elif side == 'through':
-                targets = [(cx, y1, comps_near(cx, y1)), (cx, y0, comps_near(cx, y0))]
+                comps, ey = comps_all(eps), ymid
             else:
-                targets = [(cx, (y0 + y1) / 2, comps_in_box(x0, y0, x1, y1))]
-            for tx, tyy, comps in targets:
-                for c in comps:
-                    comp_dev[c].add(dv.sym)
-                    for nm in names:
-                        comp_terms[c].add((dv.sym, nm, round(tx, 1), round(tyy, 1)))
+                comps, ey = comps_all(eps), ymid
+            for c in comps:
+                comp_dev[c].add(dv.sym)
+                for nm in names:
+                    comp_terms[c].add((dv.sym, nm, round(cx, 1), round(ey, 1)))
 
 
 def trace_nodes(path, tol=TOL):
@@ -398,11 +398,12 @@ def trace_nodes(path, tol=TOL):
         labeled |= set(comps)
     for comp, devs in comp_dev.items():
         real = [d for d in devs if d != 'TB' and not str(d).startswith('BOX@')]
-        if comp in labeled or len(real) < 2:
+        mem = comp_terms.get(comp, set())
+        # 機器2つ以上、または 端子名の付いた端点が2つ以上（主端子割当で端点は確定）なら出力。
+        if comp in labeled or (len(real) < 2 and len(mem) < 2):
             continue
         g = f"M@{comp}"
-        nodes[g] = {'kind': 'main', 'members': set(comp_terms.get(comp, set())),
-                    'devices': set(devs)}
+        nodes[g] = {'kind': 'main', 'members': set(mem), 'devices': set(devs)}
     return nodes
 
 
