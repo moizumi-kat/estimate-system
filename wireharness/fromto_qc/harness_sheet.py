@@ -283,6 +283,10 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
     ledger_class_kw = tuple(
         kw for cls, kws in _CLASS_LEDGER.items()
         for kw in kws if any(cls in c for c in classes))
+    # 図面ブロックの PARTS(部品種別名) 集合（正規化）。ハーネス台帳は入力の手間を
+    # 省くため PARTS名の略称を機器名に使う（例 図面'ﾏﾙﾁﾒｰﾀ'→台帳'ﾏﾙﾁ'、
+    # '伝送ﾕﾆｯﾄ'→'伝送'、'LUG-T'→'LUG'）。台帳名が PARTS の部分文字列なら同一機器。
+    parts_norm = [norm(c) for c in classes if c and len(norm(c)) >= 2]
 
     def anchored(e):
         key = norm(e['device'] + ('-' + e['no'] if e['no'] else ''))
@@ -294,6 +298,10 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
         # 部品種別クラスによるアンカー（台帳=記述名 vs 図面=部品種別）
         dev = e.get('device', '')
         if ledger_class_kw and any(kw in dev for kw in ledger_class_kw):
+            return True
+        # 略称ルール: 台帳の機器名が図面PARTS名の部分文字列なら同一機器（最小長2）
+        ndev = norm(dev)
+        if len(ndev) >= 2 and any(ndev in pc for pc in parts_norm):
             return True
         # 号線でもアンカー: 台帳の色欄/端子欄に号線が入る場合がある(母線/扉配線/盤外電源 等)。
         # 台帳=基本回路名 vs 図面=枝番付き の差を _gousen_anchored で吸収。
