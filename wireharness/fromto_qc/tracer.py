@@ -298,11 +298,12 @@ def _build_components(path, tol=TOL):
 
 
 def _attach_main_terminals(m, segs, find, comp_terms, comp_dev, margin=45):
-    """端子ピンを持たない主回路機器（MCCB/接触器/サーマル等, terminal_dbの直列素子）に、
-    線が来ている側から標準端子名を割り当てる。
-      上(box上辺)に線 → 線側 端子(例 MCCB 1/3/5)、下(box下辺)に線 → 負荷側(2/4/6)。
+    """端子ピンを持たない機器（主回路のMCCB/接触器/サーマル/CT/AM等, terminal_db/cache）に、
+    線が来ている側から標準端子名を割り当てる。役割(role)ごとに配置(side)を決める:
+      side=top→box上辺(線側/1次)、bottom→下辺(負荷側)、through→上下両方(CT1次貫通)、
+      その他(side/any/coil/meter/secondary)→box近傍の任意の線。
     単線図では1接続=3相ぶんの端子。ノード(comp)に (機器, 端子名) を追加。"""
-    # sym -> (parts, type)
+    from . import terminal_fetch as _TF
     meta = {}
     for e in m.msp:
         if e.dxftype() != 'INSERT' or not e.attribs:
@@ -315,38 +316,56 @@ def _attach_main_terminals(m, segs, find, comp_terms, comp_dev, margin=45):
         sym = f"{dev}-{d1}" if d1 and d1 not in UNFILLED_DEVICE1 else dev
         meta[sym] = (a.get('PARTS', ''), a.get('TYPE', ''))
     pinned = {t.device for t in m.terminals}
+
+    def comps_near(cx, cy):
+        s = set()
+        for i, (a, b) in enumerate(segs):
+            for p in (a, b):
+                if abs(p[0] - cx) < margin and abs(p[1] - cy) < margin:
+                    s.add(find(i))
+        return s
+
+    def comps_in_box(x0, y0, x1, y1):
+        s = set()
+        for i, (a, b) in enumerate(segs):
+            for p in (a, b):
+                if x0 - margin <= p[0] <= x1 + margin and y0 - margin <= p[1] <= y1 + margin:
+                    s.add(find(i))
+        return s
+
     seen = set()
     for dv in m.devices:
         if dv.sym in pinned or dv.sym in seen:
             continue
         seen.add(dv.sym)
         pt, ty = meta.get(dv.sym, ('', ''))
-        defn = _TDB.resolve(pt, ty)
-        if not defn or not defn.get('split_series'):
+        try:
+            defn = _TF.resolve(pt, ty, None)
+        except Exception:
+            defn = _TDB.resolve(pt, ty)
+        if not defn or not defn.get('terminals'):
             continue
         x0, y0, x1, y1 = (min(dv.box[0], dv.box[2]), min(dv.box[1], dv.box[3]),
                           max(dv.box[0], dv.box[2]), max(dv.box[1], dv.box[3]))
         cx = (x0 + x1) / 2
-        line_names, load_names = [], []
         for t in defn.get('terminals', []):
             names = t.get('names_3p') or t.get('names') or []
-            if t.get('role') == 'line':
-                line_names = names
-            elif t.get('role') == 'load':
-                load_names = names
-        # 縦向き前提: 上辺=線側, 下辺=負荷側
-        for edge_y, names in ((y1, line_names), (y0, load_names)):
             if not names:
                 continue
-            comps = set()
-            for i, (a, b) in enumerate(segs):
-                for p in (a, b):
-                    if abs(p[0] - cx) < margin and abs(p[1] - edge_y) < margin:
-                        comps.add(find(i))
-            for c in comps:
-                comp_dev[c].add(dv.sym)
-                for nm in names:
-                    comp_terms[c].add((dv.sym, nm, round(cx, 1), round(edge_y, 1)))
+            side = t.get('side', '')
+            if side == 'top':
+                targets = [(cx, y1, comps_near(cx, y1))]
+            elif side == 'bottom':
+                targets = [(cx, y0, comps_near(cx, y0))]
+            elif side == 'through':
+                targets = [(cx, y1, comps_near(cx, y1)), (cx, y0, comps_near(cx, y0))]
+            else:
+                targets = [(cx, (y0 + y1) / 2, comps_in_box(x0, y0, x1, y1))]
+            for tx, tyy, comps in targets:
+                for c in comps:
+                    comp_dev[c].add(dv.sym)
+                    for nm in names:
+                        comp_terms[c].add((dv.sym, nm, round(tx, 1), round(tyy, 1)))
 
 
 def trace_nodes(path, tol=TOL):

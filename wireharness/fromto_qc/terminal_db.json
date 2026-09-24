@@ -181,17 +181,17 @@
       ]
     },
     "AM": {
-      "desc": "電流計（三菱YS等）。CT2次に接続（2端子）。",
+      "desc": "電流計（三菱YS等）。CT2次に接続（2端子 1/2）。",
       "split_series": false, "poles": 1,
       "terminals": [
-        {"role": "meter", "side": "any", "names": ["+", "-"]}
+        {"role": "meter", "side": "any", "names": ["1", "2"]}
       ]
     },
     "VM": {
-      "desc": "電圧計。2端子（相間/相中性）。",
+      "desc": "電圧計。2端子（相間/相中性 1/2）。",
       "split_series": false, "poles": 1,
       "terminals": [
-        {"role": "meter", "side": "any", "names": ["+", "-"]}
+        {"role": "meter", "side": "any", "names": ["1", "2"]}
       ]
     },
     "F": {
