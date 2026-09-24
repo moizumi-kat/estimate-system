@@ -188,25 +188,36 @@ def _brk_alias(key):
     return {key, 'BRK' + m.group(2)} if m else {key}
 
 
+def _name_aliases(key):
+    """ハーネス照合用の機器名別名集合（表記違いの吸収）:
+      ・ブレーカ族(ELCB/MCCB/MCB)を同一視
+      ・「分離器/ｾﾊﾟﾚｰﾀ/セパレータ」等の修飾語を除いた形（台帳 SPD・分離器 = 図面 SPD）
+    ※積算では別物になり得るのでハーネス照合限定。"""
+    out = set(_brk_alias(key))
+    for k in list(out):
+        k2 = k.replace('分離器', '').replace('ｾﾊﾟﾚｰﾀ', '').replace('セパレータ', '')
+        if k2 and k2 != k:
+            out |= _brk_alias(k2)
+    return out
+
+
 def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None):
     """実運用フロー: 図面抽出でアンカー（1機器でも捕捉）できた電線を、設計セット(台帳/他シート)
     のフル記載で出力する。図面に相手の無いコネクタ先/扉/外部を突合で補完。
     戻り: [{'gousen'(空可),'kind','size','wires':[{color,from,to}]}]（台帳書式）。"""
     skel_paths = skel_paths or []
-    # 図面で捕捉できた機器（アンカー判定用, ブレーカ族は別名も登録）
+    # 図面で捕捉できた機器（アンカー判定用, 別名も登録）
     my_dev = set()
     for p in list(seq_paths) + list(skel_paths):
         for g, nd in tracer.trace_nodes(p).items():
             for (d, t, x, y) in nd['members']:
-                my_dev |= _brk_alias(norm(d))
+                my_dev |= _name_aliases(norm(d))
 
     def anchored(e):
         key = norm(e['device'] + ('-' + e['no'] if e['no'] else ''))
-        cands = {key, norm(e['device'])}
-        for x in list(cands):
-            cands |= _brk_alias(x)
+        cands = _name_aliases(key) | _name_aliases(norm(e['device']))
         for x in _expand_combined(key, my_dev):
-            cands |= _brk_alias(x)
+            cands |= _name_aliases(x)
         return bool(cands & my_dev)
 
     out = []
