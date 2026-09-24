@@ -93,6 +93,22 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
             return d, n
         return dev, ''
 
+    # 端子台の番号未記入(TB:番号なし)ラグに 仮番号(仮N)を全体で採番する。
+    # 同じ端子台ブロック位置に複数号線が来る(＝別ラグ)ので「位置＋号線」で個別化する。
+    # (潰すと別ラグの結線が同一端子に集約され繋ぎ込み数が見かけ上膨張＝作業性を誤評価。
+    #  仮番号で各ラグを物理どおり個別化し、出力でも「要確認(未記入)」と分かる)
+    def _tbkey(g, x, y):
+        return (round(x), round(y), norm(g))
+    tb_lugs = set()
+    for g, nd in nodes.items():
+        if str(g).startswith('M@'):
+            continue
+        for (dev, term, x, y) in nd['members']:
+            d, n = split(dev)
+            if norm(d) == 'TB' and (not n) and (not term or term == '?'):
+                tb_lugs.add(_tbkey(g, x, y))
+    tb_prov = {lug: f"仮{i+1}" for i, lug in enumerate(sorted(tb_lugs))}
+
     out = []
     for g in sorted(nodes):
         nd = nodes[g]
@@ -101,10 +117,17 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
         terms = []
         for (dev, term, x, y) in sorted(nd['members']):
             d, n = split(dev)
-            key = f"{d}-{n}:{term}"
+            unfilled_tb = norm(d) == 'TB' and (not n) and (not term or term == '?')
+            if unfilled_tb:
+                key = f"TB@{round(x)},{round(y)}#{norm(g)}"
+                prov = tb_prov.get(_tbkey(g, x, y), '')
+            else:
+                key = f"{d}-{n}:{term}"
             if key not in idx:
-                idx[key] = {'place': place_of.get(norm(dev), ''), 'device': d, 'no': n,
-                            'terminal': (term if term and term != '?' else ''), 'x': x, 'y': y}
+                idx[key] = {'place': place_of.get(norm(dev), ''), 'device': d,
+                            'no': (prov if unfilled_tb else n),
+                            'terminal': (term if term and term != '?' else ''),
+                            'x': x, 'y': y, 'unfilled_tb': unfilled_tb}
                 terms.append((key, x, y))
         circ = _circuit_of(g)
         kind, size = specs.get(norm(circ), ('', ''))

@@ -65,6 +65,37 @@ def analyze_defects(seq_paths, skel_paths=None, seiban='', layout_path=None):
                         '自動確定号線': fd['summary'].get('自動確定', 0)}}
 
 
+def terminal_number_defects(seq_paths, skel_paths=None, seiban=''):
+    """端子台の番号未記入を不備として検出し、修正案付きで返す。
+    番号が無いと別ラグの結線が1端子に集約され繋ぎ込み数が膨張する(作業性悪化)ため、
+    本システムは位置で個別化し仮番号(仮N)を振っている。設計での番号記入を促す。
+    戻り: {'seiban','count','items':[{仮番号, 位置, 接続号線[], 修正案}], 'note'}"""
+    sheet = harness_sheet.build_sheet(seq_paths, skel_paths=skel_paths, seiban=seiban)
+    # 仮番号ラグ → その号線を集める
+    prov = {}   # 仮番号 -> {'x','y','gousen':set}
+    for r in sheet:
+        for m in r['members']:
+            if m.get('unfilled_tb'):
+                p = prov.setdefault(m['no'], {'x': m['x'], 'y': m['y'], 'gousen': set()})
+                if r['gousen'] and not str(r['gousen']).startswith('M@'):
+                    p['gousen'].add(r['gousen'])
+    items = []
+    for prov_no in sorted(prov, key=lambda s: int(str(s).replace('仮', '') or 0)):
+        p = prov[prov_no]
+        gs = sorted(p['gousen'])
+        items.append({
+            'provisional': prov_no,
+            'position': {'x': round(p['x'], 1), 'y': round(p['y'], 1)},
+            'gousen': gs,
+            'fix': (f'端子台の番号が未記入です（仮に {prov_no} を割当）。接続号線: '
+                    f'{"／".join(str(g) for g in gs) if gs else "(なし)"}。'
+                    f'設計図に端子台の端子番号を記入してください。'),
+        })
+    return {'seiban': seiban, 'count': len(items), 'items': items,
+            'note': '番号未記入は繋ぎ込み数を増やし作業性を下げます。位置で個別化し仮番号を'
+                    '割り当てて出力しています（要確認）。'}
+
+
 def produce(seq_paths, skel_paths=None, seiban='', layout_path=None, strict=True):
     """本番フロー本体。図面のみでハーネスシートを生成する。
     strict=True: 不備が1件でもあれば最終シートは保留し、不備＋修正案を提示(参考シートは付す)。
