@@ -17,6 +17,7 @@ import collections
 import ezdxf
 from . import tracer
 from .equipotential import generate_wiring
+from . import route as _route
 from .geometry import norm
 
 
@@ -69,10 +70,12 @@ def _circuit_of(gousen):
     return m.group(1) if m else ''
 
 
-def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None):
+def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='connection'):
     """ハーネスシートの電線レコードを生成。
     戻り: [{'gousen','kind','size','wires':[{'color','from':{place,device,no,terminal},'to':{...}}]}]
-    place_of: 機器キー(norm)→場所 の辞書（台帳や配置図から作る。無ければ空欄）。"""
+    place_of: 機器キー(norm)→場所 の辞書（台帳や配置図から作る。無ければ空欄）。
+    priority: 渡り(ルート)の最適化基準。'connection'=繋ぎ込み数最小(既定・作業性最優先)/
+              'length'=総配線長最小/'duct'=ダクト平準化(将来)。"""
     skel_paths = skel_paths or []
     specs = _wire_specs(list(seq_paths) + list(skel_paths))
     place_of = place_of or {}
@@ -106,7 +109,7 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None):
         circ = _circuit_of(g)
         kind, size = specs.get(norm(circ), ('', ''))
         wires = []
-        for a, b in generate_wiring(terms):
+        for a, b in _route.optimize_watari(terms, priority):
             ma, mb = idx[a], idx[b]
             wires.append({'color': _color_of(g, ma['terminal']),
                           'from': {k: ma[k] for k in ('place', 'device', 'no', 'terminal')},
