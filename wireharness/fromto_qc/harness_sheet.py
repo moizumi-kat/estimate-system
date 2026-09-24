@@ -339,20 +339,33 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
                 return True
         return False
 
-    out = []
-    for w in _parse_harness_wires(harness_paths):
+    def _emit(w):
         ends = w['ends']
-        # アンカー: どちらかの端点機器が図面で捕捉済み(連結ラベル/ブレーカ別名は吸収)なら採用
-        if not any(anchored(e) for e in ends):
-            continue
         a = ends[0]
         b = ends[1] if len(ends) > 1 else {'color': '', 'place': '', 'device': '', 'no': '', 'terminal': ''}
-        out.append({'gousen': '', 'kind': w['kind'], 'size': w['size'],
-                    'members': [{'place': e['place'], 'device': e['device'], 'no': e['no'],
-                                 'terminal': e['terminal']} for e in ends],
-                    'wires': [{'color': a.get('color', ''),
-                               'from': {'place': a['place'], 'device': a['device'], 'no': a['no'], 'terminal': a['terminal']},
-                               'to': {'place': b['place'], 'device': b['device'], 'no': b['no'], 'terminal': b['terminal']}}]})
+        return {'gousen': '', 'kind': w['kind'], 'size': w['size'],
+                'members': [{'place': e['place'], 'device': e['device'], 'no': e['no'],
+                             'terminal': e['terminal']} for e in ends],
+                'wires': [{'color': a.get('color', ''),
+                           'from': {'place': a['place'], 'device': a['device'], 'no': a['no'], 'terminal': a['terminal']},
+                           'to': {'place': b['place'], 'device': b['device'], 'no': b['no'], 'terminal': b['terminal']}}]}
+
+    wires = _parse_harness_wires(harness_paths)
+    out = []
+    rest = []
+    confirmed = set()   # 出力済み(実在確定)機器キー device-no
+    for w in wires:
+        if any(anchored(e) for e in w['ends']):
+            out.append(_emit(w))
+            for e in w['ends']:
+                confirmed.add(norm(e['device'] + ('-' + e['no'] if e['no'] else '')))
+        else:
+            rest.append(w)
+    # 確定機器の伝播(1パス): 出力済みで実在確定した機器に繋がる残りの台帳線も採用。
+    # 例: GL-401 は 52-401 経由の線で出力済み→実在確定。同じ GL-401 の扉配線も採る。
+    for w in rest:
+        if any(norm(e['device'] + ('-' + e['no'] if e['no'] else '')) in confirmed for e in w['ends']):
+            out.append(_emit(w))
     return out
 
 
