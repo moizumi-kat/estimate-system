@@ -180,28 +180,39 @@ def _expand_combined(key, known):
     return [key]
 
 
+def _brk_alias(key):
+    """ブレーカ族(ELCB/MCCB/MCB)をハーネス照合上は同一視するための別名集合。
+    ハーネス配線では分岐遮断器は種別に関わらず同じ接続点（図面=MCCB／台帳=ELCB 等の
+    表記違いを吸収）。※積算では別物なのでハーネス照合限定。"""
+    m = re.match(r'^(ELCB|MCCB|MCB)(.+)$', key)
+    return {key, 'BRK' + m.group(2)} if m else {key}
+
+
 def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None):
     """実運用フロー: 図面抽出でアンカー（1機器でも捕捉）できた電線を、設計セット(台帳/他シート)
     のフル記載で出力する。図面に相手の無いコネクタ先/扉/外部を突合で補完。
     戻り: [{'gousen'(空可),'kind','size','wires':[{color,from,to}]}]（台帳書式）。"""
     skel_paths = skel_paths or []
-    # 図面で捕捉できた機器（アンカー判定用）
+    # 図面で捕捉できた機器（アンカー判定用, ブレーカ族は別名も登録）
     my_dev = set()
     for p in list(seq_paths) + list(skel_paths):
         for g, nd in tracer.trace_nodes(p).items():
             for (d, t, x, y) in nd['members']:
-                my_dev.add(norm(d))
+                my_dev |= _brk_alias(norm(d))
 
     def anchored(e):
         key = norm(e['device'] + ('-' + e['no'] if e['no'] else ''))
-        if key in my_dev or norm(e['device']) in my_dev:
-            return True
-        return any(x in my_dev for x in _expand_combined(key, my_dev))
+        cands = {key, norm(e['device'])}
+        for x in list(cands):
+            cands |= _brk_alias(x)
+        for x in _expand_combined(key, my_dev):
+            cands |= _brk_alias(x)
+        return bool(cands & my_dev)
 
     out = []
     for w in _parse_harness_wires(harness_paths):
         ends = w['ends']
-        # アンカー: どちらかの端点機器が図面で捕捉済み(連結ラベルは展開)なら採用
+        # アンカー: どちらかの端点機器が図面で捕捉済み(連結ラベル/ブレーカ別名は吸収)なら採用
         if not any(anchored(e) for e in ends):
             continue
         a = ends[0]
