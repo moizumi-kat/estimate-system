@@ -164,6 +164,22 @@ def _parse_harness_wires(harness_paths):
     return wires
 
 
+def _expand_combined(key, known):
+    """連結ラベルを分割: 後半が2つの等長コード連結で両方が既知機器なら分ける。
+    例 'ELCB106107'(←106.107)→['ELCB106','ELCB107'], 'MCCB1AC1GC'→['MCCB1AC','MCCB1GC']。
+    分けられない(片方が図面に無い等)ならそのまま。"""
+    m = re.match(r'^([A-Za-z]+)(.+)$', key)
+    if not m:
+        return [key]
+    pre, suf = m.groups()
+    if len(suf) % 2 == 0 and len(suf) >= 4:
+        h = len(suf) // 2
+        a, b = pre + suf[:h], pre + suf[h:]
+        if a in known and b in known:
+            return [a, b]
+    return [key]
+
+
 def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None):
     """実運用フロー: 図面抽出でアンカー（1機器でも捕捉）できた電線を、設計セット(台帳/他シート)
     のフル記載で出力する。図面に相手の無いコネクタ先/扉/外部を突合で補完。
@@ -175,12 +191,18 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
         for g, nd in tracer.trace_nodes(p).items():
             for (d, t, x, y) in nd['members']:
                 my_dev.add(norm(d))
+
+    def anchored(e):
+        key = norm(e['device'] + ('-' + e['no'] if e['no'] else ''))
+        if key in my_dev or norm(e['device']) in my_dev:
+            return True
+        return any(x in my_dev for x in _expand_combined(key, my_dev))
+
     out = []
     for w in _parse_harness_wires(harness_paths):
         ends = w['ends']
-        # アンカー: どちらかの端点機器が図面で捕捉済みなら採用
-        if not any(norm(e['device'] + ('-' + e['no'] if e['no'] else '')) in my_dev
-                   or norm(e['device']) in my_dev for e in ends):
+        # アンカー: どちらかの端点機器が図面で捕捉済み(連結ラベルは展開)なら採用
+        if not any(anchored(e) for e in ends):
             continue
         a = ends[0]
         b = ends[1] if len(ends) > 1 else {'color': '', 'place': '', 'device': '', 'no': '', 'terminal': ''}
