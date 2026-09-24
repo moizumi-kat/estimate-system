@@ -16,6 +16,7 @@
 エラー/不備は握りつぶさず必ず提示する(◎誤答ゼロ・迷ったら△の方針に沿う)。
 """
 from . import harness_sheet, fromto_review
+from . import router as _router
 
 
 # 「不備ではない」= 盤外/予備/別ハーネスで結線される(確認不要)カテゴリ
@@ -122,6 +123,73 @@ def produce(seq_paths, skel_paths=None, seiban='', layout_path=None, strict=True
     return out
 
 
+def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
+                     topology='connection', physical='length'):
+    """【次バージョン】1本ずつ「長さ」「ルート」を出す。ルート決定は優先度で選択。
+      topology(渡りの張り方): 'connection'=繋ぎ込み数最小(作業性)/'length'=総配線長最小/'duct'
+      physical(物理経路):     'length'=各線を最短経路/'capacity'=ダクト平準化(混雑を分散)
+    ダクト網は内部配置図(DCT)から取得。配置図が無ければ端点間マンハッタン長で近似。
+    戻り: {'seiban','priority','wires':[{gousen,from,to,size,length,route}],
+           'total_length','duct_util','summary'}"""
+    from .layout import Layout
+    sheet = harness_sheet.build_sheet(seq_paths, skel_paths=skel_paths, seiban=seiban,
+                                      priority=topology)
+    # 電線(端点座標つき)を集める
+    flat = []
+    for r in sheet:
+        for wi in r['wires']:
+            if wi.get('from_pos') and wi.get('to_pos'):
+                flat.append({'gousen': r['gousen'], 'kind': r['kind'], 'size': r['size'],
+                             'from': wi['from'], 'to': wi['to'],
+                             'from_pos': wi['from_pos'], 'to_pos': wi['to_pos']})
+    # ダクト網(配置図)
+    lay = None
+    for p in (dct_paths or []):
+        try:
+            lay = Layout(p)
+            if getattr(lay, 'hducts', None) or getattr(lay, 'vducts', None):
+                break
+        except Exception:
+            lay = None
+    wires_out = []
+    total = 0.0
+    duct_util = {}
+    if lay is not None and (getattr(lay, 'hducts', None) or getattr(lay, 'vducts', None)):
+        results, total, util = _router.route_wires(flat, lay, priority=physical)
+        duct_util = {f'{sorted(e)}': v for e, v in util.items()}
+        for w, path, length in results:
+            wires_out.append({'gousen': w['gousen'], 'size': w['size'],
+                              'from': w['from'], 'to': w['to'],
+                              'length': round(length, 1), 'route': [list(p) for p in path]})
+    else:
+        # ダクト網なし: マンハッタン長で近似(経路は直結)
+        for w in flat:
+            fp, tp = w['from_pos'], w['to_pos']
+            length = abs(fp[0] - tp[0]) + abs(fp[1] - tp[1])
+            total += length
+            wires_out.append({'gousen': w['gousen'], 'size': w['size'],
+                              'from': w['from'], 'to': w['to'],
+                              'length': round(length, 1), 'route': [list(fp), list(tp)]})
+    return {'seiban': seiban, 'priority': {'topology': topology, 'physical': physical},
+            'wires': wires_out, 'total_length': round(total, 1), 'duct_util': duct_util,
+            'summary': {'電線数': len(wires_out), '総配線長': round(total, 1),
+                        'ダクト有': lay is not None and bool(duct_util)}}
+
+
 def to_csv(sheet, path):
     """生成シートをCSV(同フォーマット)で書き出す(harness_sheet.to_csv に委譲)。"""
     return harness_sheet.to_csv(sheet, path)
+
+
+def length_to_csv(routed, path):
+    """route_and_length の結果を「1本ずつ 長さ・ルート」CSV(cp932)で書き出す。"""
+    import csv
+    with open(path, 'w', encoding='cp932', errors='replace', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['号線', 'サイズ', 'From機器', 'From番号', 'From端子',
+                    'To機器', 'To番号', 'To端子', '測長', 'ルート(節点数)'])
+        for wi in routed['wires']:
+            fr, to = wi['from'], wi['to']
+            w.writerow([wi['gousen'], wi['size'], fr['device'], fr['no'], fr['terminal'],
+                        to['device'], to['no'], to['terminal'], wi['length'], len(wi['route'])])
+    return path

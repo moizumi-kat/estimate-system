@@ -136,7 +136,8 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
             ma, mb = idx[a], idx[b]
             wires.append({'color': _color_of(g, ma['terminal']),
                           'from': {k: ma[k] for k in ('place', 'device', 'no', 'terminal')},
-                          'to': {k: mb[k] for k in ('place', 'device', 'no', 'terminal')}})
+                          'to': {k: mb[k] for k in ('place', 'device', 'no', 'terminal')},
+                          'from_pos': (ma['x'], ma['y']), 'to_pos': (mb['x'], mb['y'])})
         out.append({'gousen': g, 'kind': kind, 'size': size,
                     'members': [idx[k] for k in idx], 'wires': wires})
     return out
