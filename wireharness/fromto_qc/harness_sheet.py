@@ -181,11 +181,37 @@ def _expand_combined(key, known):
 
 
 def _brk_alias(key):
-    """ブレーカ族(ELCB/MCCB/MCB)をハーネス照合上は同一視するための別名集合。
-    ハーネス配線では分岐遮断器は種別に関わらず同じ接続点（図面=MCCB／台帳=ELCB 等の
-    表記違いを吸収）。※積算では別物なのでハーネス照合限定。"""
+    """ブレーカ族(ELCB/MCCB/MCB/52)をハーネス照合上は同一視するための別名集合。
+    ハーネス配線では分岐遮断器は種別に関わらず同じ接続点（図面=MCCB／台帳=ELCB／
+    ANSI番号 52 等の表記違いを吸収）。※積算では別物なのでハーネス照合限定。
+    例: 台帳'52-401'(ANSI 52=遮断器) = 図面'MCCB-401' → 共に 'BRK401'。"""
     m = re.match(r'^(ELCB|MCCB|MCB)(.+)$', key)
-    return {key, 'BRK' + m.group(2)} if m else {key}
+    if m:
+        return {key, 'BRK' + m.group(2)}
+    m = re.match(r'^52(\d.*)$', key)   # ANSI 52 = 遮断器（52-401 等）
+    if m:
+        return {key, 'BRK' + m.group(1)}
+    return {key}
+
+
+def _gousen_anchored(g, captured):
+    """台帳の号線(g)が、捕捉した号線集合(captured)のどれかに対応するか。
+    台帳=簡易な基本回路名(例 '401'/'1BZ')・図面=枝番付き(例 '40101'/'1BZ01') の
+    表記差を吸収する: 完全一致、または一方が他方の接頭で残差が短い(枝番相当)場合に一致。
+    最小長3で '1'/'2' 等の過剰一致を防ぐ。"""
+    g = norm(g)
+    if not g:
+        return False
+    if g in captured:            # 完全一致は長さ不問（短い号線もそのまま拾う）
+        return True
+    if len(g) < 3:               # 接頭一致は '1'/'2' 等の過剰一致を防ぐため最小長3
+        return False
+    for c in captured:
+        if c.startswith(g) and len(c) - len(g) <= 3:      # 台帳=基本名, 図面=基本名+枝番
+            return True
+        if len(c) >= 3 and g.startswith(c) and len(g) - len(c) <= 2:
+            return True
+    return False
 
 
 def _name_aliases(key):
@@ -223,9 +249,10 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
             cands |= _name_aliases(x)
         if cands & my_dev:
             return True
-        # 号線でもアンカー: 台帳の色欄/端子欄に号線が入る場合がある(母線→盤外電源 等)
+        # 号線でもアンカー: 台帳の色欄/端子欄に号線が入る場合がある(母線/扉配線/盤外電源 等)。
+        # 台帳=基本回路名 vs 図面=枝番付き の差を _gousen_anchored で吸収。
         for fld in ('color', 'terminal'):
-            if norm(e.get(fld, '')) in my_gousen and norm(e.get(fld, '')):
+            if _gousen_anchored(e.get(fld, ''), my_gousen):
                 return True
         return False
 
