@@ -239,16 +239,21 @@ _CLASS_LEDGER = {
 
 def _sheet_roster(paths):
     """図面(全シート)のINSERTブロック属性から機器名簿と部品種別を集める。
-    戻り: (device_keys:set[norm名(別名込)], classes:set[PARTS文字列])。
-    配線幾何を持たない一覧表シート(結線図)の機器も、実在するのでアンカー源になる。"""
+    戻り: (device_keys:set[norm名(別名込)], classes:set[PARTS文字列], earth:bool)。
+    配線幾何を持たない一覧表シート(結線図)の機器も、実在するのでアンカー源になる。
+    earth = 接地母線(ETバー/L_EARTH層)の実在。ETバーは等電位なので、在れば
+    アース線は順序不問で採用してよい(茂泉様確認)。"""
     devs = set()
     classes = set()
+    earth = False
     _skip = {'回路', '番号', '種別／容量', '遮断器', '電圧', '負荷', '負荷名称', '容量', '(VA)'}
     for p in paths or []:
         try:
             doc = ezdxf.readfile(p)
         except Exception:
             continue
+        if any(l.dxf.name == 'L_EARTH' for l in doc.layers):
+            earth = True
         for e in doc.modelspace():
             if e.dxftype() != 'INSERT' or not e.attribs:
                 continue
@@ -258,7 +263,13 @@ def _sheet_roster(paths):
                 devs |= _name_aliases(norm(dev))
             if a.get('PARTS'):
                 classes.add(a['PARTS'])
-    return devs, classes
+    return devs, classes, earth
+
+
+def _is_earth_end(e):
+    """台帳端点が接地点か(ETバー/機器のET端子/BOX/ダクト接地)。'ET'トークンで判定。"""
+    tok = norm(e.get('device', '')) + norm(e.get('no', '')) + norm(e.get('terminal', ''))
+    return 'ET' in tok or 'ｱｰｽ' in tok or 'アース' in tok
 
 
 def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None):
@@ -277,7 +288,7 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
             for (d, t, x, y) in nd['members']:
                 my_dev |= _name_aliases(norm(d))
     # ブロック属性の機器名簿（配線幾何の無い一覧表シートの機器も拾う）＋部品種別クラス
-    roster, classes = _sheet_roster(all_paths)
+    roster, classes, earth_present = _sheet_roster(all_paths)
     my_dev |= roster
     # 台帳の記述名を図面の部品種別クラスで拾う対応（計測回路など）
     ledger_class_kw = tuple(
@@ -302,6 +313,10 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
         # 略称ルール: 台帳の機器名が図面PARTS名の部分文字列なら同一機器（最小長2）
         ndev = norm(dev)
         if len(ndev) >= 2 and any(ndev in pc for pc in parts_norm):
+            return True
+        # アース: 接地母線(ETバー/L_EARTH)が図面に在れば、ET端点のアース線は採用。
+        # ETバーは等電位なので端子順は不問(接続されていれば良い=茂泉様確認)。
+        if earth_present and _is_earth_end(e):
             return True
         # 号線でもアンカー: 台帳の色欄/端子欄に号線が入る場合がある(母線/扉配線/盤外電源 等)。
         # 台帳=基本回路名 vs 図面=枝番付き の差を _gousen_anchored で吸収。
