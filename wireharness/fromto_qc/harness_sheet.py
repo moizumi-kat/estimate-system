@@ -328,6 +328,10 @@ def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None
         # 「中欠用線あり⟺NCVあり」を全製番で実測確認。NCV在れば中欠用線を採用。
         if nzs_present and '中欠' in dev:
             return True
+        # 盤外由来: R-F(P)/L-F(R)＝盤外/盤間の境界中継コネクタ(標準要素)。
+        # 定義上盤外なので図面に対応物は無いが、モデル通り採用(案1・茂泉様確認)。
+        if 'F(P)' in dev or 'F(R)' in dev:
+            return True
         # 号線でもアンカー: 台帳の色欄/端子欄に号線が入る場合がある(母線/扉配線/盤外電源 等)。
         # 台帳=基本回路名 vs 図面=枝番付き の差を _gousen_anchored で吸収。
         for fld in ('color', 'terminal'):
