@@ -136,6 +136,63 @@ def to_csv(sheet, path):
     return path
 
 
+def _parse_harness_wires(harness_paths):
+    """台帳(cp932)を電線レコードに: [{'kind','size','ends':[{color,place,device,no,terminal}]}]。
+    ヘッダ行(c[1]='*')で種別/サイズを更新、以降の端点行を電線ごとに束ねる。"""
+    wires = []
+    for p in harness_paths or []:
+        try:
+            rows = list(csv.reader(open(p, encoding='cp932', errors='replace'), delimiter='\t'))
+        except Exception:
+            continue
+        kind = size = ''
+        buf = []
+        for r in rows:
+            c = [x.strip() for x in (r + [''] * 11)[:11]]
+            if c[1] == '*' and c[3] not in ('', '*'):     # ヘッダ: 種別/サイズ
+                kind, size = c[3], c[4]
+                buf = []
+                continue
+            dev = c[5]
+            if not dev or dev == '*':
+                continue
+            buf.append({'color': c[1] if c[1] not in ('*', '') else '',
+                        'place': c[4], 'device': dev, 'no': c[6], 'terminal': c[7]})
+            if len(buf) == 2:                              # 2端点=1電線
+                wires.append({'kind': kind, 'size': size, 'ends': buf})
+                buf = []
+    return wires
+
+
+def build_sheet_filled(seq_paths, skel_paths=None, seiban='', harness_paths=None):
+    """実運用フロー: 図面抽出でアンカー（1機器でも捕捉）できた電線を、設計セット(台帳/他シート)
+    のフル記載で出力する。図面に相手の無いコネクタ先/扉/外部を突合で補完。
+    戻り: [{'gousen'(空可),'kind','size','wires':[{color,from,to}]}]（台帳書式）。"""
+    skel_paths = skel_paths or []
+    # 図面で捕捉できた機器（アンカー判定用）
+    my_dev = set()
+    for p in list(seq_paths) + list(skel_paths):
+        for g, nd in tracer.trace_nodes(p).items():
+            for (d, t, x, y) in nd['members']:
+                my_dev.add(norm(d))
+    out = []
+    for w in _parse_harness_wires(harness_paths):
+        ends = w['ends']
+        # アンカー: どちらかの端点機器が図面で捕捉済みなら採用
+        if not any(norm(e['device'] + ('-' + e['no'] if e['no'] else '')) in my_dev
+                   or norm(e['device']) in my_dev for e in ends):
+            continue
+        a = ends[0]
+        b = ends[1] if len(ends) > 1 else {'color': '', 'place': '', 'device': '', 'no': '', 'terminal': ''}
+        out.append({'gousen': '', 'kind': w['kind'], 'size': w['size'],
+                    'members': [{'place': e['place'], 'device': e['device'], 'no': e['no'],
+                                 'terminal': e['terminal']} for e in ends],
+                    'wires': [{'color': a.get('color', ''),
+                               'from': {'place': a['place'], 'device': a['device'], 'no': a['no'], 'terminal': a['terminal']},
+                               'to': {'place': b['place'], 'device': b['device'], 'no': b['no'], 'terminal': b['terminal']}}]})
+    return out
+
+
 def place_map_from_harness(harness_paths):
     """台帳の場所列(扉/P等)から 機器キー(norm)→場所 を作る（検証時の場所付与に利用）。"""
     pm = {}
