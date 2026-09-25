@@ -188,6 +188,67 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
                         'ダクト種別': duct_type, 'ダクト有': lay is not None and bool(duct_util)}}
 
 
+def duct_decision(seq_paths, skel_paths=None, seiban='', dct_paths=None, duct_type=None):
+    """標準ダクトに収まらない場合の判断支援(茂泉様):
+      標準ダクトで占有率>32%(=基準超過)なら、ユーザに2案を提示:
+        ① 迂回(capacity)  … 標準ダクトのまま混雑を避けて分散。総配線長が伸びる。
+        ② ダクト昇格      … 一回り大きい型式にする。総配線長は最短のまま、ダクトが大きくなる。
+    戻り: {'seiban','duct_type','fits'(標準で収まるか),
+           'standard':{最短時の総長・最大占有率},
+           'option_detour':{総長・増分・最大占有率} or None,
+           'option_upsize':{型式・断面・最大占有率} or None,
+           'recommend'}"""
+    # 標準ダクト・最短経路での占有率
+    base = route_and_length(seq_paths, skel_paths=skel_paths, seiban=seiban,
+                            dct_paths=dct_paths, topology='connection',
+                            physical='length', duct_type=duct_type)
+    dt = base['duct_type']
+    util = list(base['duct_util'].values())
+    max_util = max(util) if util else 0.0
+    fits = max_util <= 1.0        # util = 使用面積 / (断面×32%)。1.0超=基準32%超過
+    out = {'seiban': seiban, 'duct_type': dt, 'fits': fits,
+           'standard': {'総配線長': base['total_length'], '最大占有率': round(max_util, 2)},
+           'option_detour': None, 'option_upsize': None, 'recommend': None}
+    if fits:
+        out['recommend'] = f'標準ダクト {dt} で基準内(最大占有率{round(max_util*100)}%≤32%枠)。変更不要。'
+        return out
+    # ① 迂回(capacity): 標準ダクトのまま分散し、総長の増分を見る
+    det = route_and_length(seq_paths, skel_paths=skel_paths, seiban=seiban,
+                           dct_paths=dct_paths, topology='connection',
+                           physical='capacity', duct_type=dt)
+    du = list(det['duct_util'].values())
+    out['option_detour'] = {
+        '型式': dt, '総配線長': det['total_length'],
+        '総長増分': round(det['total_length'] - base['total_length'], 1),
+        '最大占有率': round(max(du) if du else 0, 2),
+        '基準内': (max(du) if du else 0) <= 1.0}
+    # ② 昇格: 収まる最小の一回り大きい型式を探す(最短経路で判定)
+    for cand in _router.larger_ducts(dt):
+        up = route_and_length(seq_paths, skel_paths=skel_paths, seiban=seiban,
+                              dct_paths=dct_paths, topology='connection',
+                              physical='length', duct_type=cand)
+        uu = list(up['duct_util'].values())
+        if (max(uu) if uu else 0) <= 1.0:
+            t = _router.DUCT_TYPES[cand]
+            out['option_upsize'] = {'型式': cand, '断面': f"{t['w']}×{t['h']}",
+                                    '総配線長': up['total_length'],
+                                    '最大占有率': round(max(uu) if uu else 0, 2)}
+            break
+    det_ok = bool(out['option_detour'] and out['option_detour']['基準内'])
+    up = out['option_upsize']
+    if det_ok:
+        out['recommend'] = (
+            f"標準ダクト {dt} 超過。①迂回で基準内に収まります（総長+{out['option_detour']['総長増分']}）。"
+            f"総長を伸ばしたくなければ ②昇格({up['型式'] if up else '該当なし'})。ユーザ選択。")
+    else:
+        out['recommend'] = (
+            f"標準ダクト {dt} 超過。①迂回では解消しません（占有率"
+            f"{out['option_detour']['最大占有率'] if out['option_detour'] else '—'}）。"
+            f"②ダクト昇格({up['型式'] if up else '該当なし'}"
+            f"{('・'+up['断面']) if up else ''})が必要です。")
+    return out
+
+
 def to_csv(sheet, path):
     """生成シートをCSV(同フォーマット)で書き出す(harness_sheet.to_csv に委譲)。"""
     return harness_sheet.to_csv(sheet, path)

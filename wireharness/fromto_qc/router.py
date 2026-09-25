@@ -60,6 +60,16 @@ def duct_for_panel(kind):
     return DUCT_BY_PANEL.get(kind, DEFAULT_DUCT_TYPE)
 
 
+# 実効容量(=断面×32%)の昇順。ダクトを「一回り大きく」する昇格順に使う。
+DUCT_ORDER = sorted(DUCT_TYPES, key=lambda t: DUCT_TYPES[t]['area'])
+
+
+def larger_ducts(duct_type):
+    """指定型式より実効容量が大きい型式を昇順で返す（一回り大きい候補）。"""
+    cap = DUCT_TYPES.get(duct_type, {}).get('area', 0)
+    return [t for t in DUCT_ORDER if DUCT_TYPES[t]['area'] > cap]
+
+
 def duct_capacity(duct_type=None):
     """ダクト種別 → 配線に使える実効容量(mm2) = 幅×高さ × 占有率(32%)。"""
     t = DUCT_TYPES.get(duct_type or DEFAULT_DUCT_TYPE)
