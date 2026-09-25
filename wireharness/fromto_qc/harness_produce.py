@@ -124,7 +124,7 @@ def produce(seq_paths, skel_paths=None, seiban='', layout_path=None, strict=True
 
 
 def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
-                     topology='connection', physical='length'):
+                     topology='connection', physical='length', duct_type=None):
     """【次バージョン】1本ずつ「長さ」「ルート」を出す。ルート決定は優先度で選択。
       topology(渡りの張り方): 'connection'=繋ぎ込み数最小(作業性)/'length'=総配線長最小/'duct'
       physical(物理経路):     'length'=各線を最短経路/'capacity'=ダクト平準化(混雑を分散)
@@ -155,7 +155,8 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
     total = 0.0
     duct_util = {}
     if lay is not None and (getattr(lay, 'hducts', None) or getattr(lay, 'vducts', None)):
-        results, total, util = _router.route_wires(flat, lay, priority=physical)
+        results, total, util = _router.route_wires(flat, lay, priority=physical,
+                                                   duct_type=duct_type)
         duct_util = {f'{sorted(e)}': v for e, v in util.items()}
         for w, path, length in results:
             wires_out.append({'gousen': w['gousen'], 'size': w['size'],

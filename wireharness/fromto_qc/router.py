@@ -16,6 +16,25 @@ import math
 WIRE_AREA = {'1.25': 3.5, '2': 5, '3.5': 8, '5.5': 12, '8': 16, '14': 24, '22': 34, '38': 52}
 DEFAULT_AREA = 5.0
 
+# ダクト種別 → 有効断面積(mm2)と許容占有率。制御盤/分電盤は ID36-C-20 / ID38-C-20 を使用。
+# ※ area / fill は社内基準の実値に差し替える（下記は暫定・要・茂泉様の基準値）。
+#   capacity = area * fill = 配線に使える実効容量。
+DUCT_TYPES = {
+    'ID36-C-20': {'area': None, 'fill': None, 'w': 36, 'note': '要社内基準値'},
+    'ID38-C-20': {'area': None, 'fill': None, 'w': 38, 'note': '要社内基準値'},
+}
+DEFAULT_DUCT_TYPE = 'ID38-C-20'
+FALLBACK_DUCT_CAPACITY = 300.0     # 基準値未設定時の暫定容量
+
+
+def duct_capacity(duct_type=None):
+    """ダクト種別 → 配線に使える実効容量(mm2)。基準値未設定なら暫定値。"""
+    t = DUCT_TYPES.get(duct_type or DEFAULT_DUCT_TYPE, {})
+    area, fill = t.get('area'), t.get('fill')
+    if area and fill:
+        return area * fill
+    return FALLBACK_DUCT_CAPACITY
+
 
 def wire_area(size):
     s = str(size).replace('sq', '').strip()
@@ -106,10 +125,12 @@ class DuctNetwork:
         return {e: round(v / self.duct_area, 2) for e, v in self.fill.items()}
 
 
-def route_wires(wires, layout, priority='length'):
+def route_wires(wires, layout, priority='length', duct_type=None):
     """wires: [{'from_pos':(x,y),'to_pos':(x,y),'size':...}] を優先度でルーティング。
-    layout: Layout（hducts と、垂直ダクトVX）。戻り: [(wire, path, length)], 総延長, 占有率。"""
-    net = DuctNetwork(layout.hducts, getattr(layout, 'vducts', []))
+    layout: Layout（hducts と、垂直ダクトVX）。duct_type: 'ID36-C-20'/'ID38-C-20'等（容量に反映）。
+    戻り: [(wire, path, length)], 総延長, 占有率。"""
+    net = DuctNetwork(layout.hducts, getattr(layout, 'vducts', []),
+                      duct_area=duct_capacity(duct_type))
     # 容量優先は混雑を避けるため、太い線から先に確定（貪欲）
     order = sorted(range(len(wires)), key=lambda i: -wire_area(wires[i].get('size', '')))
     if priority != 'capacity':
