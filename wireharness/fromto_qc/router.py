@@ -120,8 +120,11 @@ class DuctNetwork:
         if priority == 'capacity':
             e = frozenset((a, b))
             used = self.fill.get(e, 0.0)
-            over = max(0.0, (used + area) - self.duct_area)
-            return base + over * 5.0        # 容量超過を強く忌避（迂回を促す）
+            # この線を通すと基準(32%枠=duct_area)を超えるなら大コストで迂回を強制。
+            # (超過幅に比例＋固定の大ペナルティ。空き区間があれば必ずそちらへ回る)
+            if used + area > self.duct_area:
+                over = (used + area) - self.duct_area
+                return base + 100000.0 + over * 50.0
         return base
 
     def route(self, p_from, p_to, area=DEFAULT_AREA, priority='length'):

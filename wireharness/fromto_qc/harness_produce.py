@@ -217,9 +217,14 @@ def duct_decision(seq_paths, skel_paths=None, seiban='', dct_paths=None, duct_ty
                            dct_paths=dct_paths, topology='connection',
                            physical='capacity', duct_type=dt)
     du = list(det['duct_util'].values())
+    base_len = base['total_length']
+    inc = round(det['total_length'] - base_len, 1)
     out['option_detour'] = {
-        '型式': dt, '総配線長': det['total_length'],
-        '総長増分': round(det['total_length'] - base['total_length'], 1),
+        '型式': dt,
+        '総配線長(標準最短)': base_len,
+        '総配線長(迂回後)': det['total_length'],
+        '総長増分': inc,
+        '総長増加率%': round(inc / base_len * 100, 1) if base_len else 0.0,
         '最大占有率': round(max(du) if du else 0, 2),
         '基準内': (max(du) if du else 0) <= 1.0}
     # ② 昇格: 収まる最小の一回り大きい型式を探す(最短経路で判定)
@@ -234,18 +239,22 @@ def duct_decision(seq_paths, skel_paths=None, seiban='', dct_paths=None, duct_ty
                                     '総配線長': up['total_length'],
                                     '最大占有率': round(max(uu) if uu else 0, 2)}
             break
-    det_ok = bool(out['option_detour'] and out['option_detour']['基準内'])
+    det = out['option_detour']
+    det_ok = bool(det and det['基準内'])
     up = out['option_upsize']
+    det_len = (f"総長 {det['総配線長(標準最短)']}→{det['総配線長(迂回後)']} "
+               f"(+{det['総長増分']}, +{det['総長増加率%']}%)") if det else '—'
     if det_ok:
         out['recommend'] = (
-            f"標準ダクト {dt} 超過。①迂回で基準内に収まります（総長+{out['option_detour']['総長増分']}）。"
-            f"総長を伸ばしたくなければ ②昇格({up['型式'] if up else '該当なし'})。ユーザ選択。")
+            f"標準ダクト {dt} 超過。①迂回で基準内に収まります: {det_len}。"
+            f"総長を伸ばしたくなければ ②昇格({up['型式'] if up else '該当なし'}"
+            f"{('・'+up['断面']) if up else ''}, 総長は最短のまま)。ユーザ選択。")
     else:
         out['recommend'] = (
-            f"標準ダクト {dt} 超過。①迂回では解消しません（占有率"
-            f"{out['option_detour']['最大占有率'] if out['option_detour'] else '—'}）。"
-            f"②ダクト昇格({up['型式'] if up else '該当なし'}"
-            f"{('・'+up['断面']) if up else ''})が必要です。")
+            f"標準ダクト {dt} 超過。①迂回では基準内に収まりません（{det_len}／占有率"
+            f"{det['最大占有率'] if det else '—'}）。②ダクト昇格が必要: "
+            f"{up['型式'] if up else '該当なし'}{('・'+up['断面']) if up else ''}"
+            f"{('（総長は最短 '+str(up['総配線長'])+'）') if up else ''}。")
     return out
 
 
