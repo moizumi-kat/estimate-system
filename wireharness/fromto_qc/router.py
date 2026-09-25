@@ -48,9 +48,9 @@ DUCT_TYPES = {
     for name, (wh, counts) in _TABLE31.items()
 }
 # 盤種別ごとの主使用ダクト(茂泉様)。電線数が多い制御盤は大きい方を使う。
-#   制御盤 = ID48-C-20(40×80=3200mm2)、分電盤 = ID38-C-20(30×80=2400mm2)。
-DUCT_BY_PANEL = {'制御盤': 'ID48-C-20', '分電盤': 'ID38-C-20'}
-PANEL_DUCT_TYPES = ('ID48-C-20', 'ID38-C-20')
+#   制御盤 = ID48-C-20(40×80=3200mm2)、分電盤 = ID36-C-20(30×60=1800mm2)。
+DUCT_BY_PANEL = {'制御盤': 'ID48-C-20', '分電盤': 'ID36-C-20'}
+PANEL_DUCT_TYPES = ('ID48-C-20', 'ID36-C-20')
 DEFAULT_DUCT_TYPE = 'ID48-C-20'
 FALLBACK_DUCT_CAPACITY = DUCT_TYPES['ID48-C-20']['area'] * DUCT_FILL_RATE
 
