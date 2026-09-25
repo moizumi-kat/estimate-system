@@ -47,10 +47,17 @@ DUCT_TYPES = {
            'allow': dict(zip(_SIZES, counts))}
     for name, (wh, counts) in _TABLE31.items()
 }
-# 制御盤/分電盤で使用する2種。ID38(30×80)を既定(容量が大きい方)。
-PANEL_DUCT_TYPES = ('ID36-C-20', 'ID38-C-20')
-DEFAULT_DUCT_TYPE = 'ID38-C-20'
-FALLBACK_DUCT_CAPACITY = DUCT_TYPES['ID38-C-20']['area'] * DUCT_FILL_RATE
+# 盤種別ごとの主使用ダクト(茂泉様)。電線数が多い制御盤は大きい方を使う。
+#   制御盤 = ID48-C-20(40×80=3200mm2)、分電盤 = ID38-C-20(30×80=2400mm2)。
+DUCT_BY_PANEL = {'制御盤': 'ID48-C-20', '分電盤': 'ID38-C-20'}
+PANEL_DUCT_TYPES = ('ID48-C-20', 'ID38-C-20')
+DEFAULT_DUCT_TYPE = 'ID48-C-20'
+FALLBACK_DUCT_CAPACITY = DUCT_TYPES['ID48-C-20']['area'] * DUCT_FILL_RATE
+
+
+def duct_for_panel(kind):
+    """盤種別('制御盤'/'分電盤') → 主使用ダクト型式。不明時は既定(制御盤=ID48)。"""
+    return DUCT_BY_PANEL.get(kind, DEFAULT_DUCT_TYPE)
 
 
 def duct_capacity(duct_type=None):

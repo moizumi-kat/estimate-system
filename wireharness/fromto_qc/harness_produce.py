@@ -132,6 +132,16 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
     戻り: {'seiban','priority','wires':[{gousen,from,to,size,length,route}],
            'total_length','duct_util','summary'}"""
     from .layout import Layout
+    # ダクト型式: 明示が無ければ盤種別で自動選択(制御盤=ID48/分電盤=ID38)。
+    # 分電盤はH系シート(結線図)を使うので、パスにH*があれば分電盤とみなす。
+    if duct_type is None:
+        import os as _os
+        import re as _re
+        # 分電盤は結線図H系/外形図G系シートを使う。ファイル名(basename)で判定。
+        is_haiden = any(_re.search(r'-[HG]\d', _os.path.basename(str(p)).upper())
+                        for p in list(seq_paths) + list(skel_paths or []))
+        kind = '分電盤' if is_haiden else '制御盤'
+        duct_type = _router.duct_for_panel(kind)
     sheet = harness_sheet.build_sheet(seq_paths, skel_paths=skel_paths, seiban=seiban,
                                       priority=topology)
     # 電線(端点座標つき)を集める
@@ -172,9 +182,10 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
                               'from': w['from'], 'to': w['to'],
                               'length': round(length, 1), 'route': [list(fp), list(tp)]})
     return {'seiban': seiban, 'priority': {'topology': topology, 'physical': physical},
-            'wires': wires_out, 'total_length': round(total, 1), 'duct_util': duct_util,
+            'duct_type': duct_type, 'wires': wires_out,
+            'total_length': round(total, 1), 'duct_util': duct_util,
             'summary': {'電線数': len(wires_out), '総配線長': round(total, 1),
-                        'ダクト有': lay is not None and bool(duct_util)}}
+                        'ダクト種別': duct_type, 'ダクト有': lay is not None and bool(duct_util)}}
 
 
 def to_csv(sheet, path):
