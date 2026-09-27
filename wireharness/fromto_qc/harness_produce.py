@@ -150,6 +150,7 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
         for wi in r['wires']:
             if wi.get('from_pos') and wi.get('to_pos'):
                 flat.append({'gousen': r['gousen'], 'kind': r['kind'], 'size': r['size'],
+                             'color': wi.get('color', ''),
                              'from': wi['from'], 'to': wi['to'],
                              'from_pos': wi['from_pos'], 'to_pos': wi['to_pos']})
     # ダクト網(配置図)
@@ -169,7 +170,8 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
                                                    duct_type=duct_type)
         duct_util = {f'{sorted(e)}': v for e, v in util.items()}
         for w, path, length in results:
-            wires_out.append({'gousen': w['gousen'], 'size': w['size'],
+            wires_out.append({'gousen': w['gousen'], 'kind': w.get('kind', ''),
+                              'size': w['size'], 'color': w.get('color', ''),
                               'from': w['from'], 'to': w['to'],
                               'length': round(length, 1), 'route': [list(p) for p in path]})
     else:
@@ -178,7 +180,8 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
             fp, tp = w['from_pos'], w['to_pos']
             length = abs(fp[0] - tp[0]) + abs(fp[1] - tp[1])
             total += length
-            wires_out.append({'gousen': w['gousen'], 'size': w['size'],
+            wires_out.append({'gousen': w['gousen'], 'kind': w.get('kind', ''),
+                              'size': w['size'], 'color': w.get('color', ''),
                               'from': w['from'], 'to': w['to'],
                               'length': round(length, 1), 'route': [list(fp), list(tp)]})
     return {'seiban': seiban, 'priority': {'topology': topology, 'physical': physical},
@@ -264,14 +267,69 @@ def to_csv(sheet, path):
 
 
 def length_to_csv(routed, path):
-    """route_and_length の結果を「1本ずつ 長さ・ルート」CSV(cp932)で書き出す。"""
+    """route_and_length の結果を、人手ハーネスと同じ列＋測長で書き出す(cp932)。
+    列: 号線/種別/サイズ/色/From(場所,機器,番号,端子)/To(...)/測長/ルート節点数。"""
     import csv
     with open(path, 'w', encoding='cp932', errors='replace', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['号線', 'サイズ', 'From機器', 'From番号', 'From端子',
-                    'To機器', 'To番号', 'To端子', '測長', 'ルート(節点数)'])
+        w.writerow(['号線', '種別', 'サイズ', '色',
+                    'From場所', 'From機器', 'From番号', 'From端子',
+                    'To場所', 'To機器', 'To番号', 'To端子', '測長', 'ルート節点'])
         for wi in routed['wires']:
             fr, to = wi['from'], wi['to']
-            w.writerow([wi['gousen'], wi['size'], fr['device'], fr['no'], fr['terminal'],
-                        to['device'], to['no'], to['terminal'], wi['length'], len(wi['route'])])
+            w.writerow([wi['gousen'], wi.get('kind', ''), wi['size'], wi.get('color', ''),
+                        fr.get('place', ''), fr['device'], fr['no'], fr['terminal'],
+                        to.get('place', ''), to['device'], to['no'], to['terminal'],
+                        wi['length'], len(wi['route'])])
     return path
+
+
+def _classify_seiban_files(files):
+    """製番のDXF群を seq(シーケンス/結線図 F*/H*)・skel(スケルトン/外形 E*/G0*)・
+    dct(内部配置図 *DCT*) に振り分ける（ファイル名規約）。戻り: (seq, skel, dct)。"""
+    import os as _os
+    import re as _re
+    seq, skel, dct = [], [], []
+    for p in files:
+        b = _os.path.basename(str(p)).upper()
+        if 'DCT' in b:
+            dct.append(p)
+        elif _re.search(r'-[FH]\d', b):
+            seq.append(p)
+        elif _re.search(r'-[EG]\d', b):
+            skel.append(p)
+    return sorted(seq), sorted(skel), sorted(dct)
+
+
+def produce_seiban(files, seiban='', out_dir='.', topology='connection', physical='length'):
+    """【本番エントリ】新しい製番の図面群 → 人手ハーネス相当のハーネスデータを出力する。
+    files: その製番のDXF一式(F/H=結線,E/G=スケルトン/外形,DCT=配置図)。
+    生成物: <seiban>_ハーネス.csv(号線/種別/サイズ/色/From-To/測長/ルート)、
+            <seiban>_不備.csv(端子台番号未記入 等)。
+    戻り: {seiban, files:{harness_csv, defects_csv}, summary, duct_decision}。"""
+    import os as _os
+    import csv as _csv
+    seq, skel, dct = _classify_seiban_files(files)
+    routed = route_and_length(seq, skel_paths=skel, seiban=seiban, dct_paths=dct,
+                              topology=topology, physical=physical)
+    dfx = terminal_number_defects(seq, skel_paths=skel, seiban=seiban)
+    dec = duct_decision(seq, skel_paths=skel, seiban=seiban, dct_paths=dct)
+    _os.makedirs(out_dir, exist_ok=True)
+    base = seiban or 'harness'
+    hcsv = _os.path.join(out_dir, f'{base}_ハーネス.csv')
+    length_to_csv(routed, hcsv)
+    dcsv = _os.path.join(out_dir, f'{base}_不備.csv')
+    with open(dcsv, 'w', encoding='cp932', errors='replace', newline='') as f:
+        w = _csv.writer(f)
+        w.writerow(['種類', '仮番号', '位置x', '位置y', '接続号線', '修正案'])
+        for it in dfx['items']:
+            w.writerow(['端子台番号未記入', it['provisional'], it['position']['x'],
+                        it['position']['y'], '／'.join(map(str, it['gousen'])), it['fix']])
+    return {'seiban': seiban,
+            'files': {'harness_csv': hcsv, 'defects_csv': dcsv},
+            'summary': {'電線数': routed['summary']['電線数'],
+                        '総配線長': routed['total_length'],
+                        'ダクト種別': routed['duct_type'],
+                        '端子台番号未記入': dfx['count'],
+                        'seq数': len(seq), 'skel数': len(skel), 'dct数': len(dct)},
+            'duct_decision': dec['recommend']}
