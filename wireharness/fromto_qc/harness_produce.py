@@ -445,7 +445,7 @@ def device_correspondence(files, seiban='', out_dir=None):
         fp = _os.path.join(out_dir, f"{seiban or 'harness'}_機器対応表.csv")
         with open(fp, 'w', encoding='cp932', errors='replace', newline='') as f:
             w = _csv.writer(f)
-            w.writerow(['正式機器名', '盤内アドレス', '位置x', '位置y', 'シート', '仮機器名(決定的)'])
+            w.writerow(['正式機器名', 'ロケータ', '位置x', '位置y', 'シート', '仮機器名(決定的)'])
             for it in items:
                 w.writerow([it['正式名'], it['盤内アドレス'], it['x'], it['y'],
                             it['シート'], it['仮名']])
@@ -547,7 +547,7 @@ def reconcile_legacy(dxf_paths, sheet_txt_paths, seiban='', out_dir=None):
         fp = _os.path.join(out_dir, f"{seiban or 'legacy'}_機器対応表.csv")
         with open(fp, 'w', encoding='cp932', errors='replace', newline='') as f:
             w = _csv.writer(f)
-            w.writerow(['正式機器名', '盤内アドレス', '位置x', '位置y', 'PARTS',
+            w.writerow(['正式機器名', 'ロケータ', '位置x', '位置y', 'PARTS',
                         'シート', '仮名(決定的)', 'ハーネス出現', '同名複数'])
             for it in items:
                 w.writerow([it['正式名'], it['盤内アドレス'], it['x'], it['y'],
@@ -581,8 +581,8 @@ def length_to_csv(routed, path, addr_map=None):
     with open(path, 'w', encoding='cp932', errors='replace', newline='') as f:
         w = csv.writer(f)
         w.writerow(['号線', '種別', 'サイズ', '色',
-                    'From場所', 'From機器', 'From番号', 'From端子', 'From盤内アドレス',
-                    'To場所', 'To機器', 'To番号', 'To端子', 'To盤内アドレス',
+                    'From場所', 'From機器', 'From番号', 'From端子', 'Fromロケータ',
+                    'To場所', 'To機器', 'To番号', 'To端子', 'Toロケータ',
                     '測長', 'ルート節点'])
         for wi in routed['wires']:
             fr, to = wi['from'], wi['to']
