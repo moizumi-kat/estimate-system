@@ -13,6 +13,7 @@
 import os
 import json
 from .geometry import norm
+from .layout import DOOR_BASE
 from . import harness_learn as HL
 
 
@@ -21,7 +22,13 @@ def _crimp_known(size, device):
     return f'{size}|{norm(device)}' in t
 
 
-def build_review_data(routed, addr_map=None, ec=None, seiban=''):
+def _is_door(device):
+    """扉付け機器(計器・表示灯・スイッチ等)か。内部配置図(取付板)には載らず扉面に付く。"""
+    base = ''.join(ch for ch in str(device).split('-')[0] if not ch.isdigit())
+    return device in DOOR_BASE or base in DOOR_BASE
+
+
+def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
     """route_and_length の結果 → レビュー表用の行データ(要確認フラグ付き)。"""
     am = addr_map or {}
     shorts = set()
@@ -37,6 +44,12 @@ def build_review_data(routed, addr_map=None, ec=None, seiban=''):
         no = e.get('no', '')
         term = e.get('terminal', '')
         loc = am.get(norm(dev(e)), '') or am.get(norm(d), '')
+        place = e.get('place', '')
+        # 扉付け機器で配置図に位置が無いものは、手本に倣い 場所/ロケータ＝『扉』。
+        # (配置図に実在してロケータが取れる機器はその値を優先＝上書きしない)
+        if not loc and _is_door(d):
+            loc = '扉'
+            place = place or '扉'
         crimp = HL.crimp_of(size, d)
         known = _crimp_known(size, d)
         flags = []
@@ -54,7 +67,7 @@ def build_review_data(routed, addr_map=None, ec=None, seiban=''):
             flags.append('TB仮番号')
         if (norm(d), norm(term)) in shorts:
             flags.append('電気QC')
-        return {'place': e.get('place', ''), 'device': d, 'no': no, 'terminal': term,
+        return {'place': place, 'device': d, 'no': no, 'terminal': term,
                 'loc': loc, 'crimp': crimp, 'crimp_known': known, 'flags': flags}
 
     rows = []
@@ -81,13 +94,15 @@ def build_review_data(routed, addr_map=None, ec=None, seiban=''):
         'total_length': routed.get('total_length', ''),
         'duct_type': routed.get('duct_type', ''),
         'need_confirm': sum(1 for r in rows if r['flags']),
+        'defects': list(defects or []),
     }
     return {'meta': meta, 'rows': rows}
 
 
-def to_review_html(routed, path, seiban='', addr_map=None, ec=None):
-    """レビューUI(表＋要確認＋編集＋固定ラベル出力)の自己完結HTMLを書き出す。"""
-    data = build_review_data(routed, addr_map=addr_map, ec=ec, seiban=seiban)
+def to_review_html(routed, path, seiban='', addr_map=None, ec=None, defects=None):
+    """レビューUI(表＋要確認＋編集＋固定ラベル出力)の自己完結HTMLを書き出す。
+    defects: design_feedback の items（前工程へ提示する図面不備）。ハーネス確定前に上部提示する。"""
+    data = build_review_data(routed, addr_map=addr_map, ec=ec, seiban=seiban, defects=defects)
     html = _TEMPLATE.replace('/*__DATA__*/null',
                              json.dumps(data, ensure_ascii=False))
     with open(path, 'w', encoding='utf-8') as f:
@@ -140,6 +155,13 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
   .grid input,.grid select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:6px}
   .hint{color:var(--muted);font-size:12px}
   details summary{cursor:pointer;font-weight:700;margin-bottom:6px}
+  .defects{border:1px solid var(--line);border-radius:9px;margin-bottom:12px;overflow:hidden}
+  .defects .dh{padding:9px 12px;font-weight:700}
+  .defects.bad .dh{background:#fdecea;color:#8a1c12;border-bottom:1px solid #f3c9c3}
+  .defects.good .dh{background:#e9f7ee;color:#0a6b2e}
+  .defects table{width:100%}
+  .defects th{position:static;background:#fbeae7}
+  .defects .fix{color:#555}
 </style></head><body>
 <header>
   <h1>ハーネス生成データ 確認 <span id="sb" class="muted"></span></h1>
@@ -154,6 +176,8 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
   <button class="primary" id="btn-out" disabled>シート出力 ▶</button>
 </header>
 <div class="wrap">
+
+  <section id="defects" class="defects"></section>
 
   <details class="panel" id="geo">
     <summary>ラベルシール規格（固定台紙に合わせる）</summary>
@@ -201,6 +225,20 @@ document.getElementById('k-duct').textContent = meta.duct_type || '-';
 document.getElementById('k-need').textContent = meta.need_confirm;
 
 function esc(s){return (''+ (s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// 設計不備をハーネス確定前に上部提示(前工程へ)
+(function renderDefects(){
+  var d=meta.defects||[], box=document.getElementById('defects');
+  if(!d.length){ box.className='defects good';
+    box.innerHTML='<div class="dh">✔ 図面の設計不備は検出されませんでした（ハーネスデータ作成に進めます）</div>'; return; }
+  box.className='defects bad';
+  var rows=d.map(function(it){return '<tr><td>'+esc(it['分類'])+'</td><td>'+esc(it['該当'])
+    +'</td><td>'+esc(it['号線'])+'</td><td class="fix">'+esc(it['解決案'])+'</td></tr>';}).join('');
+  box.innerHTML='<div class="dh">⚠ 設計不備 '+d.length+' 件 — 先に前工程（設計）へ提示・解決してください。'
+    +'（未記入の端子等はロケータも付きません）</div>'
+    +'<table><thead><tr><th>分類</th><th>該当箇所</th><th>号線</th><th>設計への解決案</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody></table>';
+})();
 function inp(val, cls, oninput){var v=esc(val); return '<input class="'+cls+'" value="'+v+'"'+(oninput?' data-k="'+oninput+'"':'')+'>';}
 
 function endCells(r, side){

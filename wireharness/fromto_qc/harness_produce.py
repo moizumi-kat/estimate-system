@@ -609,7 +609,16 @@ def to_harness_txt(routed, path, seiban='', addr_map=None, encoding='utf-8-sig')
     既定は UTF-8(BOM) 出力(画面・Excelで文字化けしない)。社内ソフト取込用に encoding='cp932' も可。
     """
     from . import harness_learn as _HL
+    from .layout import DOOR_BASE as _DOOR
     am = addr_map or {}
+
+    def _door(dv):
+        b = ''.join(ch for ch in str(dv).split('-')[0] if not ch.isdigit())
+        return dv in _DOOR or b in _DOOR
+
+    def _place(e):
+        # 手本に倣い、扉付け機器で場所未指定なら『扉』(内部配置図に無いのが正常)
+        return e.get('place', '') or ('扉' if _door(e.get('device', '')) else '')
 
     def row(cells):
         c = (list(cells) + [''] * 11)[:11]
@@ -633,7 +642,7 @@ def to_harness_txt(routed, path, seiban='', addr_map=None, encoding='utf-8-sig')
         g = gname(w)
         for e in (w['from'], w['to']):
             crimp = _HL.crimp_of(size, e.get('device', ''))   # (サイズ,機器)→圧着(学習)
-            lines.append(row(['', g, '*', crimp, e.get('place', ''),
+            lines.append(row(['', g, '*', crimp, _place(e),
                               e.get('device', ''), e.get('no', ''), e.get('terminal', '')]))
     with open(path, 'w', encoding=encoding, newline='') as f:
         f.write('\r\n'.join(lines) + '\r\n')
@@ -790,7 +799,8 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     # 生成データ確認UI(表＋要確認＋編集＋固定ラベル出力ボタン)
     from . import review as _review
     rvw = _os.path.join(out_dir, f'{base}_確認.html')
-    _review.to_review_html(routed, rvw, seiban=seiban, addr_map=amap, ec=ec)
+    _review.to_review_html(routed, rvw, seiban=seiban, addr_map=amap, ec=ec,
+                           defects=fb.get('items'))
     return {'seiban': seiban,
             'files': {'review_html': rvw, 'harness_txt': htxt, 'harness_csv': hcsv,
                       'label_sheet_html': lbl,
