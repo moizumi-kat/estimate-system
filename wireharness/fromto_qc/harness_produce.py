@@ -508,12 +508,17 @@ def _classify_seiban_files(files):
     import re as _re
     seq, skel, dct = [], [], []
     for p in files:
-        b = _os.path.basename(str(p)).upper()
-        if 'DCT' in b:
+        bn = _os.path.basename(str(p))
+        b = bn.upper()
+        # 内部配置図/外形図/DCT/D図 = 配置図(盤内アドレス用)
+        if ('DCT' in b or '内部配置' in bn or '外形' in bn or '配置図' in bn
+                or _re.search(r'-D\d', b)):
             dct.append(p)
-        elif _re.search(r'-[FH]\d', b):
+        # シーケンス/結線図/展開接続図 = seq
+        elif 'シーケンス' in bn or '結線' in bn or '展開' in bn or _re.search(r'-[FH]\d', b):
             seq.append(p)
-        elif _re.search(r'-[EG]\d', b):
+        # スケルトン/系統図 = skel
+        elif 'スケルトン' in bn or '系統' in bn or _re.search(r'-[EG]\d', b):
             skel.append(p)
     return sorted(seq), sorted(skel), sorted(dct)
 
