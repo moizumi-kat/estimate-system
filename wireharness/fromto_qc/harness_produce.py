@@ -134,16 +134,19 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
     from .layout import Layout
     # ダクト型式: 明示が無ければ盤種別で自動選択(制御盤=ID48/分電盤=ID38)。
     # 分電盤はH系シート(結線図)を使うので、パスにH*があれば分電盤とみなす。
+    import os as _os
+    import re as _re
+    # 盤種別(分電盤=結線図H系/外形図G系, 他=制御盤)。ダクト型式＋学習した標準電線に使う。
+    is_haiden = any(_re.search(r'-[HG]\d', _os.path.basename(str(p)).upper())
+                    for p in list(seq_paths) + list(skel_paths or []))
+    kind = '分電盤' if is_haiden else '制御盤'
     if duct_type is None:
-        import os as _os
-        import re as _re
-        # 分電盤は結線図H系/外形図G系シートを使う。ファイル名(basename)で判定。
-        is_haiden = any(_re.search(r'-[HG]\d', _os.path.basename(str(p)).upper())
-                        for p in list(seq_paths) + list(skel_paths or []))
-        kind = '分電盤' if is_haiden else '制御盤'
         duct_type = _router.duct_for_panel(kind)
+    # 過去台帳から学習した盤別標準電線(未記入号線の補完に使用)
+    from . import harness_learn
+    dflt_wire = harness_learn.default_wire(kind)
     sheet = harness_sheet.build_sheet(seq_paths, skel_paths=skel_paths, seiban=seiban,
-                                      priority=topology)
+                                      priority=topology, default_wire=dflt_wire)
     # 電線(端点座標つき)を集める
     flat = []
     for r in sheet:

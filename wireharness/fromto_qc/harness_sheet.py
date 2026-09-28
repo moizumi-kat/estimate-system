@@ -77,13 +77,17 @@ def _circuit_of(gousen):
     return m.group(1) if m else ''
 
 
-def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='connection'):
+def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='connection',
+                default_wire=None):
     """ハーネスシートの電線レコードを生成。
     戻り: [{'gousen','kind','size','wires':[{'color','from':{place,device,no,terminal},'to':{...}}]}]
     place_of: 機器キー(norm)→場所 の辞書（台帳や配置図から作る。無ければ空欄）。
     priority: 渡り(ルート)の最適化基準。'connection'=繋ぎ込み数最小(既定・作業性最優先)/
-              'length'=総配線長最小/'duct'=ダクト平準化(将来)。"""
+              'length'=総配線長最小/'duct'=ダクト平準化(将来)。
+    default_wire: 未記入号線に補完する標準電線(種別,サイズ)。None なら DEFAULT_WIRE。
+                  過去台帳から学習した盤別標準(harness_learn.default_wire)を渡せる。"""
     skel_paths = skel_paths or []
+    dflt = tuple(default_wire) if default_wire else DEFAULT_WIRE
     specs = _wire_specs(list(seq_paths) + list(skel_paths))
     place_of = place_of or {}
 
@@ -139,7 +143,7 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
         circ = _circuit_of(g)
         # 図面に個別指定があればそれ、無ければ制御標準(HIV/1.25)を補完(要確認)。
         # アース号線(末尾E/緑)は緑・IV相当だが色は _color_of が付ける。
-        kind, size = specs.get(norm(circ)) or specs.get(norm(g)) or DEFAULT_WIRE
+        kind, size = specs.get(norm(circ)) or specs.get(norm(g)) or dflt
         wires = []
         for a, b in _route.optimize_watari(terms, priority):
             ma, mb = idx[a], idx[b]
