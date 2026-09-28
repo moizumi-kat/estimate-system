@@ -11,6 +11,7 @@
      各マスに収まるようフォントは自動縮小(二分探索)。
 """
 import os
+import re
 import json
 from .geometry import norm
 from .layout import DOOR_BASE
@@ -43,6 +44,9 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
         d = e.get('device', '')
         no = e.get('no', '')
         term = e.get('terminal', '')
+        # TB端子番号は製造アサイン(茂泉様/手本準拠)。仮Nは表示せず空欄にし、製造が付番/確認する。
+        if re.match(r'^仮\d', str(no)):
+            no = ''
         loc = am.get(norm(dev(e)), '') or am.get(norm(d), '')
         place = e.get('place', '')
         # 扉付け機器で配置図に位置が無いものは、手本に倣い 場所/ロケータ＝『扉』。
@@ -63,8 +67,9 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
             big = False
         if not known and big:
             flags.append('圧着未確定')
-        if '仮' in (d + no) or term in ('', '?'):
-            flags.append('TB仮番号')
+        # TB端子は製造アサイン(台番号/端子番号を製造が付与)。台/端子が未確定なTBを対象。
+        if norm(d) == 'TB' and (not no or term in ('', '?')):
+            flags.append('TB端子(製造アサイン)')
         if (norm(d), norm(term)) in shorts:
             flags.append('電気QC')
         return {'place': place, 'device': d, 'no': no, 'terminal': term,

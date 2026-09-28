@@ -319,13 +319,10 @@ def design_feedback(seq_paths, skel_paths=None, seiban='', out_dir=None):
     端子台番号未記入・電線サイズ未記入・浮き線端・短絡疑い 等を集約。
     out_dir 指定時は <製番>_設計指摘書.csv も出力。戻り: {'seiban','items','summary'}。"""
     items = []
-    # 端子台番号 未記入
+    # 注) 端子台の端子番号は『設計不備』ではなく『製造アサイン』(茂泉様)。
+    #     手本のハーネスシートでも製造が台番号を付与し、制御線の端子は空欄のまま。
+    #     よって設計指摘には載せず、mfg_assign(製造アサイン枠)として別途返す。
     tn = terminal_number_defects(seq_paths, skel_paths=skel_paths, seiban=seiban)
-    for it in tn['items']:
-        title, fix = _DESIGN_FIX['terminal_no']
-        items.append({'分類': title, '該当': f"仮{str(it['provisional']).replace('仮','')}"
-                      f"@({it['position']['x']},{it['position']['y']})",
-                      '号線': '／'.join(map(str, it['gousen'])), '解決案': fix})
     # 電線サイズ 未記入(DENSEN='sq' 等) の号線
     import ezdxf as _ez
     size_missing = set()
@@ -359,9 +356,9 @@ def design_feedback(seq_paths, skel_paths=None, seiban='', out_dir=None):
                           '号線': '／'.join(map(str, gs)), '解決案': fix})
     # ※短絡疑い(同一端子が複数号線)は トレーサのノード形成の曖昧さを多く含み、
     #   設計の不備とは限らないため設計指摘書には載せない(内部QCの electrical_check で扱う)。
-    out = {'seiban': seiban, 'items': items,
+    out = {'seiban': seiban, 'items': items, 'mfg_assign': tn['items'],
            'summary': {'指摘件数': len(items),
-                       '端子台番号未記入': tn['count'],
+                       'TB端子_製造アサイン': tn['count'],
                        '電線サイズ未記入回路': len(size_missing),
                        '浮き線端': catc.get('float', 0), '近接ギャップ': catc.get('near', 0)}}
     if out_dir:
@@ -642,8 +639,11 @@ def to_harness_txt(routed, path, seiban='', addr_map=None, encoding='utf-8-sig')
         g = gname(w)
         for e in (w['from'], w['to']):
             crimp = _HL.crimp_of(size, e.get('device', ''))   # (サイズ,機器)→圧着(学習)
+            no = e.get('no', '')
+            if re.match(r'^仮\d', str(no)):     # TB端子は製造アサイン。仮Nは出さず空欄(手本準拠)
+                no = ''
             lines.append(row(['', g, '*', crimp, _place(e),
-                              e.get('device', ''), e.get('no', ''), e.get('terminal', '')]))
+                              e.get('device', ''), no, e.get('terminal', '')]))
     with open(path, 'w', encoding=encoding, newline='') as f:
         f.write('\r\n'.join(lines) + '\r\n')
     return path
