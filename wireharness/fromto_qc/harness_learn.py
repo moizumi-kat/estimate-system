@@ -170,19 +170,42 @@ def learn_crimp(sheet_txt_paths, min_n=3, min_conf=0.7, save=True):
         conf = v / n if n else 0
         if n >= min_n and conf >= min_conf:
             table[f'{sz}|{dev}'] = [val, round(conf, 3), n]
+    # 機器横断フォールバック: 圧着端子サイズ≒ネジ径は機器の端子で決まり、電線サイズにほぼ非依存。
+    # (サイズ,機器) に該当が無い時のため、機器ごとの最頻圧着も学習(空欄も1票として扱う)。
+    by_dev = collections.defaultdict(collections.Counter)
+    for (sz, dev), cnt in tally.items():
+        by_dev[dev] += cnt
+    dev_table = {}
+    for dev, cnt in by_dev.items():
+        n = sum(cnt.values())
+        val, v = cnt.most_common(1)[0]
+        conf = v / n if n else 0
+        if n >= min_n and conf >= min_conf:
+            dev_table[dev] = [val, round(conf, 3), n]
     if save:
         k = load()
         k['crimp_table'] = table
+        k['crimp_by_device'] = dev_table
         with open(LEARNED_PATH, 'w', encoding='utf-8') as f:
             json.dump(k, f, ensure_ascii=False, indent=1)
     return table
 
 
 def crimp_of(size, device):
-    """学習済み (電線サイズ, 機器)→圧着端子サイズ。無ければ ''（空欄＝出さない）。"""
-    t = load().get('crimp_table', {})
-    v = t.get(f'{size}|{norm(device)}')
-    return v[0] if v else ''
+    """学習済み 圧着端子サイズ。まず (サイズ,機器)、無ければ (機器)横断。共に無ければ ''。"""
+    k = load()
+    v = k.get('crimp_table', {}).get(f'{size}|{norm(device)}')
+    if v:
+        return v[0]
+    d = k.get('crimp_by_device', {}).get(norm(device))
+    return d[0] if d else ''
+
+
+def crimp_known(size, device):
+    """圧着が学習で確定できるか((サイズ,機器) or (機器)横断で該当)。"""
+    k = load()
+    return (f'{size}|{norm(device)}' in k.get('crimp_table', {})
+            or norm(device) in k.get('crimp_by_device', {}))
 
 
 def wire_type(kind, gousen='', color=''):

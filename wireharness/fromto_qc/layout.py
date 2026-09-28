@@ -237,7 +237,16 @@ class Layout:
 
     # ---- 提供メソッド ----
     def device_pos(self, name):
-        return self.devices.get(norm(name))
+        n = norm(name)
+        if n in self.devices:
+            return self.devices[n]
+        # 保守的フォールバック: 回路図の器具名(例 F-1)に対し、配置図が DEVICE 単独キー(例 F)
+        # を持つ場合のみ採用。接頭の当て推量(OL-102→OLAL1 等)はしない(誤マッチ防止)。
+        base = str(name).split('-')[0]
+        nb = norm(base)
+        if nb and nb != n and nb in self.devices:
+            return self.devices[nb]
+        return None
 
     def panel_of(self, name):
         p = self.device_pos(name)

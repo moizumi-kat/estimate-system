@@ -29,6 +29,12 @@ def _is_door(device):
     return device in DOOR_BASE or base in DOOR_BASE
 
 
+def _is_boundary(device):
+    """盤外/盤間の境界中継コネクタ(R-F(P)/L-F(R)/F(P)/F(R))。盤内に位置は無い(=盤外)。"""
+    d = str(device)
+    return 'F(P)' in d or 'F(R)' in d or d.startswith('R-F') or d.startswith('L-F') or '盤外' in d
+
+
 def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
     """route_and_length の結果 → レビュー表用の行データ(要確認フラグ付き)。"""
     am = addr_map or {}
@@ -49,31 +55,28 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
             no = ''
         loc = am.get(norm(dev(e)), '') or am.get(norm(d), '')
         place = e.get('place', '')
-        # 扉付け機器で配置図に位置が無いものは、手本に倣い 場所/ロケータ＝『扉』。
-        # (配置図に実在してロケータが取れる機器はその値を優先＝上書きしない)
+        # 扉付け機器→扉、盤外境界(R-F(P)/L-F(R))→盤外(いずれも盤内に位置が無いのが正常)。
         if not loc and _is_door(d):
             loc = '扉'
             place = place or '扉'
+        elif not loc and _is_boundary(d):
+            loc = '盤外'
+            place = place or '盤外'
+        # 圧着端子サイズ: 学習で分かる所は自動補完。モデルでも空欄が正常に多いため、
+        # 不明時は空欄のままとし『要確認』にはしない(非ブロッキング。過検出を避ける)。
         crimp = HL.crimp_of(size, d)
-        known = _crimp_known(size, d)
         flags = []
-        if not loc:
-            flags.append('ロケータ未取得')
-        # 圧着未確定: 圧着端子が要る太物(2sq以上)で学習テーブルに無い場合のみ。
-        # 1.25制御線は圧着無し(空欄)が正常なので警告しない(過検出を避ける)。
-        try:
-            big = float(str(size)) >= 2.0
-        except ValueError:
-            big = False
-        if not known and big:
-            flags.append('圧着未確定')
         # TB端子は製造アサイン(台番号/端子番号を製造が付与)。台/端子が未確定なTBを対象。
-        if norm(d) == 'TB' and (not no or term in ('', '?')):
+        tb_mfg = norm(d) == 'TB' and (not no or term in ('', '?'))
+        if tb_mfg:
             flags.append('TB端子(製造アサイン)')
+        # ロケータ未取得: 扉/盤外/TB(製造アサインで別途表示)を除く、真に位置が引けない機器のみ。
+        if not loc and not tb_mfg:
+            flags.append('ロケータ未取得')
         if (norm(d), norm(term)) in shorts:
             flags.append('電気QC')
         return {'place': place, 'device': d, 'no': no, 'terminal': term,
-                'loc': loc, 'crimp': crimp, 'crimp_known': known, 'flags': flags}
+                'loc': loc, 'crimp': crimp, 'flags': flags}
 
     rows = []
     for i, w in enumerate(routed['wires']):
