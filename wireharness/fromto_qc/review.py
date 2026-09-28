@@ -119,54 +119,60 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ハーネス生成データ 確認</title>
 <style>
-  :root{
-    --bg:#f6f7f9; --panel:#fff; --ink:#1a1d21; --line:#d8dde3; --muted:#6b7280;
-    --accent:#2563eb; --warn-bg:#fff4d6; --warn-line:#e0a800; --ok:#0a8a3a; --bad:#c0392b;
-  }
+  :root{--bg:#f6f7f9;--panel:#fff;--ink:#1a1d21;--line:#d8dde3;--muted:#6b7280;
+    --accent:#2563eb;--warn-bg:#fff4d6;--warn-line:#e0a800;--ok:#0a8a3a;--bad:#c0392b}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-       font-family:"Noto Sans JP","Yu Gothic",sans-serif;font-size:13px}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP","Yu Gothic",sans-serif;font-size:13px}
   header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);
          padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
   header h1{font-size:15px;margin:0 12px 0 0}
-  .kpi{display:flex;gap:14px;flex-wrap:wrap}
-  .kpi b{font-size:15px}
-  .kpi .need{color:var(--bad)}
+  .kpi{display:flex;gap:14px;flex-wrap:wrap}.kpi b{font-size:15px}.kpi .need{color:var(--bad)}
   .sp{flex:1}
-  button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:7px;
-         padding:7px 12px;cursor:pointer}
+  button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 12px;cursor:pointer}
   button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
   button.primary:disabled{background:#9db4e8;border-color:#9db4e8;cursor:not-allowed}
   button.ghost{background:#fff}
   .wrap{padding:12px 14px 60px}
-  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  .steps{display:flex;gap:8px;align-items:center;margin:2px 0 14px;font-weight:700;color:var(--muted)}
+  .steps .s{padding:5px 12px;border-radius:20px;border:1px solid var(--line);background:#fff}
+  .steps .s.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .steps .s.done{background:#e9f7ee;color:var(--ok);border-color:#bfe6cc}
+  .steps .arw{color:#aab}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
   label.chk{display:inline-flex;gap:5px;align-items:center;color:var(--muted)}
   table{border-collapse:collapse;width:100%;background:var(--panel)}
   th,td{border:1px solid var(--line);padding:3px 5px;text-align:left;white-space:nowrap}
   th{position:sticky;top:52px;background:#eef1f5;z-index:2;font-weight:700}
   tr.flag{background:#fffdf5}
   td.warn{background:var(--warn-bg);outline:1.5px solid var(--warn-line);outline-offset:-1.5px}
-  tr.done{opacity:.55}
-  tr.done td.warn{background:#eef7ee;outline-color:var(--ok)}
+  tr.done{opacity:.55}tr.done td.warn{background:#eef7ee;outline-color:var(--ok)}
   td input{font:inherit;border:1px solid transparent;background:transparent;width:100%;min-width:36px;padding:1px 2px}
   td input:focus{border-color:var(--accent);background:#fff;outline:none}
   td.num{text-align:right}
   .tag{display:inline-block;border:1px solid var(--warn-line);background:var(--warn-bg);
        color:#8a6d00;border-radius:4px;padding:0 4px;margin:1px;font-size:11px}
   .loc{border:1px solid #000;border-radius:3px;padding:0 3px;font-weight:700}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px;margin-bottom:12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:14px;margin-bottom:12px}
+  .panel h2{font-size:15px;margin:0 0 4px}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px}
   .grid label{display:flex;flex-direction:column;gap:2px;color:var(--muted);font-size:12px}
   .grid input,.grid select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:6px}
   .hint{color:var(--muted);font-size:12px}
   details summary{cursor:pointer;font-weight:700;margin-bottom:6px}
-  .defects{border:1px solid var(--line);border-radius:9px;margin-bottom:12px;overflow:hidden}
-  .defects .dh{padding:9px 12px;font-weight:700}
-  .defects.bad .dh{background:#fdecea;color:#8a1c12;border-bottom:1px solid #f3c9c3}
-  .defects.good .dh{background:#e9f7ee;color:#0a6b2e}
-  .defects table{width:100%}
-  .defects th{position:static;background:#fbeae7}
-  .defects .fix{color:#555}
+  /* Phase1 設計不備 */
+  .def{border:1px solid #f1c9c2;border-radius:8px;margin:8px 0;overflow:hidden}
+  .def.ok{border-color:#bfe6cc}
+  .def .dh{display:flex;gap:10px;align-items:baseline;padding:8px 10px;background:#fdecea}
+  .def.ok .dh{background:#e9f7ee}
+  .def .dh b{font-size:13.5px}.def .dh .g{color:#8a1c12}
+  .def .body{padding:8px 10px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+  .def .fix{color:#555;flex:1;min-width:240px}
+  .opt{display:inline-flex;gap:5px;align-items:center;border:1px solid var(--line);border-radius:7px;padding:4px 9px;cursor:pointer}
+  .opt.sel{border-color:var(--accent);background:#eef3fe;font-weight:700}
+  .def .note{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:6px;min-width:160px}
+  .badge{font-size:11px;border-radius:10px;padding:1px 8px;font-weight:700}
+  .badge.back{background:#fff0e6;color:#a5480a;border:1px solid #f2c39c}
+  .badge.mfg{background:#e8f1ff;color:#1652c9;border:1px solid #bcd3f7}
 </style></head><body>
 <header>
   <h1>ハーネス生成データ 確認 <span id="sb" class="muted"></span></h1>
@@ -174,117 +180,154 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
     <span>電線 <b id="k-count">0</b></span>
     <span>総配線長 <b id="k-len">0</b></span>
     <span>ダクト <b id="k-duct">-</b></span>
+    <span>設計不備 <b id="k-def" class="need">0</b></span>
     <span>要確認 <b id="k-need" class="need">0</b></span>
-    <span>未確認残 <b id="k-left" class="need">0</b></span>
   </div>
   <div class="sp"></div>
-  <button class="primary" id="btn-out" disabled>シート出力 ▶</button>
+  <button class="primary" id="btn-out" disabled>③ シート出力 ▶</button>
 </header>
 <div class="wrap">
-
-  <section id="defects" class="defects"></section>
-
-  <details class="panel" id="geo">
-    <summary>ラベルシール規格（固定台紙に合わせる）</summary>
-    <div class="grid">
-      <label>プリセット
-        <select id="g-preset">
-          <option value="custom">カスタム（数値指定）</option>
-          <option value="65">エーワン 65面 (38.1×21.2)</option>
-          <option value="44">エーワン 44面 (48.3×25.4)</option>
-        </select></label>
-      <label>用紙<select id="g-page"><option>A4</option><option>A3</option><option>Letter</option></select></label>
-      <label>列数<input id="g-cols" type="number" step="1" value="5"></label>
-      <label>段数<input id="g-rows" type="number" step="1" value="13"></label>
-      <label>ラベル幅 mm<input id="g-lw" type="number" step="0.1" value="38.1"></label>
-      <label>ラベル高 mm<input id="g-lh" type="number" step="0.1" value="21.2"></label>
-      <label>上余白 mm<input id="g-mt" type="number" step="0.1" value="10.7"></label>
-      <label>左余白 mm<input id="g-ml" type="number" step="0.1" value="6.4"></label>
-      <label>横ピッチ mm<input id="g-px" type="number" step="0.1" value="40.6"></label>
-      <label>縦ピッチ mm<input id="g-py" type="number" step="0.1" value="21.2"></label>
-    </div>
-    <p class="hint">※ 固定台紙の型番/寸法に合わせて数値を入れてください。ピッチはラベル同士の中心間隔（余白＋ラベル＋間隙）。</p>
-  </details>
-
-  <div class="bar">
-    <label class="chk"><input type="checkbox" id="only-need"> 要確認のみ表示</label>
-    <button class="ghost" id="btn-allok">表示中を全て確認済みに</button>
-    <span class="hint">黄色セル＝要確認。値を修正するか、行末「確認」をチェックしてください。全て解消で「シート出力」が有効になります。</span>
+  <div class="steps">
+    <span class="s on" id="st1">① 設計不備の解消</span><span class="arw">→</span>
+    <span class="s" id="st2">② ハーネス確認</span><span class="arw">→</span>
+    <span class="s" id="st3">③ シート出力</span>
   </div>
 
-  <table id="tbl"><thead><tr>
-    <th>#</th><th>号線</th><th>種別</th><th>ｻｲｽﾞ</th>
-    <th>From場所</th><th>From機器</th><th>番号</th><th>端子</th><th>ﾛｹｰﾀ</th><th>圧着</th>
-    <th>To場所</th><th>To機器</th><th>番号</th><th>端子</th><th>ﾛｹｰﾀ</th><th>圧着</th>
-    <th>測長</th><th>要確認</th><th>確認</th>
-  </tr></thead><tbody id="tb"></tbody></table>
+  <section id="phase1" class="panel">
+    <h2>① 設計からの図面不備 — 指摘と修正案</h2>
+    <p class="hint">原則は<b>設計へ戻す</b>（修正案を提示）。ただし待ち時間短縮のため<b>製造で手直し</b>も選べます。
+      各不備の対応を決めると「②へ進む」が有効になります。</p>
+    <div id="defbox"></div>
+    <div class="bar">
+      <button class="primary" id="to2" disabled>② ハーネスシート作成へ進む ▶</button>
+      <span id="def-left" class="hint"></span>
+    </div>
+  </section>
+
+  <section id="phase2" hidden>
+    <div class="bar">
+      <button class="ghost" id="back1">◀ ① 設計不備へ戻る</button>
+      <span class="hint">ハーネスデータの確認。黄色＝要確認を修正/確認し、問題なければ「シート出力」。</span>
+    </div>
+    <details class="panel" id="geo">
+      <summary>ラベルシール規格（固定台紙に合わせる）</summary>
+      <div class="grid">
+        <label>プリセット
+          <select id="g-preset">
+            <option value="custom">カスタム（数値指定）</option>
+            <option value="65">エーワン 65面 (38.1×21.2)</option>
+            <option value="44">エーワン 44面 (48.3×25.4)</option>
+          </select></label>
+        <label>用紙<select id="g-page"><option>A4</option><option>A3</option><option>Letter</option></select></label>
+        <label>列数<input id="g-cols" type="number" step="1" value="5"></label>
+        <label>段数<input id="g-rows" type="number" step="1" value="13"></label>
+        <label>ラベル幅 mm<input id="g-lw" type="number" step="0.1" value="38.1"></label>
+        <label>ラベル高 mm<input id="g-lh" type="number" step="0.1" value="21.2"></label>
+        <label>上余白 mm<input id="g-mt" type="number" step="0.1" value="10.7"></label>
+        <label>左余白 mm<input id="g-ml" type="number" step="0.1" value="6.4"></label>
+        <label>横ピッチ mm<input id="g-px" type="number" step="0.1" value="40.6"></label>
+        <label>縦ピッチ mm<input id="g-py" type="number" step="0.1" value="21.2"></label>
+      </div>
+      <p class="hint">※ 固定台紙の型番/寸法に合わせて数値を入れてください。ピッチはラベル中心間隔。</p>
+    </details>
+    <div class="bar">
+      <label class="chk"><input type="checkbox" id="only-need"> 要確認のみ表示</label>
+      <button class="ghost" id="btn-allok">表示中を全て確認済みに</button>
+      <span>未確認残 <b id="k-left" class="need">0</b></span>
+    </div>
+    <table id="tbl"><thead><tr>
+      <th>#</th><th>号線</th><th>種別</th><th>ｻｲｽﾞ</th>
+      <th>From場所</th><th>From機器</th><th>番号</th><th>端子</th><th>ﾛｹｰﾀ</th><th>圧着</th>
+      <th>To場所</th><th>To機器</th><th>番号</th><th>端子</th><th>ﾛｹｰﾀ</th><th>圧着</th>
+      <th>測長</th><th>要確認</th><th>確認</th>
+    </tr></thead><tbody id="tb"></tbody></table>
+  </section>
 </div>
 
 <script>
 var DATA = /*__DATA__*/null;
 var rows = DATA.rows, meta = DATA.meta;
-document.getElementById('sb').textContent = meta.seiban || '';
-document.getElementById('k-count').textContent = meta.count;
-document.getElementById('k-len').textContent = meta.total_length;
-document.getElementById('k-duct').textContent = meta.duct_type || '-';
-document.getElementById('k-need').textContent = meta.need_confirm;
-
+var defects = (meta.defects||[]).map(function(d,i){return {i:i,d:d,act:''};}); // act: '' | 'back' | 'mfg'
+var phase = 1;
+function $(id){return document.getElementById(id);}
+$('sb').textContent = meta.seiban || '';
+$('k-count').textContent = meta.count;
+$('k-len').textContent = meta.total_length;
+$('k-duct').textContent = meta.duct_type || '-';
+$('k-def').textContent = defects.length;
+$('k-need').textContent = meta.need_confirm;
 function esc(s){return (''+ (s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-// 設計不備をハーネス確定前に上部提示(前工程へ)
-(function renderDefects(){
-  var d=meta.defects||[], box=document.getElementById('defects');
-  if(!d.length){ box.className='defects good';
-    box.innerHTML='<div class="dh">✔ 図面の設計不備は検出されませんでした（ハーネスデータ作成に進めます）</div>'; return; }
-  box.className='defects bad';
-  var rows=d.map(function(it){return '<tr><td>'+esc(it['分類'])+'</td><td>'+esc(it['該当'])
-    +'</td><td>'+esc(it['号線'])+'</td><td class="fix">'+esc(it['解決案'])+'</td></tr>';}).join('');
-  box.innerHTML='<div class="dh">⚠ 設計不備 '+d.length+' 件 — 先に前工程（設計）へ提示・解決してください。'
-    +'（未記入の端子等はロケータも付きません）</div>'
-    +'<table><thead><tr><th>分類</th><th>該当箇所</th><th>号線</th><th>設計への解決案</th></tr></thead>'
-    +'<tbody>'+rows+'</tbody></table>';
-})();
-function inp(val, cls, oninput){var v=esc(val); return '<input class="'+cls+'" value="'+v+'"'+(oninput?' data-k="'+oninput+'"':'')+'>';}
+/* ---------- ① 設計不備 ---------- */
+function renderDefects(){
+  var box=$('defbox');
+  if(!defects.length){ box.innerHTML='<div class="def ok"><div class="dh"><b>✔ 図面の設計不備は検出されませんでした</b>'
+      +'<span class="hint">そのままハーネスシート作成へ進めます。</span></div></div>'; $('to2').disabled=false;
+      $('def-left').textContent=''; return; }
+  box.innerHTML=defects.map(function(o){
+    var it=o.d;
+    return '<div class="def" data-i="'+o.i+'"><div class="dh"><b>'+esc(it['分類'])+'</b>'
+      +'<span class="g">該当: '+esc(it['該当'])+(it['号線']?(' ／ 号線: '+esc(it['号線'])):'')+'</span></div>'
+      +'<div class="body"><span class="fix">修正案: '+esc(it['解決案'])+'</span>'
+      +'<span class="opt'+(o.act==='back'?' sel':'')+'" data-act="back">設計へ戻す</span>'
+      +'<span class="opt'+(o.act==='mfg'?' sel':'')+'" data-act="mfg">製造で手直し</span>'
+      +'<input class="note" placeholder="メモ/修正内容(任意)" value="'+esc(o.note||'')+'">'
+      +'<span class="stat"></span></div></div>';
+  }).join('');
+  box.querySelectorAll('.def').forEach(function(card){
+    var o=defects[+card.getAttribute('data-i')];
+    card.querySelectorAll('.opt').forEach(function(op){
+      op.addEventListener('click',function(){ o.act=op.getAttribute('data-act'); renderDefects(); recalcDef(); });
+    });
+    var nt=card.querySelector('.note'); if(nt) nt.addEventListener('input',function(){o.note=nt.value;});
+    var st=card.querySelector('.stat');
+    if(o.act==='back') st.innerHTML='<span class="badge back">設計へ戻す</span>';
+    else if(o.act==='mfg') st.innerHTML='<span class="badge mfg">製造で手直し</span>';
+  });
+  recalcDef();
+}
+function recalcDef(){
+  var left=defects.filter(function(o){return !o.act;}).length;
+  $('to2').disabled = left>0;
+  $('def-left').textContent = left>0 ? ('未対応 '+left+' 件 — 各不備に「設計へ戻す」か「製造で手直し」を選んでください') : '全件の対応を設定しました。②へ進めます。';
+  $('k-def').textContent = left;  // 残不備
+}
 
+/* ---------- ② ハーネス確認 表 ---------- */
+function inp(val, cls){return '<input class="'+cls+'" value="'+esc(val)+'" data-k="'+cls+'">';}
 function endCells(r, side){
   var e=r[side];
   function td(field, warnType){
     var warn = e.flags.indexOf(warnType)>=0 ? ' class="warn"' : '';
-    return '<td'+warn+'>'+inp(e[field], side+'-'+field)+'</td>';
+    return '<td'+warn+'><input value="'+esc(e[field])+'" data-side="'+side+'" data-f="'+field+'"></td>';
   }
-  // 場所/機器/番号 は読み取り主体だが編集可。端子/ロケータ/圧着 は確認対象。
-  return '<td>'+inp(e.place, side+'-place')+'</td>'
-       + '<td>'+inp(e.device, side+'-device')+'</td>'
-       + '<td>'+inp(e.no, side+'-no')+'</td>'
-       + td('terminal','TB仮番号')
+  return '<td><input value="'+esc(e.place)+'" data-side="'+side+'" data-f="place"></td>'
+       + '<td><input value="'+esc(e.device)+'" data-side="'+side+'" data-f="device"></td>'
+       + td('no','TB端子(製造アサイン)')
+       + td('terminal','TB端子(製造アサイン)')
        + td('loc','ロケータ未取得')
        + td('crimp','圧着未確定');
 }
-
 function render(){
-  var onlyNeed=document.getElementById('only-need').checked;
-  var tb=document.getElementById('tb'); tb.innerHTML='';
-  rows.forEach(function(r,idx){
+  var onlyNeed=$('only-need').checked, tb=$('tb'); tb.innerHTML='';
+  rows.forEach(function(r){
     if(onlyNeed && !(r.flags.length && !r._done)) return;
     var tr=document.createElement('tr');
     tr.className=(r.flags.length?'flag ':'')+(r._done?'done':'');
-    var qcWarn = r.flags.indexOf('電気QC')>=0 ? ' class="warn"' : '';
+    var qc=r.flags.indexOf('電気QC')>=0?' class="warn"':'';
     tr.innerHTML='<td class="num">'+r.i+'</td>'
       +'<td>'+esc(r.gousen||r.color)+'</td>'
-      +'<td>'+inp(r.type,'w-type')+'</td>'
-      +'<td>'+inp(r.size,'w-size')+'</td>'
-      +endCells(r,'from')
-      +endCells(r,'to')
+      +'<td><input value="'+esc(r.type)+'" data-w="type"></td>'
+      +'<td><input value="'+esc(r.size)+'" data-w="size"></td>'
+      +endCells(r,'from')+endCells(r,'to')
       +'<td class="num">'+esc(r.length)+'</td>'
-      +'<td'+qcWarn+'>'+r.flags.map(function(f){return '<span class="tag">'+f+'</span>';}).join('')+'</td>'
+      +'<td'+qc+'>'+r.flags.map(function(f){return '<span class="tag">'+f+'</span>';}).join('')+'</td>'
       +'<td style="text-align:center">'+(r.flags.length?'<input type="checkbox" class="done"'+(r._done?' checked':'')+'>':'—')+'</td>';
-    // bind inputs
-    tr.querySelectorAll('input[data-k]').forEach(function(el){
-      el.addEventListener('input',function(){
-        var k=el.getAttribute('data-k').split('-'); // side-field or w-field
-        if(k[0]==='w'){ r[k[1]===''?'':k[1]]=el.value; if(k[1]==='type')r.type=el.value; if(k[1]==='size')r.size=el.value; }
-        else { r[k[0]][k[1]]=el.value; }
-      });
+    tr.querySelectorAll('input[data-side]').forEach(function(el){
+      el.addEventListener('input',function(){ r[el.getAttribute('data-side')][el.getAttribute('data-f')]=el.value; });
+    });
+    tr.querySelectorAll('input[data-w]').forEach(function(el){
+      el.addEventListener('input',function(){ r[el.getAttribute('data-w')]=el.value; });
     });
     var dc=tr.querySelector('input.done');
     if(dc) dc.addEventListener('change',function(){ r._done=dc.checked; recalc(); render(); });
@@ -292,82 +335,66 @@ function render(){
   });
   recalc();
 }
-
 function recalc(){
   var left=rows.filter(function(r){return r.flags.length && !r._done;}).length;
-  document.getElementById('k-left').textContent=left;
-  document.getElementById('btn-out').disabled = left>0;
+  $('k-left').textContent=left; $('k-need').textContent=left;
+  $('btn-out').disabled = !(phase===2 && left===0);
 }
-
-document.getElementById('only-need').addEventListener('change',render);
-document.getElementById('btn-allok').addEventListener('click',function(){
-  var onlyNeed=document.getElementById('only-need').checked;
-  rows.forEach(function(r){ if(r.flags.length){ if(!onlyNeed || !r._done) r._done=true; }});
+$('only-need').addEventListener('change',render);
+$('btn-allok').addEventListener('click',function(){
+  var onlyNeed=$('only-need').checked;
+  rows.forEach(function(r){ if(r.flags.length && (!onlyNeed || !r._done)) r._done=true; });
   render();
 });
 
-// ---- プリセット ----
+/* ---------- 工程遷移 ---------- */
+function goPhase(p){
+  phase=p;
+  $('phase1').hidden = p!==1; $('phase2').hidden = p!==2;
+  $('st1').className='s '+(p>1?'done':'on'); $('st2').className='s '+(p===2?'on':(p>2?'done':''));
+  if(p===2) render();
+  recalc();
+}
+$('to2').addEventListener('click',function(){ goPhase(2); });
+$('back1').addEventListener('click',function(){ goPhase(1); });
+
+/* ---------- プリセット/寸法 ---------- */
 var PRESET={ '65':{cols:5,rows:13,lw:38.1,lh:21.2,mt:10.7,ml:6.4,px:40.6,py:21.2},
              '44':{cols:4,rows:11,lw:48.3,lh:25.4,mt:21.2,ml:8.0,px:49.5,py:25.4} };
-document.getElementById('g-preset').addEventListener('change',function(){
-  var p=PRESET[this.value]; if(!p)return;
-  for(var k in p){ document.getElementById('g-'+k).value=p[k]; }
-});
+$('g-preset').addEventListener('change',function(){var p=PRESET[this.value];if(!p)return;for(var k in p){$('g-'+k).value=p[k];}});
+function geo(){var g=function(id){return parseFloat($('g-'+id).value)||0;};
+  return {page:$('g-page').value,cols:g('cols'),rows:g('rows'),lw:g('lw'),lh:g('lh'),mt:g('mt'),ml:g('ml'),px:g('px'),py:g('py')};}
 
-function geo(){
-  var g=function(id){return parseFloat(document.getElementById('g-'+id).value)||0;};
-  return {page:document.getElementById('g-page').value,cols:g('cols'),rows:g('rows'),
-          lw:g('lw'),lh:g('lh'),mt:g('mt'),ml:g('ml'),px:g('px'),py:g('py')};
-}
-
-// ---- ラベルシート出力(固定台紙・絶対配置・フォント自動調整) ----
+/* ---------- ③ ラベル出力(固定台紙・絶対配置・フォント自動調整) ---------- */
 function labelHTML(r){
-  function ep(e){
-    var t=e.terminal?(':'+esc(e.terminal)):'';
-    var pl=e.place?('['+esc(e.place)+']'):'';
-    var lc=e.loc?(' <span class="loc">'+esc(e.loc)+'</span>'):'';
-    var cr=e.crimp?(' <span class="cr">'+esc(e.crimp)+'</span>'):'';
-    return pl+esc(e.device)+(e.no?('-'+esc(e.no)):'')+t+lc+cr;
-  }
-  return '<div class="fit"><div class="hd"><b>'+esc(r.gousen||r.color)+'</b>'
-    +'<span class="sz">'+esc(r.type)+esc(r.size)+'</span></div>'
-    +'<div class="ep"><i>F</i>'+ep(r.from)+'</div>'
-    +'<div class="ep"><i>T</i>'+ep(r.to)+'</div></div>';
+  function ep(e){var t=e.terminal?(':'+esc(e.terminal)):'';var pl=e.place?('['+esc(e.place)+']'):'';
+    var lc=e.loc?(' <span class="loc">'+esc(e.loc)+'</span>'):'';var cr=e.crimp?(' <span class="cr">'+esc(e.crimp)+'</span>'):'';
+    return pl+esc(e.device)+(e.no?('-'+esc(e.no)):'')+t+lc+cr;}
+  return '<div class="fit"><div class="hd"><b>'+esc(r.gousen||r.color)+'</b><span class="sz">'+esc(r.type)+esc(r.size)+'</span></div>'
+    +'<div class="ep"><i>F</i>'+ep(r.from)+'</div><div class="ep"><i>T</i>'+ep(r.to)+'</div></div>';
 }
-
-document.getElementById('btn-out').addEventListener('click',function(){
-  var G=geo(), per=Math.max(1,G.cols*G.rows);
-  var pages='', n=rows.length;
-  for(var i=0;i<n;i+=per){
-    var cells='';
-    for(var j=0;j<per;j++){
-      var r=rows[i+j]; if(!r) break;
-      var col=j%G.cols, row=Math.floor(j/G.cols);
-      var x=(G.ml+col*G.px).toFixed(2), y=(G.mt+row*G.py).toFixed(2);
-      cells+='<div class="cell" style="left:'+x+'mm;top:'+y+'mm;width:'+G.lw+'mm;height:'+G.lh+'mm">'+labelHTML(r)+'</div>';
-    }
-    pages+='<div class="page">'+cells+'</div>';
-  }
-  var css='@page{size:'+G.page+';margin:0}*{box-sizing:border-box}'
-    +'body{margin:0;font-family:"Noto Sans JP","Yu Gothic",sans-serif;color:#000}'
-    +'.page{position:relative;width:'+(G.page==="A4"?210:G.page==="A3"?297:216)+'mm;'
-    +'height:'+(G.page==="A4"?297:G.page==="A3"?420:279)+'mm;page-break-after:always}'
-    +'.cell{position:absolute;overflow:hidden;padding:0.6mm;display:flex;align-items:center}'
-    +'.fit{width:100%;line-height:1.13}'
-    +'.hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:0.15mm solid #000;margin-bottom:0.3mm}'
-    +'.hd b{font-weight:700}.sz{opacity:.85}'
+$('btn-out').addEventListener('click',function(){
+  var G=geo(), per=Math.max(1,G.cols*G.rows), pages='', n=rows.length;
+  for(var i=0;i<n;i+=per){var cells='';
+    for(var j=0;j<per;j++){var r=rows[i+j]; if(!r)break;
+      var col=j%G.cols,row=Math.floor(j/G.cols);
+      var x=(G.ml+col*G.px).toFixed(2),y=(G.mt+row*G.py).toFixed(2);
+      cells+='<div class="cell" style="left:'+x+'mm;top:'+y+'mm;width:'+G.lw+'mm;height:'+G.lh+'mm">'+labelHTML(r)+'</div>';}
+    pages+='<div class="page">'+cells+'</div>';}
+  var css='@page{size:'+G.page+';margin:0}*{box-sizing:border-box}body{margin:0;font-family:"Noto Sans JP","Yu Gothic",sans-serif;color:#000}'
+    +'.page{position:relative;width:'+(G.page==="A4"?210:G.page==="A3"?297:216)+'mm;height:'+(G.page==="A4"?297:G.page==="A3"?420:279)+'mm;page-break-after:always}'
+    +'.cell{position:absolute;overflow:hidden;padding:0.6mm;display:flex;align-items:center}.fit{width:100%;line-height:1.13}'
+    +'.hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:0.15mm solid #000;margin-bottom:0.3mm}.hd b{font-weight:700}.sz{opacity:.85}'
     +'.ep{overflow-wrap:anywhere}.ep i{display:inline-block;width:1.05em;font-style:normal;font-weight:700;opacity:.7}'
-    +'.loc{border:0.15mm solid #000;border-radius:0.6mm;padding:0 0.4mm;font-weight:700;white-space:nowrap}'
-    +'.cr{border:0.15mm dashed #666;border-radius:0.6mm;padding:0 0.3mm}'
+    +'.loc{border:0.15mm solid #000;border-radius:0.6mm;padding:0 0.4mm;font-weight:700;white-space:nowrap}.cr{border:0.15mm dashed #666;border-radius:0.6mm;padding:0 0.3mm}'
     +'@media screen{body{background:#eee;padding:8px}.page{background:#fff;margin:0 auto 10px;box-shadow:0 1px 6px rgba(0,0,0,.3);outline:1px solid #ccc}.cell{outline:0.2mm dashed #bbb}}';
-  var doc='<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>'+esc(meta.seiban)+' ラベル</title>'
-    +'<style>'+css+'</style></head><body>'+pages
+  var doc='<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>'+esc(meta.seiban)+' ラベル</title><style>'+css+'</style></head><body>'+pages
     +'<scr'+'ipt>function fit(el,box){var lo=3,hi=12;for(var k=0;k<14;k++){var m=(lo+hi)/2;el.style.fontSize=m+"pt";'
     +'if(el.scrollWidth<=box.clientWidth&&el.scrollHeight<=box.clientHeight)lo=m;else hi=m;}el.style.fontSize=lo+"pt";}'
-    +'document.querySelectorAll(".cell .fit").forEach(function(f){fit(f,f.parentNode);});'
-    +'setTimeout(function(){window.print&&window.print();},400);</scr'+'ipt></body></html>';
+    +'document.querySelectorAll(".cell .fit").forEach(function(f){fit(f,f.parentNode);});setTimeout(function(){window.print&&window.print();},400);</scr'+'ipt></body></html>';
   var w=window.open('','_blank'); w.document.write(doc); w.document.close();
 });
 
-render();
+renderDefects();
+goPhase(1);
 </script></body></html>"""
