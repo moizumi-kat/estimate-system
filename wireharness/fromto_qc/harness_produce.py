@@ -369,7 +369,7 @@ def design_feedback(seq_paths, skel_paths=None, seiban='', out_dir=None):
         import csv as _csv
         _os.makedirs(out_dir, exist_ok=True)
         p = _os.path.join(out_dir, f"{seiban or 'harness'}_設計指摘書.csv")
-        with open(p, 'w', encoding='cp932', errors='replace', newline='') as f:
+        with open(p, 'w', encoding='utf-8-sig', errors='replace', newline='') as f:
             w = _csv.writer(f)
             w.writerow(['分類', '該当箇所', '号線', '設計への解決案'])
             for it in items:
@@ -443,7 +443,7 @@ def device_correspondence(files, seiban='', out_dir=None):
         import csv as _csv
         _os.makedirs(out_dir, exist_ok=True)
         fp = _os.path.join(out_dir, f"{seiban or 'harness'}_機器対応表.csv")
-        with open(fp, 'w', encoding='cp932', errors='replace', newline='') as f:
+        with open(fp, 'w', encoding='utf-8-sig', errors='replace', newline='') as f:
             w = _csv.writer(f)
             w.writerow(['正式機器名', 'ロケータ', '位置x', '位置y', 'シート', '仮機器名(決定的)'])
             for it in items:
@@ -545,7 +545,7 @@ def reconcile_legacy(dxf_paths, sheet_txt_paths, seiban='', out_dir=None):
         import csv as _csv
         _os.makedirs(out_dir, exist_ok=True)
         fp = _os.path.join(out_dir, f"{seiban or 'legacy'}_機器対応表.csv")
-        with open(fp, 'w', encoding='cp932', errors='replace', newline='') as f:
+        with open(fp, 'w', encoding='utf-8-sig', errors='replace', newline='') as f:
             w = _csv.writer(f)
             w.writerow(['正式機器名', 'ロケータ', '位置x', '位置y', 'PARTS',
                         'シート', '仮名(決定的)', 'ハーネス出現', '同名複数'])
@@ -578,7 +578,7 @@ def length_to_csv(routed, path, addr_map=None):
     def _dev(e):
         return (e['device'] + ('-' + e['no'] if e['no'] else ''))
 
-    with open(path, 'w', encoding='cp932', errors='replace', newline='') as f:
+    with open(path, 'w', encoding='utf-8-sig', errors='replace', newline='') as f:
         w = csv.writer(f)
         w.writerow(['号線', '種別', 'サイズ', '色',
                     'From場所', 'From機器', 'From番号', 'From端子', 'Fromロケータ',
@@ -592,6 +592,53 @@ def length_to_csv(routed, path, addr_map=None):
                         fr.get('place', ''), fr['device'], fr['no'], fr['terminal'], fa,
                         to.get('place', ''), to['device'], to['no'], to['terminal'], ta,
                         wi['length'], len(wi['route'])])
+    return path
+
+
+def to_harness_txt(routed, path, seiban='', addr_map=None, encoding='utf-8-sig'):
+    """生成ハーネスを『ハーネスデータシート』と同じネイティブ形式(11列TAB)で書き出す。
+
+    形式(モデル準拠):
+      行0  "配線情報リスト 作成日  97,4,26"
+      行3  col10 に製番
+      以降 電線ごとに:
+        ・種別/サイズが変わったら 仕様ヘッダ  \t*\t*\t<種別>\t<サイズ>\t*\t*\t*\t*
+          変わらなければ 区切り            \t*\t*\t*\t*\t*\t*\t*\t*
+        ・端点2行  \t<号線>\t*\t<圧着>\t<場所>\t<機器>\t<番号>\t<端子>
+    列: 0空,1=号線(電源線は色 赤/白/青),2=*,3=圧着端子(未算出は空),4=場所,5=機器,6=番号,7=端子,8-10空。
+    既定は UTF-8(BOM) 出力(画面・Excelで文字化けしない)。社内ソフト取込用に encoding='cp932' も可。
+    """
+    am = addr_map or {}
+
+    def row(cells):
+        c = (list(cells) + [''] * 11)[:11]
+        return '\t'.join('' if x is None else str(x) for x in c)
+
+    def spec_type(w):
+        if (w.get('color') or '') == '緑' or str(w.get('gousen', '')).upper().startswith('E'):
+            return '緑'
+        return w.get('kind') or 'HIV'
+
+    def gname(w):
+        # 電源線(色付き)は号線欄に色、制御線は号線番号(モデル準拠)
+        return w.get('color') or w.get('gousen', '')
+
+    lines = [row(['"配線情報リスト 作成日  97,4,26"']), row([]), row([]),
+             row(['', '', '', '', '', '', '', '', '', '', seiban])]
+    prev = None
+    for w in routed['wires']:
+        spec = (spec_type(w), w.get('size', ''))
+        if spec != prev:
+            lines.append(row(['', '*', '*', spec[0], spec[1], '*', '*', '*', '*']))
+        else:
+            lines.append(row(['', '*', '*', '*', '*', '*', '*', '*', '*']))
+        prev = spec
+        g = gname(w)
+        for e in (w['from'], w['to']):
+            lines.append(row(['', g, '*', '', e.get('place', ''),
+                              e.get('device', ''), e.get('no', ''), e.get('terminal', '')]))
+    with open(path, 'w', encoding=encoding, newline='') as f:
+        f.write('\r\n'.join(lines) + '\r\n')
     return path
 
 
@@ -647,8 +694,12 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     base = seiban or 'harness'
     hcsv = _os.path.join(out_dir, f'{base}_ハーネス.csv')
     length_to_csv(routed, hcsv, addr_map=amap)
+    # ハーネスデータシートと同じネイティブ形式(11列TAB)でも出力(社内運用そのまま)
+    htxt = _os.path.join(out_dir, f'{base}_ハーネスデータ.txt')
+    to_harness_txt(routed, htxt, seiban=seiban, addr_map=amap)
     return {'seiban': seiban,
-            'files': {'harness_csv': hcsv, 'design_feedback_csv': fb.get('file'),
+            'files': {'harness_txt': htxt, 'harness_csv': hcsv,
+                      'design_feedback_csv': fb.get('file'),
                       'device_map_csv': corr.get('file')},
             'electrical': ec['summary'],
             'design_feedback': fb['summary'],
