@@ -787,8 +787,12 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     # マス目シール印刷用(各マスにフォント自動調整)
     lbl = _os.path.join(out_dir, f'{base}_ラベルシート.html')
     to_label_sheet_html(routed, lbl, seiban=seiban, addr_map=amap)
+    # 生成データ確認UI(表＋要確認＋編集＋固定ラベル出力ボタン)
+    from . import review as _review
+    rvw = _os.path.join(out_dir, f'{base}_確認.html')
+    _review.to_review_html(routed, rvw, seiban=seiban, addr_map=amap, ec=ec)
     return {'seiban': seiban,
-            'files': {'harness_txt': htxt, 'harness_csv': hcsv,
+            'files': {'review_html': rvw, 'harness_txt': htxt, 'harness_csv': hcsv,
                       'label_sheet_html': lbl,
                       'design_feedback_csv': fb.get('file'),
                       'device_map_csv': corr.get('file')},
