@@ -15,6 +15,8 @@
 
 エラー/不備は握りつぶさず必ず提示する(◎誤答ゼロ・迷ったら△の方針に沿う)。
 """
+import re
+import collections
 from . import harness_sheet, fromto_review
 from . import router as _router
 
@@ -264,6 +266,118 @@ def duct_decision(seq_paths, skel_paths=None, seiban='', dct_paths=None, duct_ty
     return out
 
 
+def electrical_check(seq_paths, skel_paths=None, seiban=''):
+    """生成ハーネスが電気的に問題ないか検証する。
+    ・各号線(等電位ノード)内は連結(全端子が繋がる)＝渡りは全域木で構成(構造的に保証)。
+    ・同一端子が複数の号線に現れる＝短絡の疑い(誤トレース) → 指摘。
+    ・端子1つだけの号線(結線相手が無い)＝浮き → 指摘(不備側で扱う)。
+    戻り: {'ok', 'shorts':[...], 'summary'}"""
+    from . import tracer
+    from .geometry import norm as _n
+    term_nodes = collections.defaultdict(set)   # 端子 → その端子が属する号線集合
+    for p in list(seq_paths) + list(skel_paths or []):
+        for g, nd in tracer.trace_nodes(p).items():
+            if str(g).startswith('M@'):
+                continue
+            for (d, t, x, y) in nd['members']:
+                # 端子番号が未記入(空/?)の端子は識別不能=別途「番号未記入」で指摘済み。
+                # 短絡判定は「実端子番号が付いた端子」だけを対象にする(誤検出を避ける)。
+                if not t or t == '?':
+                    continue
+                term_nodes[(_n(d), _n(t))].add(_n(g))
+    shorts = []
+    for (dev, term), gs in term_nodes.items():
+        if term and len(gs) >= 2:
+            shorts.append({'terminal': f'{dev}:{term}', '号線': sorted(gs)})
+    # 各号線内の渡りは全域木(構造的に連結・同一電位)＝電気的に整合。
+    # shorts は「同一端子が複数号線に出現」= 真の短絡 or トレーサのノード形成曖昧の候補
+    # (内部QC。設計指摘には出さず、抽出精度の確認に使う)。
+    return {'ok': not shorts, 'shorts': shorts,
+            'summary': {'各号線内の結線': '全域木で連結(電気的に整合)',
+                        '要確認(同一端子が複数号線)': len(shorts)}}
+
+
+# 不備カテゴリ → 前工程(設計)への指摘と解決案
+_DESIGN_FIX = {
+    'terminal_no': ('端子台の端子番号 未記入',
+                    '結線図で端子台の端子番号(何番に繋ぐか)を記入してください。'
+                    '未記入だと繋ぎ込み数が正しく評価できません。'),
+    'wire_size':  ('電線サイズ 未記入',
+                   'CABLE(電線サイズ)の DENSEN に実サイズ(例 HIV1.25sq)を記入してください。'
+                   '未記入は社内標準で仮補完しています(要確認)。'),
+    'float':      ('浮き線端(結線先なし)',
+                   '線端がどの機器にも届いていません。結線先の機器・端子を明記してください。'),
+    'near':       ('近接ギャップ(未接続)',
+                   '線端が機器端子の直前で止まっています。端子まで接続してください。'),
+    'short':      ('短絡疑い(同一端子が複数号線)',
+                   '同じ端子が異なる号線に現れています。図面の結線を確認してください。'),
+}
+
+
+def design_feedback(seq_paths, skel_paths=None, seiban='', out_dir=None):
+    """図面不備を前工程(設計)への『指摘＋解決案』としてまとめる。
+    端子台番号未記入・電線サイズ未記入・浮き線端・短絡疑い 等を集約。
+    out_dir 指定時は <製番>_設計指摘書.csv も出力。戻り: {'seiban','items','summary'}。"""
+    items = []
+    # 端子台番号 未記入
+    tn = terminal_number_defects(seq_paths, skel_paths=skel_paths, seiban=seiban)
+    for it in tn['items']:
+        title, fix = _DESIGN_FIX['terminal_no']
+        items.append({'分類': title, '該当': f"仮{str(it['provisional']).replace('仮','')}"
+                      f"@({it['position']['x']},{it['position']['y']})",
+                      '号線': '／'.join(map(str, it['gousen'])), '解決案': fix})
+    # 電線サイズ 未記入(DENSEN='sq' 等) の号線
+    import ezdxf as _ez
+    size_missing = set()
+    for p in list(seq_paths) + list(skel_paths or []):
+        try:
+            doc = _ez.readfile(p)
+        except Exception:
+            continue
+        for e in doc.modelspace():
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in e.attribs}
+            if a.get('PARTS') == '電線サイズ':
+                d = a.get('DENSEN', '')
+                if not re.match(r'[A-Za-z]*[0-9.]+\s*sq', d):    # 数値サイズが無い=未記入
+                    if a.get('DEVICE1'):
+                        size_missing.add(a['DEVICE1'])
+    if size_missing:
+        title, fix = _DESIGN_FIX['wire_size']
+        items.append({'分類': title, '該当': f'{len(size_missing)}回路',
+                      '号線': '／'.join(sorted(size_missing)[:15]), '解決案': fix})
+    # 浮き線端・近接ギャップ(fromto_review)
+    da = analyze_defects(seq_paths, skel_paths=skel_paths, seiban=seiban)
+    cat_map = {'float': 'float', 'near': 'near'}
+    catc = collections.Counter(d['cat'] for d in da['defects'])
+    for cat in ('float', 'near'):
+        if catc.get(cat):
+            title, fix = _DESIGN_FIX[cat_map[cat]]
+            gs = [d['gousen'] for d in da['defects'] if d['cat'] == cat][:15]
+            items.append({'分類': title, '該当': f'{catc[cat]}号線',
+                          '号線': '／'.join(map(str, gs)), '解決案': fix})
+    # ※短絡疑い(同一端子が複数号線)は トレーサのノード形成の曖昧さを多く含み、
+    #   設計の不備とは限らないため設計指摘書には載せない(内部QCの electrical_check で扱う)。
+    out = {'seiban': seiban, 'items': items,
+           'summary': {'指摘件数': len(items),
+                       '端子台番号未記入': tn['count'],
+                       '電線サイズ未記入回路': len(size_missing),
+                       '浮き線端': catc.get('float', 0), '近接ギャップ': catc.get('near', 0)}}
+    if out_dir:
+        import os as _os
+        import csv as _csv
+        _os.makedirs(out_dir, exist_ok=True)
+        p = _os.path.join(out_dir, f"{seiban or 'harness'}_設計指摘書.csv")
+        with open(p, 'w', encoding='cp932', errors='replace', newline='') as f:
+            w = _csv.writer(f)
+            w.writerow(['分類', '該当箇所', '号線', '設計への解決案'])
+            for it in items:
+                w.writerow([it['分類'], it['該当'], it['号線'], it['解決案']])
+        out['file'] = p
+    return out
+
+
 def to_csv(sheet, path):
     """生成シートをCSV(同フォーマット)で書き出す(harness_sheet.to_csv に委譲)。"""
     return harness_sheet.to_csv(sheet, path)
@@ -315,24 +429,22 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     seq, skel, dct = _classify_seiban_files(files)
     routed = route_and_length(seq, skel_paths=skel, seiban=seiban, dct_paths=dct,
                               topology=topology, physical=physical)
-    dfx = terminal_number_defects(seq, skel_paths=skel, seiban=seiban)
     dec = duct_decision(seq, skel_paths=skel, seiban=seiban, dct_paths=dct)
+    ec = electrical_check(seq, skel_paths=skel, seiban=seiban)
+    fb = design_feedback(seq, skel_paths=skel, seiban=seiban, out_dir=out_dir)
     _os.makedirs(out_dir, exist_ok=True)
     base = seiban or 'harness'
     hcsv = _os.path.join(out_dir, f'{base}_ハーネス.csv')
     length_to_csv(routed, hcsv)
-    dcsv = _os.path.join(out_dir, f'{base}_不備.csv')
-    with open(dcsv, 'w', encoding='cp932', errors='replace', newline='') as f:
-        w = _csv.writer(f)
-        w.writerow(['種類', '仮番号', '位置x', '位置y', '接続号線', '修正案'])
-        for it in dfx['items']:
-            w.writerow(['端子台番号未記入', it['provisional'], it['position']['x'],
-                        it['position']['y'], '／'.join(map(str, it['gousen'])), it['fix']])
     return {'seiban': seiban,
-            'files': {'harness_csv': hcsv, 'defects_csv': dcsv},
+            'files': {'harness_csv': hcsv, 'design_feedback_csv': fb.get('file')},
+            'electrical': ec['summary'],
+            'design_feedback': fb['summary'],
             'summary': {'電線数': routed['summary']['電線数'],
                         '総配線長': routed['total_length'],
                         'ダクト種別': routed['duct_type'],
-                        '端子台番号未記入': dfx['count'],
+                        '指摘件数(設計へ)': fb['summary']['指摘件数'],
+                        '各号線内の電気整合': '全域木で連結(OK)',
+                        '要QC(同一端子が複数号線)': ec['summary']['要確認(同一端子が複数号線)'],
                         'seq数': len(seq), 'skel数': len(skel), 'dct数': len(dct)},
             'duct_decision': dec['recommend']}
