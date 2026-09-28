@@ -463,22 +463,42 @@ def to_csv(sheet, path):
     return harness_sheet.to_csv(sheet, path)
 
 
-def length_to_csv(routed, path):
+def length_to_csv(routed, path, addr_map=None):
     """route_and_length の結果を、人手ハーネスと同じ列＋測長で書き出す(cp932)。
-    列: 号線/種別/サイズ/色/From(場所,機器,番号,端子)/To(...)/測長/ルート節点数。"""
+    列: 号線/種別/サイズ/色/From(場所,機器,番号,端子,盤内アドレス)/To(...)/測長/ルート節点数。
+    addr_map: {norm(正式機器名): 盤内アドレス}。各端点に盤内アドレス(不変キー)を併記する。"""
     import csv
+    from .geometry import norm as _n
+    am = addr_map or {}
+
+    def _dev(e):
+        return (e['device'] + ('-' + e['no'] if e['no'] else ''))
+
     with open(path, 'w', encoding='cp932', errors='replace', newline='') as f:
         w = csv.writer(f)
         w.writerow(['号線', '種別', 'サイズ', '色',
-                    'From場所', 'From機器', 'From番号', 'From端子',
-                    'To場所', 'To機器', 'To番号', 'To端子', '測長', 'ルート節点'])
+                    'From場所', 'From機器', 'From番号', 'From端子', 'From盤内アドレス',
+                    'To場所', 'To機器', 'To番号', 'To端子', 'To盤内アドレス',
+                    '測長', 'ルート節点'])
         for wi in routed['wires']:
             fr, to = wi['from'], wi['to']
+            fa = am.get(_n(_dev(fr)), '') or am.get(_n(fr['device']), '')
+            ta = am.get(_n(_dev(to)), '') or am.get(_n(to['device']), '')
             w.writerow([wi['gousen'], wi.get('kind', ''), wi['size'], wi.get('color', ''),
-                        fr.get('place', ''), fr['device'], fr['no'], fr['terminal'],
-                        to.get('place', ''), to['device'], to['no'], to['terminal'],
+                        fr.get('place', ''), fr['device'], fr['no'], fr['terminal'], fa,
+                        to.get('place', ''), to['device'], to['no'], to['terminal'], ta,
                         wi['length'], len(wi['route'])])
     return path
+
+
+def addr_map_from_correspondence(corr):
+    """device_correspondence の結果 → {norm(正式機器名): 盤内アドレス}。"""
+    from .geometry import norm as _n
+    m = {}
+    for it in corr.get('items', []):
+        if it.get('盤内アドレス'):
+            m[_n(it['正式名'])] = it['盤内アドレス']
+    return m
 
 
 def _classify_seiban_files(files):
@@ -513,10 +533,11 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     ec = electrical_check(seq, skel_paths=skel, seiban=seiban)
     fb = design_feedback(seq, skel_paths=skel, seiban=seiban, out_dir=out_dir)
     corr = device_correspondence(files, seiban=seiban, out_dir=out_dir)
+    amap = addr_map_from_correspondence(corr)
     _os.makedirs(out_dir, exist_ok=True)
     base = seiban or 'harness'
     hcsv = _os.path.join(out_dir, f'{base}_ハーネス.csv')
-    length_to_csv(routed, hcsv)
+    length_to_csv(routed, hcsv, addr_map=amap)
     return {'seiban': seiban,
             'files': {'harness_csv': hcsv, 'design_feedback_csv': fb.get('file'),
                       'device_map_csv': corr.get('file')},
