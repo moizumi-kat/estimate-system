@@ -139,6 +139,59 @@ def learn(seibans, train_dir, drawing_dir, save=True):
     return knowledge
 
 
+def learn_crimp(sheet_txt_paths, min_n=3, min_conf=0.7, save=True):
+    """既存ハーネスシート(.txt)から (電線サイズ, 機器)→圧着端子サイズ の対応を学習する。
+
+    圧着端子サイズはハーネスシートの各端点行 col3 に入る(4/5/6/6無し/3.5/つなぎ 等)。
+    (サイズ,機器)ごとに最頻値を採り、件数 min_n 以上・占有率 min_conf 以上のときだけ採用
+    （曖昧なものは空欄＝誤答を出さない。◎誤答ゼロ優先）。learned.json の 'crimp_table' に統合。
+    キーは "サイズ|機器(norm)"、値は [圧着, 占有率, 件数]。
+    """
+    tally = collections.defaultdict(collections.Counter)   # (size,dev) -> Counter(col3)
+    for p in sheet_txt_paths:
+        try:
+            raw = open(p, 'rb').read().decode('cp932', 'replace')
+        except Exception:
+            continue
+        size_now = ''
+        for r in csv.reader(raw.splitlines(), delimiter='\t'):
+            c = [x.strip() for x in (r + [''] * 11)[:11]]
+            if c[1] == '*':
+                if c[3] not in ('', '*'):
+                    size_now = c[4]
+                continue
+            dev = c[5]
+            if dev and dev != '*':
+                tally[(size_now, norm(dev))][c[3]] += 1
+    table = {}
+    for (sz, dev), cnt in tally.items():
+        n = sum(cnt.values())
+        val, v = cnt.most_common(1)[0]
+        conf = v / n if n else 0
+        if n >= min_n and conf >= min_conf:
+            table[f'{sz}|{dev}'] = [val, round(conf, 3), n]
+    if save:
+        k = load()
+        k['crimp_table'] = table
+        with open(LEARNED_PATH, 'w', encoding='utf-8') as f:
+            json.dump(k, f, ensure_ascii=False, indent=1)
+    return table
+
+
+def crimp_of(size, device):
+    """学習済み (電線サイズ, 機器)→圧着端子サイズ。無ければ ''（空欄＝出さない）。"""
+    t = load().get('crimp_table', {})
+    v = t.get(f'{size}|{norm(device)}')
+    return v[0] if v else ''
+
+
+def wire_type(kind, gousen='', color=''):
+    """種別ラベル(ハーネスシート col3 のヘッダ)。アース=緑、他は kind(既定 HIV)。"""
+    if (color or '') == '緑' or str(gousen or '').upper().startswith('E') or (kind or '').upper() in ('EARTH', 'E'):
+        return '緑'
+    return kind or 'HIV'
+
+
 def load():
     """learned.json を読む。無ければ空。"""
     try:

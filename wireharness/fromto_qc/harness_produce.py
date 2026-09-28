@@ -608,16 +608,12 @@ def to_harness_txt(routed, path, seiban='', addr_map=None, encoding='utf-8-sig')
     列: 0空,1=号線(電源線は色 赤/白/青),2=*,3=圧着端子(未算出は空),4=場所,5=機器,6=番号,7=端子,8-10空。
     既定は UTF-8(BOM) 出力(画面・Excelで文字化けしない)。社内ソフト取込用に encoding='cp932' も可。
     """
+    from . import harness_learn as _HL
     am = addr_map or {}
 
     def row(cells):
         c = (list(cells) + [''] * 11)[:11]
         return '\t'.join('' if x is None else str(x) for x in c)
-
-    def spec_type(w):
-        if (w.get('color') or '') == '緑' or str(w.get('gousen', '')).upper().startswith('E'):
-            return '緑'
-        return w.get('kind') or 'HIV'
 
     def gname(w):
         # 電源線(色付き)は号線欄に色、制御線は号線番号(モデル準拠)
@@ -627,7 +623,8 @@ def to_harness_txt(routed, path, seiban='', addr_map=None, encoding='utf-8-sig')
              row(['', '', '', '', '', '', '', '', '', '', seiban])]
     prev = None
     for w in routed['wires']:
-        spec = (spec_type(w), w.get('size', ''))
+        size = w.get('size', '')
+        spec = (_HL.wire_type(w.get('kind'), w.get('gousen'), w.get('color')), size)
         if spec != prev:
             lines.append(row(['', '*', '*', spec[0], spec[1], '*', '*', '*', '*']))
         else:
@@ -635,10 +632,100 @@ def to_harness_txt(routed, path, seiban='', addr_map=None, encoding='utf-8-sig')
         prev = spec
         g = gname(w)
         for e in (w['from'], w['to']):
-            lines.append(row(['', g, '*', '', e.get('place', ''),
+            crimp = _HL.crimp_of(size, e.get('device', ''))   # (サイズ,機器)→圧着(学習)
+            lines.append(row(['', g, '*', crimp, e.get('place', ''),
                               e.get('device', ''), e.get('no', ''), e.get('terminal', '')]))
     with open(path, 'w', encoding=encoding, newline='') as f:
         f.write('\r\n'.join(lines) + '\r\n')
+    return path
+
+
+def to_label_sheet_html(routed, path, seiban='', addr_map=None,
+                        cols=5, rows=10, cell_w_mm=38.0, cell_h_mm=25.0,
+                        page='A4', margin_mm=8.0):
+    """ハーネス線の識別ラベル(シール)を『マス目』に面付けした印刷用HTMLを出力。
+
+    運用: このシートをラベル台紙に印刷 → 各マス(1枚)を剥がして対応する電線に貼る。
+    各マス(電線1本)の内容: 号線 / 種別・サイズ / From(機器-番号:端子, ロケータ) / To(同左)。
+    各マスに収まるよう、JavaScript で文字がはみ出さない最大フォントに自動縮小する。
+    面付けは cols×rows、マス寸法 cell_w_mm×cell_h_mm(ラベル台紙に合わせて変更可)。
+    戻り: path。
+    """
+    from . import harness_learn as _HL
+    from .geometry import norm as _n
+    am = addr_map or {}
+    per = max(1, cols * rows)
+
+    def dev(e):
+        return e['device'] + ('-' + e['no'] if e.get('no') else '')
+
+    def loc(e):
+        return am.get(_n(dev(e)), '') or am.get(_n(e['device']), '')
+
+    def esc(s):
+        return (str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+
+    def endpoint(e):
+        t = (':' + e['terminal']) if e.get('terminal') else ''
+        pl = ('[' + e['place'] + ']') if e.get('place') else ''
+        lc = loc(e)
+        lc = f'<span class="loc">{esc(lc)}</span>' if lc else ''
+        return f'{esc(pl)}{esc(dev(e))}{esc(t)} {lc}'
+
+    ws = routed['wires']
+    cells = []
+    for w in ws:
+        size = w.get('size', '')
+        typ = _HL.wire_type(w.get('kind'), w.get('gousen'), w.get('color'))
+        g = w.get('color') or w.get('gousen', '')
+        cells.append(
+            '<div class="cell"><div class="fit">'
+            f'<div class="hd"><b>{esc(g)}</b><span class="sz">{esc(typ)}{esc(size)}</span></div>'
+            f'<div class="ep"><i>F</i>{endpoint(w["from"])}</div>'
+            f'<div class="ep"><i>T</i>{endpoint(w["to"])}</div>'
+            '</div></div>')
+    pages = []
+    for i in range(0, max(len(cells), 1), per):
+        chunk = cells[i:i + per]
+        while len(chunk) < per:
+            chunk.append('<div class="cell empty"></div>')
+        pages.append('<div class="sheet">' + ''.join(chunk) + '</div>')
+
+    html = f'''<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>{esc(seiban)} ハーネスラベル</title>
+<style>
+  @page {{ size: {page}; margin: {margin_mm}mm; }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin:0; font-family: "Noto Sans JP","IPAGothic","Yu Gothic",sans-serif; background:#fff; color:#000; }}
+  .sheet {{ display:grid; grid-template-columns: repeat({cols}, {cell_w_mm}mm);
+            grid-auto-rows: {cell_h_mm}mm; page-break-after: always; }}
+  .cell {{ width:{cell_w_mm}mm; height:{cell_h_mm}mm; border:0.2mm solid #bbb;
+           padding:0.8mm; overflow:hidden; display:flex; align-items:center; }}
+  .cell.empty {{ border-style:dashed; }}
+  .fit {{ width:100%; line-height:1.15; }}
+  .hd {{ display:flex; justify-content:space-between; align-items:baseline; border-bottom:0.15mm solid #000; margin-bottom:0.4mm; }}
+  .hd b {{ font-weight:700; }}
+  .sz {{ opacity:.85; }}
+  .ep i {{ display:inline-block; width:1.1em; font-style:normal; font-weight:700; opacity:.7; }}
+  .loc {{ border:0.15mm solid #000; border-radius:0.6mm; padding:0 0.4mm; font-weight:700; white-space:nowrap; }}
+  .ep {{ overflow-wrap:anywhere; }}
+  @media screen {{ body {{ background:#eee; padding:10px; }} .sheet {{ background:#fff; margin:0 auto 12px; box-shadow:0 1px 6px rgba(0,0,0,.25); }} }}
+</style></head><body>
+{''.join(pages)}
+<script>
+// 各マスの文字を、はみ出さない最大フォントに自動調整(二分探索)
+function fit(el, box){{
+  var lo=3.0, hi=11.0;               // pt
+  for(var k=0;k<12;k++){{
+    var mid=(lo+hi)/2; el.style.fontSize=mid+'pt';
+    if(el.scrollWidth<=box.clientWidth && el.scrollHeight<=box.clientHeight) lo=mid; else hi=mid;
+  }}
+  el.style.fontSize=lo+'pt';
+}}
+document.querySelectorAll('.cell .fit').forEach(function(f){{ fit(f, f.parentNode); }});
+</script></body></html>'''
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(html)
     return path
 
 
@@ -697,8 +784,12 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     # ハーネスデータシートと同じネイティブ形式(11列TAB)でも出力(社内運用そのまま)
     htxt = _os.path.join(out_dir, f'{base}_ハーネスデータ.txt')
     to_harness_txt(routed, htxt, seiban=seiban, addr_map=amap)
+    # マス目シール印刷用(各マスにフォント自動調整)
+    lbl = _os.path.join(out_dir, f'{base}_ラベルシート.html')
+    to_label_sheet_html(routed, lbl, seiban=seiban, addr_map=amap)
     return {'seiban': seiban,
             'files': {'harness_txt': htxt, 'harness_csv': hcsv,
+                      'label_sheet_html': lbl,
                       'design_feedback_csv': fb.get('file'),
                       'device_map_csv': corr.get('file')},
             'electrical': ec['summary'],
