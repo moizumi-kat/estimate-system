@@ -453,6 +453,110 @@ def device_correspondence(files, seiban='', out_dir=None):
     return out
 
 
+def _layout_roster(dxf_paths):
+    """配置図(制御盤=D系/分電盤=G系, 格子枠あり)から機器インスタンスの物理位置＋盤内アドレスを収集。
+    戻り: {(DEVICE, DEVICE1): [ (x, y, 盤内アドレス, PARTS, シート) , ...]}。
+    同名機器が複数位置にある＝現場で識別できず『仮名』が要る対象。位置(盤内アドレス)で一意化する。"""
+    import re as _re
+    import ezdxf as _ezdxf
+    from .layout import Layout
+    R = {}
+    d_files = [p for p in dxf_paths if _re.search(r'-D\d', _os_basename(p).upper())
+               and 'DCT' not in _os_basename(p).upper()]
+    g_files = [p for p in dxf_paths if _re.search(r'-G\d', _os_basename(p).upper())]
+    for p in (d_files or g_files):
+        try:
+            lay = Layout(p)
+        except Exception:
+            lay = None
+        try:
+            doc = _ezdxf.readfile(p)
+        except Exception:
+            continue
+        sheet = _os_basename(p)
+        for e in doc.modelspace():
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in e.attribs}
+            dev, d1, parts = a.get('DEVICE', ''), a.get('DEVICE1', ''), a.get('PARTS', '')
+            if not dev or dev == 'FRAME':
+                continue
+            x, y = e.dxf.insert.x, e.dxf.insert.y
+            addr = ''
+            if lay is not None:
+                try:
+                    addr = lay.cell_at(x, y) or ''
+                except Exception:
+                    addr = ''
+            R.setdefault((dev, d1), []).append((round(x), round(y), addr, parts, sheet))
+    return R
+
+
+def _harness_sheet_refs(txt_paths):
+    """既存ハーネスシート(.txt, cp932, TAB区切り) → Counter[(機器種別, 番号)]（端点出現数）。"""
+    import csv as _csv
+    import collections as _c
+    refs = _c.Counter()
+    for p in txt_paths:
+        try:
+            raw = open(p, 'rb').read().decode('cp932', 'replace')
+        except Exception:
+            continue
+        for r in _csv.reader(raw.splitlines(), delimiter='\t'):
+            c = [x.strip() for x in (r + [''] * 11)[:11]]
+            if c[1] == '*':          # 電線仕様ヘッダ行
+                continue
+            dt, no = c[5], c[6]
+            if dt and dt != '*':
+                refs[(dt, no)] += 1
+    return refs
+
+
+def reconcile_legacy(dxf_paths, sheet_txt_paths, seiban='', out_dir=None):
+    """【過去製番の照合】客先の正式図面(DXF)＋既存ハーネスシート(.txt, 仮名入り)を突合し、
+    正式機器名 ↔ 盤内アドレス ↔ 仮名(決定的) の対応表を再生成する。
+
+    運用課題(茂泉様): 製造は同一機器の識別に手書きの『仮の機器名称』を付け社内図面を書き直すが、
+      客先の正式図面には仮名が無く、改造時に 正式図面↔ハーネス(仮名) の照合が困難。
+    ここでの実証: 位置(盤内アドレス)は名前に依らない不変キー。配置図から各機器の盤内アドレスを取り、
+      仮名を『正式名(盤内アドレス)』で決定的に生成すれば、既存ハーネスシートと自動照合できる。
+    戻り: {seiban, 図面機器数, アドレス付与数, ハーネス参照数, 照合数, 同名複数数, items, file?}。
+    """
+    R = _layout_roster(dxf_paths)
+    refs = _harness_sheet_refs(sheet_txt_paths)
+    n_dev = len(R)
+    n_addr = sum(1 for insts in R.values() if any(a for _, _, a, _, _ in insts))
+    matched = [k for k in refs if k in R and any(a for _, _, a, _, _ in R[k])]
+    dup = {k: v for k, v in R.items() if len(v) > 1}
+    items = []
+    for (dev, d1), insts in sorted(R.items()):
+        nm = dev + ('-' + d1 if d1 else '')
+        occ = refs.get((dev, d1), 0)
+        for (x, y, addr, parts, sheet) in insts:
+            items.append({'正式名': nm, '盤内アドレス': addr, 'x': x, 'y': y,
+                          'PARTS': parts, 'シート': sheet,
+                          '仮名': f'{nm}({addr})' if addr else nm,
+                          'ハーネス出現': occ, '同名複数': len(insts) > 1})
+    out = {'seiban': seiban, '図面機器数': n_dev, 'アドレス付与数': n_addr,
+           'ハーネス参照数': len(refs), '照合数': len(matched),
+           '同名複数数': len(dup), 'items': items}
+    if out_dir:
+        import os as _os
+        import csv as _csv
+        _os.makedirs(out_dir, exist_ok=True)
+        fp = _os.path.join(out_dir, f"{seiban or 'legacy'}_機器対応表.csv")
+        with open(fp, 'w', encoding='cp932', errors='replace', newline='') as f:
+            w = _csv.writer(f)
+            w.writerow(['正式機器名', '盤内アドレス', '位置x', '位置y', 'PARTS',
+                        'シート', '仮名(決定的)', 'ハーネス出現', '同名複数'])
+            for it in items:
+                w.writerow([it['正式名'], it['盤内アドレス'], it['x'], it['y'],
+                            it['PARTS'], it['シート'], it['仮名'],
+                            it['ハーネス出現'], '●' if it['同名複数'] else ''])
+        out['file'] = fp
+    return out
+
+
 def _os_basename(p):
     import os as _os
     return _os.path.basename(str(p))
