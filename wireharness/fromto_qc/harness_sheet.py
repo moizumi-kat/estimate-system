@@ -21,9 +21,15 @@ from . import route as _route
 from .geometry import norm
 
 
+# 制御配線の標準電線(社内定石)。図面で個別指定が無い号線に適用(要確認)。
+DEFAULT_WIRE = ('HIV', '1.25')
+
+
 def _wire_specs(paths):
-    """CABLEブロックの DENSEN 属性から 回路番号→(種別,サイズ) を集める。
-    DENSEN 例 'HIV3.5sq' → 種別'HIV' サイズ'3.5'。'sq'のみ等は不明として空。"""
+    """図面から 回路番号→(種別,サイズ) を集める。
+    ・電線サイズ(CABLE)ブロックの DENSEN 例 'HIV3.5sq' → ('HIV','3.5')。'sq'のみは未記入。
+    ・系統情報ブロックの '4.幹線サイズ' 例 'EM-FP5.5sq-3C'/'EM-CET60sq' → 幹線の種別/サイズ。
+    未記入(DENSEN='sq'等)は out に入れない → build_sheet 側で標準(DEFAULT_WIRE)を補完。"""
     out = {}
     for p in paths:
         try:
@@ -34,16 +40,17 @@ def _wire_specs(paths):
             if e.dxftype() != 'INSERT' or not e.attribs:
                 continue
             a = {x.dxf.tag: (x.dxf.text or '').strip() for x in e.attribs}
-            if a.get('PARTS') != '電線サイズ':
-                continue
-            d = a.get('DENSEN', '')
-            m = re.match(r'([A-Za-z]*)([0-9.]+)\s*sq', d)
-            if m:
-                kind = m.group(1) or 'IV'
-                size = m.group(2)
-                circ = norm(a.get('DEVICE1', ''))
-                if circ:
-                    out[circ] = (kind, size)
+            parts = a.get('PARTS', '')
+            circ = norm(a.get('DEVICE1', ''))
+            if parts == '電線サイズ':
+                m = re.match(r'([A-Za-z]*)([0-9.]+)\s*sq', a.get('DENSEN', ''))
+                if m and circ:
+                    out[circ] = (m.group(1) or 'IV', m.group(2))
+            elif parts == '系統情報':
+                # 幹線サイズ 例 'EM-FP5.5sq-3C' → 種別 'EM-FP' サイズ '5.5'
+                m = re.search(r'([A-Za-z\-]*?)([0-9.]+)\s*sq', a.get('4.幹線サイズ', ''))
+                if m and circ:
+                    out.setdefault(circ, (m.group(1).strip('-') or 'CV', m.group(2)))
     return out
 
 
@@ -130,7 +137,9 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
                             'x': x, 'y': y, 'unfilled_tb': unfilled_tb}
                 terms.append((key, x, y))
         circ = _circuit_of(g)
-        kind, size = specs.get(norm(circ), ('', ''))
+        # 図面に個別指定があればそれ、無ければ制御標準(HIV/1.25)を補完(要確認)。
+        # アース号線(末尾E/緑)は緑・IV相当だが色は _color_of が付ける。
+        kind, size = specs.get(norm(circ)) or specs.get(norm(g)) or DEFAULT_WIRE
         wires = []
         for a, b in _route.optimize_watari(terms, priority):
             ma, mb = idx[a], idx[b]
