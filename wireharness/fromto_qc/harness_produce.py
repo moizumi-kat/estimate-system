@@ -378,6 +378,86 @@ def design_feedback(seq_paths, skel_paths=None, seiban='', out_dir=None):
     return out
 
 
+def device_correspondence(files, seiban='', out_dir=None):
+    """正式機器名 ↔ 仮機器名 ↔ 盤内アドレス(位置) の対応表を作る。
+
+    背景(茂泉様の運用課題):
+      製造は同一機器の識別のため『仮の機器名称』を付け、社内図面を書き直すが、
+      客先の正式図面には仮名が無く、改造時に 正式図面↔ハーネス(仮名) の照合が困難。
+    解決:
+      仮名を『正式名＋盤内アドレス(位置から決定的)』で生成すれば、客先の正式図面から
+      いつでも同じ仮名を再生成でき、ハーネスシートと自動照合できる(手作業の対応不要)。
+      位置(盤内アドレス)は名前に依らない不変キー。
+    戻り: {'seiban','items':[{正式名,盤内アドレス,x,y,シート,仮名}], 'file'?}
+    """
+    import re as _re
+    from .geometry import DrawingModel
+    from .layout import Layout
+    seq, skel, dct = _classify_seiban_files(files)
+    # 盤内アドレスは「配置図(D001・格子枠あり)」の物理位置から取る(回路図F/Eの座標ではない)。
+    # 優先: -D<数字> の非DCT(格子枠あり) → DCT。
+    lay = None
+    d_files = [p for p in files if _re.search(r'-D\d', _os_basename(p).upper())
+               and 'DCT' not in _os_basename(p).upper()]
+    for p in (d_files + dct):
+        try:
+            lay = Layout(p)
+            break
+        except Exception:
+            lay = None
+
+    def phys_addr(sym):
+        """機器の 盤内アドレス を配置図の物理位置から。無ければ空。"""
+        if lay is None:
+            return ''
+        try:
+            pos = lay.device_pos(sym)
+            if pos:
+                return lay.cell_at(pos[0], pos[1]) or ''
+        except Exception:
+            pass
+        return ''
+
+    seen = set()
+    items = []
+    for p in seq + skel:
+        try:
+            m = DrawingModel(p)
+        except Exception:
+            continue
+        sheet = _os_basename(p)
+        for d in m.devices:
+            cx = round((d.box[0] + d.box[2]) / 2)
+            cy = round((d.box[1] + d.box[3]) / 2)
+            if d.sym in seen:
+                continue
+            seen.add(d.sym)                 # 論理機器1つにつき1行(接点の多重描画を集約)
+            a = phys_addr(d.sym)
+            prov = f'{d.sym}({a})' if a else d.sym
+            items.append({'正式名': d.sym, '盤内アドレス': a, 'x': cx, 'y': cy,
+                          'シート': sheet, '仮名': prov})
+    items.sort(key=lambda r: (r['正式名'], r['x'], r['y']))
+    out = {'seiban': seiban, 'items': items}
+    if out_dir:
+        import os as _os
+        import csv as _csv
+        _os.makedirs(out_dir, exist_ok=True)
+        fp = _os.path.join(out_dir, f"{seiban or 'harness'}_機器対応表.csv")
+        with open(fp, 'w', encoding='cp932', errors='replace', newline='') as f:
+            w = _csv.writer(f)
+            w.writerow(['正式機器名', '盤内アドレス', '位置x', '位置y', 'シート', '仮機器名(決定的)'])
+            for it in items:
+                w.writerow([it['正式名'], it['盤内アドレス'], it['x'], it['y'],
+                            it['シート'], it['仮名']])
+        out['file'] = fp
+    return out
+
+
+def _os_basename(p):
+    import os as _os
+    return _os.path.basename(str(p))
+
+
 def to_csv(sheet, path):
     """生成シートをCSV(同フォーマット)で書き出す(harness_sheet.to_csv に委譲)。"""
     return harness_sheet.to_csv(sheet, path)
@@ -432,12 +512,14 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     dec = duct_decision(seq, skel_paths=skel, seiban=seiban, dct_paths=dct)
     ec = electrical_check(seq, skel_paths=skel, seiban=seiban)
     fb = design_feedback(seq, skel_paths=skel, seiban=seiban, out_dir=out_dir)
+    corr = device_correspondence(files, seiban=seiban, out_dir=out_dir)
     _os.makedirs(out_dir, exist_ok=True)
     base = seiban or 'harness'
     hcsv = _os.path.join(out_dir, f'{base}_ハーネス.csv')
     length_to_csv(routed, hcsv)
     return {'seiban': seiban,
-            'files': {'harness_csv': hcsv, 'design_feedback_csv': fb.get('file')},
+            'files': {'harness_csv': hcsv, 'design_feedback_csv': fb.get('file'),
+                      'device_map_csv': corr.get('file')},
             'electrical': ec['summary'],
             'design_feedback': fb['summary'],
             'summary': {'電線数': routed['summary']['電線数'],
