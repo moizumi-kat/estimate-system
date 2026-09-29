@@ -154,7 +154,12 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
     for r in sheet:
         for wi in r['wires']:
             if wi.get('from_pos') and wi.get('to_pos'):
-                flat.append({'gousen': r['gousen'], 'kind': r['kind'], 'size': r['size'],
+                # 主回路(単線図)の無名結線は内部ID 'M@n' で拾っている。出力はモデルに倣い
+                # 回路番号(端点の番号)を号線名にする(内部IDは出さない)。
+                g = r['gousen']
+                if str(g).startswith('M@'):
+                    g = wi['from'].get('no') or wi['to'].get('no') or ''
+                flat.append({'gousen': g, 'kind': r['kind'], 'size': r['size'],
                              'color': wi.get('color', ''),
                              'from': wi['from'], 'to': wi['to'],
                              'from_pos': wi['from_pos'], 'to_pos': wi['to_pos']})
@@ -396,12 +401,20 @@ def device_correspondence(files, seiban='', out_dir=None):
     lay = None
     d_files = [p for p in files if _re.search(r'-D\d', _os_basename(p).upper())
                and 'DCT' not in _os_basename(p).upper()]
-    for p in (d_files + dct):
+    # 分電盤は配置図(格子枠)が G(外形図/内部配置図)にある。制御盤の D と同様に候補へ。
+    g_files = [p for p in files if _re.search(r'-G\d', _os_basename(p).upper())
+               and 'DCT' not in _os_basename(p).upper()]
+    for p in (d_files + g_files + dct):
         try:
-            lay = Layout(p)
-            break
+            cand = Layout(p)
         except Exception:
-            lay = None
+            continue
+        # 格子枠(行・列)を持つ図面を優先。無ければ暫定として保持し次を試す。
+        if getattr(cand, 'rows', None) and getattr(cand, 'cols', None):
+            lay = cand
+            break
+        if lay is None:
+            lay = cand
 
     def phys_addr(sym):
         """機器の 盤内アドレス を配置図の物理位置から。無ければ空。"""
