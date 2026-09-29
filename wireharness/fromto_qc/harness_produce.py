@@ -398,34 +398,44 @@ def device_correspondence(files, seiban='', out_dir=None):
     seq, skel, dct = _classify_seiban_files(files)
     # 盤内アドレスは「配置図(D001・格子枠あり)」の物理位置から取る(回路図F/Eの座標ではない)。
     # 優先: -D<数字> の非DCT(格子枠あり) → DCT。
-    lay = None
+    # 盤内アドレスは配置図(格子枠)の物理位置から。制御盤=D、分電盤=G(外形図/内部配置図)。
+    # 分電盤は G001(扉/外形)と G002(内部機器配置)のように複数あり、内部機器は後者にある。
+    # よって「1枚を選ぶ」のではなく、格子枠を持つ全配置図を横断して機器位置を探す。
     d_files = [p for p in files if _re.search(r'-D\d', _os_basename(p).upper())
                and 'DCT' not in _os_basename(p).upper()]
-    # 分電盤は配置図(格子枠)が G(外形図/内部配置図)にある。制御盤の D と同様に候補へ。
     g_files = [p for p in files if _re.search(r'-G\d', _os_basename(p).upper())
                and 'DCT' not in _os_basename(p).upper()]
+    lays = []
     for p in (d_files + g_files + dct):
         try:
-            cand = Layout(p)
+            L = Layout(p)
         except Exception:
             continue
-        # 格子枠(行・列)を持つ図面を優先。無ければ暫定として保持し次を試す。
-        if getattr(cand, 'rows', None) and getattr(cand, 'cols', None):
-            lay = cand
-            break
-        if lay is None:
-            lay = cand
+        if getattr(L, 'rows', None) and getattr(L, 'cols', None):
+            lays.append(L)
+    lay = lays[0] if lays else None      # 後方互換(missing判定等で参照)
+
+    def _brk_variants(sym):
+        """遮断器の別名(結線図ELCB ↔ 配置図MCCB 等)を相互展開して照合候補にする。"""
+        s = str(sym)
+        m = _re.match(r'^(ELCB|MCCB|MCB|ELB|NFB|MMS)(\b|[-\s]|\d|$)', s)
+        if not m:
+            return [s]
+        rest = s[len(m.group(1)):]
+        return [s] + [alt + rest for alt in ('MCCB', 'ELCB', 'MCB', 'NFB', 'MMS')]
 
     def phys_addr(sym):
-        """機器の 盤内アドレス を配置図の物理位置から。無ければ空。"""
-        if lay is None:
-            return ''
-        try:
-            pos = lay.device_pos(sym)
-            if pos:
-                return lay.cell_at(pos[0], pos[1]) or ''
-        except Exception:
-            pass
+        """機器の 盤内アドレス を配置図の物理位置から(全配置図を横断＋遮断器別名対応)。"""
+        for cand in _brk_variants(sym):
+            for L in lays:
+                try:
+                    pos = L.device_pos(cand)
+                    if pos:
+                        a = L.cell_at(pos[0], pos[1])
+                        if a:
+                            return a
+                except Exception:
+                    pass
         return ''
 
     seen = set()
