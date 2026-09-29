@@ -194,6 +194,7 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
                               'size': w['size'], 'color': w.get('color', ''),
                               'from': w['from'], 'to': w['to'],
                               'length': round(length, 1), 'route': [list(fp), list(tp)]})
+    _assign_maincircuit_tb(wires_out)
     return {'seiban': seiban, 'priority': {'topology': topology, 'physical': physical},
             'duct_type': duct_type, 'wires': wires_out,
             'total_length': round(total, 1), 'duct_util': duct_util,
@@ -471,6 +472,33 @@ def device_correspondence(files, seiban='', out_dir=None):
                             it['シート'], it['仮名']])
         out['file'] = fp
     return out
+
+
+_PHASE_SUFFIX = {'緑': 'E', '赤': 'U', '白': 'V', '青': 'W'}
+
+
+def _assign_maincircuit_tb(wires):
+    """主回路(アース/電源)の TB 端子番号を手本ルールで自動付番する(茂泉様)。
+
+    手本のハーネスシート: 主回路の TB 端子 = <回路番号><相>。
+      アース(緑/号線E)→ <回路>E、電源 赤→U/白→V/青→W(R/S/T相)。制御線は空欄のまま。
+    回路番号は「相手端点(非TB側)の番号」を用いる(例 TB↔MCCB-102 → 102<相>)。
+    端子が既に埋まっている TB は変更しない(図面優先)。
+    """
+    from .geometry import norm as _n
+    for w in wires:
+        color = w.get('color', '')
+        suf = _PHASE_SUFFIX.get(color)
+        if not suf and str(w.get('gousen', '')).upper().startswith('E'):
+            suf = 'E'                       # アース号線(色未設定)
+        if not suf:
+            continue                        # 制御線は対象外(空欄のまま)
+        fr, to = w['from'], w['to']
+        for a, b in ((fr, to), (to, fr)):
+            if _n(a.get('device', '')) == 'TB' and not a.get('terminal'):
+                circ = b.get('no', '')
+                if circ:
+                    a['terminal'] = f'{circ}{suf}'
 
 
 def _layout_roster(dxf_paths):

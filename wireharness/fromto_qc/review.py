@@ -74,12 +74,12 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
         crimp = HL.crimp_of(size, d)
         flags = []
         # TB端子は製造アサイン(台番号/端子番号を製造が付与)。台/端子が未確定なTBを対象。
+        # 主回路のTB端子は _assign_maincircuit_tb で自動付番済みなので、ここでは残り(制御等)のみ。
         tb_mfg = norm(d) == 'TB' and (not no or term in ('', '?'))
         if tb_mfg:
             flags.append('TB端子(製造アサイン)')
-        # ロケータ未取得: 扉/盤外/TB(製造アサインで別途表示)を除く、真に位置が引けない機器のみ。
-        if not loc and not tb_mfg:
-            flags.append('ロケータ未取得')
+        # ロケータは照合の補助情報(ハーネス配線の正誤ではない)。図面にロケータが無い製番もある。
+        # 位置が引ければ付与、引けなければ空欄のままとし『要確認』にはしない(非ブロッキング)。
         if (norm(d), norm(term)) in shorts:
             flags.append('電気QC')
         return {'place': place, 'device': d, 'no': no, 'terminal': term,
