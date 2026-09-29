@@ -62,6 +62,13 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
         elif not loc and _is_boundary(d):
             loc = '盤外'
             place = place or '盤外'
+        # 過電流継電器 51 は配置図に単独では無く、電子式で同回路の 52/MCCB(遮断器・接触器)に統合。
+        # モデルの物理実体に合わせ、同回路(番号一致)の 52→MCCB→ELCB のロケータを継承する。
+        elif not loc and no and re.match(r'^51([A-Z]|$)', norm(d)):
+            for host in ('52', 'MCCB', 'ELCB'):
+                loc = am.get(norm(host + '-' + no)) or am.get(norm(host + no)) or ''
+                if loc:
+                    break
         # 圧着端子サイズ: 学習で分かる所は自動補完。モデルでも空欄が正常に多いため、
         # 不明時は空欄のままとし『要確認』にはしない(非ブロッキング。過検出を避ける)。
         crimp = HL.crimp_of(size, d)
