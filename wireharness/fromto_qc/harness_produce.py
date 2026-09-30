@@ -194,6 +194,19 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
                               'size': w['size'], 'color': w.get('color', ''),
                               'from': w['from'], 'to': w['to'],
                               'length': round(length, 1), 'route': [list(fp), list(tp)]})
+    # 端子台の台番号を配置図(D/G, 格子枠)のTBブロックから幾何的に付番 → 端子(相/回路)を付番。
+    dev_lays = []
+    for p in list(dct_paths or []) + list(skel_paths or []):
+        bn = _os_basename(p).upper()
+        if 'DCT' in bn:                 # ダクト図は除外(配置図/外形図・スケルトンのみ)
+            continue
+        try:
+            L = Layout(p)
+            if getattr(L, 'devices', None):
+                dev_lays.append(L)
+        except Exception:
+            pass
+    _assign_tb_block(wires_out, dev_lays)
     _assign_maincircuit_tb(wires_out)
     return {'seiban': seiban, 'priority': {'topology': topology, 'physical': physical},
             'duct_type': duct_type, 'wires': wires_out,
@@ -475,6 +488,66 @@ def device_correspondence(files, seiban='', out_dir=None):
 
 
 _PHASE_SUFFIX = {'緑': 'E', '赤': 'U', '白': 'V', '青': 'W'}
+_TB_NEAR_MAX = 600.0        # 接続先機器と端子台ストリップの近接判定(mm)。これ超なら付番しない(誤答回避)
+
+
+def _tb_blocks(lays):
+    """配置図群から端子台ストリップの {台番号: (x,y)} を集める(キー TB101→番号101)。"""
+    import re as _re
+    out = {}
+    for L in lays:
+        for k, pos in getattr(L, 'devices', {}).items():
+            m = _re.match(r'^TB(.+)$', str(k))
+            if m:
+                out.setdefault(m.group(1), pos)
+    return out
+
+
+def _assign_tb_block(wires, lays):
+    """TB端子の台番号を配置図から幾何的に付番する(茂泉様: 台番号はモデル＝配置図のTBブロック)。
+
+    規則(モデル検証済): TB台番号 = 接続先(非TB)機器に最も近い配置図の端子台ストリップ。
+      例 MCCB-102 の近くの TB102、MCCB-103/104 の近くの TB101 …(5-29026でモデルと一致)。
+    近接(距離 _TB_NEAR_MAX 以内)で一意な時のみ付番。遠い/判定不能は空欄のまま(誤答ゼロ)。
+    """
+    import math
+    from .geometry import norm as _n
+    blocks = _tb_blocks(lays)
+    if not blocks or not lays:
+        return
+
+    def dev_pos(dev, no):
+        name = dev + ('-' + no if no else '')
+        for L in lays:
+            try:
+                p = L.device_pos(name) or L.device_pos(dev)
+                if p:
+                    return p
+            except Exception:
+                pass
+        return None
+
+    def nearest(pos):
+        best, bd = None, 1e18
+        for tbno, tpos in blocks.items():
+            d = math.hypot(tpos[0] - pos[0], tpos[1] - pos[1])
+            if d < bd:
+                bd, best = d, tbno
+        return (best, bd) if best is not None else (None, bd)
+
+    for w in wires:
+        fr, to = w['from'], w['to']
+        for a, b in ((fr, to), (to, fr)):
+            no = str(a.get('no', ''))
+            # TB以外、または実台番号が既にある場合はスキップ。仮N(内部の暫定)は未割当扱いで上書き。
+            if _n(a.get('device', '')) != 'TB' or (no and not re.match(r'^仮\d', no)):
+                continue
+            pos = dev_pos(b.get('device', ''), b.get('no', ''))
+            if not pos:
+                continue
+            tbno, dist = nearest(pos)
+            if tbno and dist <= _TB_NEAR_MAX:
+                a['no'] = tbno
 
 
 def _assign_maincircuit_tb(wires):

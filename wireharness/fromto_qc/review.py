@@ -73,9 +73,9 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
         # 不明時は空欄のままとし『要確認』にはしない(非ブロッキング。過検出を避ける)。
         crimp = HL.crimp_of(size, d)
         flags = []
-        # TB端子は製造アサイン(台番号/端子番号を製造が付与)。台/端子が未確定なTBを対象。
-        # 主回路のTB端子は _assign_maincircuit_tb で自動付番済みなので、ここでは残り(制御等)のみ。
-        tb_mfg = norm(d) == 'TB' and (not no or term in ('', '?'))
+        # TB端子: 台番号(端子台)は配置図から幾何付番済み。端子番号は主回路=自動付番、制御=空欄が
+        # 正常(手本準拠)。よって『要確認』は台番号すら特定できないTBのみ(接続先が配置図に無い等)。
+        tb_mfg = norm(d) == 'TB' and not no
         if tb_mfg:
             flags.append('TB端子(製造アサイン)')
         # ロケータは照合の補助情報(ハーネス配線の正誤ではない)。図面にロケータが無い製番もある。
