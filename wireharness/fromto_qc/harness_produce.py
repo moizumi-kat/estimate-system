@@ -535,12 +535,14 @@ def _assign_tb_block(wires, lays):
                 bd, best = d, tbno
         return (best, bd) if best is not None else (None, bd)
 
+    def _unassigned_tb(a):
+        no = str(a.get('no', ''))
+        return _n(a.get('device', '')) == 'TB' and (not no or bool(re.match(r'^仮\d', no)))
+
+    # (1) 幾何付番: 接続先機器に最も近い配置図のTBストリップ(モデル準拠)
     for w in wires:
-        fr, to = w['from'], w['to']
-        for a, b in ((fr, to), (to, fr)):
-            no = str(a.get('no', ''))
-            # TB以外、または実台番号が既にある場合はスキップ。仮N(内部の暫定)は未割当扱いで上書き。
-            if _n(a.get('device', '')) != 'TB' or (no and not re.match(r'^仮\d', no)):
+        for a, b in ((w['from'], w['to']), (w['to'], w['from'])):
+            if not _unassigned_tb(a):
                 continue
             pos = dev_pos(b.get('device', ''), b.get('no', ''))
             if not pos:
@@ -548,6 +550,19 @@ def _assign_tb_block(wires, lays):
             tbno, dist = nearest(pos)
             if tbno and dist <= _TB_NEAR_MAX:
                 a['no'] = tbno
+
+    # (2) フォールバック: 幾何で置けないTB(配置図に無い機器＝製造の作業用仮名 等)は
+    #     製造の正規付番として、接続先の回路番号(相手機器の番号→無ければ号線の数字接頭)を台番号にする。
+    for w in wires:
+        g = str(w.get('gousen', ''))
+        gnum = re.match(r'^(\d+)', g)
+        gnum = gnum.group(1) if gnum else ''
+        for a, b in ((w['from'], w['to']), (w['to'], w['from'])):
+            if not _unassigned_tb(a):
+                continue
+            circ = b.get('no', '') or gnum
+            if circ:
+                a['no'] = circ
 
 
 def _assign_maincircuit_tb(wires):
