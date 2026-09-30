@@ -560,7 +560,10 @@ def _assign_tb_block(wires, lays):
         for a, b in ((w['from'], w['to']), (w['to'], w['from'])):
             if not _unassigned_tb(a):
                 continue
-            circ = b.get('no', '') or gnum
+            bno = str(b.get('no', ''))
+            if re.match(r'^仮\d', bno):     # 相手も未確定TB(渡り)の仮Nは使わない→号線の回路番号で付番
+                bno = ''
+            circ = bno or gnum
             if circ:
                 a['no'] = circ
 
