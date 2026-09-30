@@ -78,10 +78,11 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
         tb_mfg = norm(d) == 'TB' and not no
         if tb_mfg:
             flags.append('TB端子(製造アサイン)')
+        # 注) 同一端子が複数号線に現れるのは『分岐』(茂泉様)。等電位を保ったままその端子から
+        #     新しい号線が分岐する正常な結線であり、短絡ではない。よって要確認にはしない。
         # ロケータは照合の補助情報(ハーネス配線の正誤ではない)。図面にロケータが無い製番もある。
         # 位置が引ければ付与、引けなければ空欄のままとし『要確認』にはしない(非ブロッキング)。
-        if (norm(d), norm(term)) in shorts:
-            flags.append('電気QC')
+        _ = shorts   # electrical_check の shorts は分岐点(正常)なので要確認にしない(内部QCのみ)
         return {'place': place, 'device': d, 'no': no, 'terminal': term,
                 'loc': loc, 'crimp': crimp, 'flags': flags}
 
