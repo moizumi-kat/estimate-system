@@ -563,7 +563,9 @@ def _assign_tb_block(wires, lays):
             bno = str(b.get('no', ''))
             if re.match(r'^仮\d', bno):     # 相手も未確定TB(渡り)の仮Nは使わない→号線の回路番号で付番
                 bno = ''
-            circ = bno or gnum
+            # 台番号: 接続先機器の番号 → 号線の数字接頭 → 号線名そのもの
+            # (母線/相のTB渡り: 号線が E/N/S/L1/SLD 等の非数字ならバス名を台番号にする)
+            circ = bno or gnum or g
             if circ:
                 a['no'] = circ
 
