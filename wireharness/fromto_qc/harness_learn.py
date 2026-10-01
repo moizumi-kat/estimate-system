@@ -22,10 +22,34 @@ import ezdxf
 from .geometry import norm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-LEARNED_PATH = os.path.join(HERE, 'learned.json')
+# 学習結果(可変状態)の置き場所。環境変数 HARNESS_STATE を指定すると永続領域へ外部化する
+# (AWS/EC2 の再デプロイ=git pull でコード木が更新されても運用中の学習が巻き戻らない)。
+# 未指定ならパッケージ内(従来どおり=ローカル挙動は不変)。初回は同梱のリポジトリ値からシード。
+_STATE = os.environ.get('HARNESS_STATE')
+
+
+def _state_path(name):
+    if _STATE:
+        os.makedirs(_STATE, exist_ok=True)
+        dst = os.path.join(_STATE, name)
+        src = os.path.join(HERE, name)
+        if not os.path.exists(dst) and os.path.exists(src):
+            try:
+                import shutil
+                if os.path.isdir(src):
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+            except Exception:
+                pass
+        return dst
+    return os.path.join(HERE, name)
+
+
+LEARNED_PATH = _state_path('learned.json')
 # 人手で確定(承認)したハーネスシートの蓄積先。確認UIの「確定・出力＋学習」で追記され、
 # ここから圧着等を再学習して learned.json に反映する(運用で賢くなる)。
-CONFIRMED_DIR = os.path.join(HERE, 'confirmed')
+CONFIRMED_DIR = _state_path('confirmed')
 
 
 def _read_text(path):

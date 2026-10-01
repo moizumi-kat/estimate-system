@@ -22,7 +22,10 @@ import ezdxf
 from .geometry import norm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CASES_PATH = os.path.join(HERE, 'design_cases.json')
+# 学習結果(ケースベース)の置き場所。harness_learn と同じ HARNESS_STATE 永続領域に外部化
+# (未指定ならパッケージ内=従来どおり)。初回はリポジトリ同梱値からシード。
+from . import harness_learn as _HL_state
+CASES_PATH = _HL_state._state_path('design_cases.json')
 
 # 図枠(FRAME)ブロックの改訂履歴 属性。REVDATEn=日付 / RDITAILEn=修正内容 / RNAMEn=担当。
 # 製番により FA2_FRAME / FA3_FRAME 等、連番 n も 1..N と異なるため、正規表現で広く拾う。

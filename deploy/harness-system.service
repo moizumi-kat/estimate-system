@@ -1,0 +1,30 @@
+# systemd ユニット（EC2）: ハーネスデータ自動生成システムを gunicorn で常駐させる。
+# 見積(estimate-system.service:8000)・検図(kenzu-system.service:8001)とは
+# 別プロセス・別ポート(8002)・別データ。同じEC2上に相乗りできる。
+# 設置: /etc/systemd/system/harness-system.service にコピーして
+#   sudo systemctl daemon-reload && sudo systemctl enable --now harness-system
+# ---- 環境に合わせて {APP_DIR} / {APP_USER} を書き換える ----
+[Unit]
+Description=ハーネスデータ自動生成システム (wire-harness) Flask/gunicorn
+After=network.target
+
+[Service]
+Type=simple
+User={APP_USER}
+Group={APP_USER}
+WorkingDirectory={APP_DIR}
+# 環境変数は平文でユニットに書かず専用ファイルに置く。/etc/harness-system.env に記載し chmod 600:
+#   HARNESS_WORK=/var/lib/harness-system/work     アップロード/出力/バックアップ/ログ(永続領域=EBS)
+#   HARNESS_STATE=/var/lib/harness-system/state   学習結果(learned.json/design_cases.json/confirmed)の
+#                                                 永続化先。再デプロイ(git pull)で巻き戻らないよう
+#                                                 コード木の外へ外部化(初回はリポジトリ値から自動シード)。
+EnvironmentFile=/etc/harness-system.env
+# ハーネス生成(DXF解析・測長)は重いので timeout を大きめに。ワーカ数はvCPUに合わせて調整。
+ExecStart={APP_DIR}/venv/bin/gunicorn wireharness.harness_app:app \
+    --workers 3 --timeout 300 --graceful-timeout 30 \
+    --bind 127.0.0.1:8002 --access-logfile - --error-logfile -
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -35,8 +35,9 @@ app.logger.addHandler(_handler)
 app.logger.setLevel(logging.INFO)
 
 # --- 知識ファイル(学習結果)のバックアップ ---
-_FROMTO = os.path.join(HERE, 'fromto_qc')
-_KNOWLEDGE = ['learned.json', 'design_cases.json']       # confirmed/ も併せて退避
+# 実際の保存先(HARNESS_STATE で永続領域に外部化され得る)をモジュールから解決する。
+from wireharness.fromto_qc import harness_learn as _HL
+from wireharness.fromto_qc import design_check as _DC
 BACKUP_DIR = os.path.join(WORK, '_backup')
 
 
@@ -47,11 +48,10 @@ def backup_knowledge(tag='auto', keep=30):
         ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         dst = os.path.join(BACKUP_DIR, f'{ts}_{tag}')
         os.makedirs(dst, exist_ok=True)
-        for name in _KNOWLEDGE:
-            src = os.path.join(_FROMTO, name)
+        for src in (_HL.LEARNED_PATH, _DC.CASES_PATH):
             if os.path.exists(src):
-                shutil.copy2(src, os.path.join(dst, name))
-        conf = os.path.join(_FROMTO, 'confirmed')
+                shutil.copy2(src, os.path.join(dst, os.path.basename(src)))
+        conf = _HL.CONFIRMED_DIR
         if os.path.isdir(conf):
             shutil.copytree(conf, os.path.join(dst, 'confirmed'), dirs_exist_ok=True)
         # 世代上限
