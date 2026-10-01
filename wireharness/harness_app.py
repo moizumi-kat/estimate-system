@@ -6,11 +6,16 @@
   → 出力ダウンロード(ハーネスデータ.txt / ラベルシート / 各CSV)。
 
 起動: python wireharness/harness_app.py   (本番: gunicorn -b 0.0.0.0:8000 wireharness.harness_app:app)
+運用: 詳細は wireharness/運用マニュアル.md を参照。
 """
 import os
 import glob
 import html
+import shutil
+import logging
+import datetime
 import traceback
+from logging.handlers import RotatingFileHandler
 from flask import Flask, request, redirect, url_for, send_file, abort, Response
 
 from wireharness.fromto_qc import harness_produce as HP
@@ -19,6 +24,58 @@ app = Flask(__name__)
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORK = os.environ.get('HARNESS_WORK', os.path.join(HERE, 'harness_work'))
 os.makedirs(WORK, exist_ok=True)
+
+# --- ログ(ローテーション) ---
+LOG_DIR = os.path.join(WORK, 'logs')
+os.makedirs(LOG_DIR, exist_ok=True)
+_handler = RotatingFileHandler(os.path.join(LOG_DIR, 'app.log'),
+                               maxBytes=1_000_000, backupCount=5, encoding='utf-8')
+_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+app.logger.addHandler(_handler)
+app.logger.setLevel(logging.INFO)
+
+# --- 知識ファイル(学習結果)のバックアップ ---
+_FROMTO = os.path.join(HERE, 'fromto_qc')
+_KNOWLEDGE = ['learned.json', 'design_cases.json']       # confirmed/ も併せて退避
+BACKUP_DIR = os.path.join(WORK, '_backup')
+
+
+def backup_knowledge(tag='auto', keep=30):
+    """学習結果(learned.json / design_cases.json / confirmed/)をタイムスタンプ退避。
+    学習で上書きする前に呼ぶ。直近 keep 世代のみ保持。失敗しても処理は止めない。"""
+    try:
+        ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        dst = os.path.join(BACKUP_DIR, f'{ts}_{tag}')
+        os.makedirs(dst, exist_ok=True)
+        for name in _KNOWLEDGE:
+            src = os.path.join(_FROMTO, name)
+            if os.path.exists(src):
+                shutil.copy2(src, os.path.join(dst, name))
+        conf = os.path.join(_FROMTO, 'confirmed')
+        if os.path.isdir(conf):
+            shutil.copytree(conf, os.path.join(dst, 'confirmed'), dirs_exist_ok=True)
+        # 世代上限
+        gens = sorted(glob.glob(os.path.join(BACKUP_DIR, '*')))
+        for old in gens[:-keep]:
+            shutil.rmtree(old, ignore_errors=True)
+        app.logger.info('backup_knowledge ok: %s', dst)
+        return dst
+    except Exception:
+        app.logger.exception('backup_knowledge failed')
+        return None
+
+
+@app.errorhandler(Exception)
+def _on_error(e):
+    # abort(404/400 等)はそのまま、未捕捉例外はログして分かりやすく表示
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return e
+    app.logger.exception('unhandled error: %s %s', request.method, request.path)
+    body = ('<div class="card err">予期しないエラーが発生しました。'
+            'お手数ですが管理者へログ(app.log)の確認をご依頼ください。</div>'
+            '<div class="card"><a class="btn" href="/">← ホームへ</a></div>')
+    return _page(body, title='エラー'), 500
 
 # 出力種別 → (ファイル接尾, 表示名, ダウンロード時のMIME)
 OUTPUTS = [
@@ -111,7 +168,8 @@ def index():
             f'before→after差分で「実際の直し方」を学習し、次回以降の①設計不備の指摘＋実績修正案に反映します。</p>'
             f'<div class="row"><a class="btn" href="/design">設計不備を登録／一覧 ▶</a></div></div>'
             f'<div class="card muted">社内サーバ共有・ブラウザ動作。'
-            f'正常な図面はハーネス生成まで全自動、図面不備は確認UIの①で前工程へ提示します。</div>')
+            f'正常な図面はハーネス生成まで全自動、図面不備は確認UIの①で前工程へ提示します。'
+            f'　<a href="/help">使い方</a> ・ <a href="/admin">管理（バックアップ/ログ）</a></div>')
     return _page(body)
 
 
@@ -137,9 +195,11 @@ def generate():
     if not saved:
         return _page('<div class="card err">DXFファイルがありません。</div>'
                      '<div class="card"><a class="btn" href="/">← 戻る</a></div>')
+    app.logger.info('generate seiban=%s files=%d', safe, len(saved))
     try:
         HP.produce_seiban(saved, seiban=safe, out_dir=outdir)
     except Exception:
+        app.logger.exception('generate failed seiban=%s', safe)
         return _page(f'<div class="card err">生成でエラーが発生しました:\n{_esc(traceback.format_exc())}</div>'
                      '<div class="card"><a class="btn" href="/">← 戻る</a></div>')
     return redirect(url_for('review', seiban=safe))
@@ -181,6 +241,8 @@ def confirm(seiban):
     corrections = data.get('corrections') or []
     if not rows:
         return {'ok': False, 'error': '確定する行がありません。'}, 400
+    backup_knowledge(tag='confirm')     # 学習で上書きする前に退避
+    app.logger.info('confirm seiban=%s rows=%d corrections=%d', safe, len(rows), len(corrections))
     try:
         res = HP.confirm_and_learn(rows, corrections=corrections, seiban=safe, out_dir=outdir)
     except Exception:
@@ -272,6 +334,8 @@ def design_learn():
     if after and after.filename:
         apath = os.path.join(d, f'after_{os.path.basename(after.filename)}')
         after.save(apath)
+    backup_knowledge(tag='design')      # 学習で上書きする前に退避
+    app.logger.info('design_learn seiban=%s sheet=%s after=%s', seiban, sheet, bool(apath))
     try:
         case = DC.build_case(seiban, sheet or 'sheet', bpath, apath, pdf_text=note)
         data = DC.add_cases([case])
@@ -293,6 +357,66 @@ def design_learn():
             f'<div class="row"><a class="btn" href="/design">設計不備一覧へ</a>'
             f'<a class="btn" href="/">← 製番一覧</a></div></div>')
     return _page(body, title='設計不備の学習')
+
+
+@app.route('/admin')
+def admin():
+    """管理: 学習結果のバックアップ状況・手動退避・ログ末尾。"""
+    gens = sorted(glob.glob(os.path.join(BACKUP_DIR, '*')), reverse=True)[:20]
+    rows = ''
+    for g in gens:
+        rows += f'<tr><td>{_esc(os.path.basename(g))}</td><td class="muted">{_esc(g)}</td></tr>'
+    logtail = ''
+    lp = os.path.join(LOG_DIR, 'app.log')
+    if os.path.exists(lp):
+        with open(lp, encoding='utf-8', errors='replace') as f:
+            logtail = ''.join(f.readlines()[-40:])
+    body = (
+        '<div class="card"><h2>学習結果のバックアップ</h2>'
+        '<p class="muted">learned.json / design_cases.json / confirmed/ を退避します（学習時に自動、直近30世代保持）。</p>'
+        '<form method="post" action="/admin/backup"><button class="primary">今すぐバックアップ</button></form>'
+        f'<table style="margin-top:10px"><tr><th>世代</th><th>場所</th></tr>'
+        f'{rows or "<tr><td colspan=2 class=muted>まだありません</td></tr>"}</table></div>'
+        f'<div class="card"><h2>ログ（末尾40行）</h2><pre style="white-space:pre-wrap;font-size:12px">{_esc(logtail) or "（ログなし）"}</pre></div>'
+        '<div class="card"><a class="btn" href="/help">使い方</a> <a class="btn" href="/">← ホーム</a></div>')
+    return _page(body, title='管理')
+
+
+@app.route('/admin/backup', methods=['POST'])
+def admin_backup():
+    dst = backup_knowledge(tag='manual')
+    body = (f'<div class="card"><h2 class="ok">✔ バックアップしました</h2>'
+            f'<p class="muted">{_esc(dst) or "失敗しました（ログ参照）"}</p>'
+            '<div class="row"><a class="btn" href="/admin">← 管理へ</a></div></div>')
+    return _page(body, title='管理')
+
+
+@app.route('/help')
+def help_page():
+    body = '''
+      <div class="card"><h2>使い方（かんたんマニュアル）</h2>
+        <h3>1. ハーネスデータを作る</h3>
+        <ol>
+          <li>ホームで <b>製番</b> を入力し、図面DXF一式（シーケンス/結線・スケルトン/外形・内部配置図）を選んで「図面を登録して一括生成」。</li>
+          <li>確認UIが開きます。<b>①設計不備</b>：指摘があれば「設計へ戻す／製造で手直し」を選択。</li>
+          <li><b>②ハーネス確認</b>：黄色＝要確認を修正/確認。</li>
+          <li><b>③確定・出力＋学習</b>：ボタンでモデル同一形式のExcelを出力（既存システムへ取込→シール印刷）。修正内容は学習されます。</li>
+        </ol>
+        <h3>2. 設計不備を学習させる</h3>
+        <ol>
+          <li>ホーム下部または <a href="/design">設計不備を登録／一覧</a> から、<b>修正前</b>と<b>修正後</b>の図面(DXF)を登録。</li>
+          <li>before→after差分で「実際の直し方」を学習し、次回以降の①で実績修正案として参照されます。</li>
+        </ol>
+        <h3>3. 二つの学習</h3>
+        <ul>
+          <li><b>設計不備の学習</b>：修正前/不備/修正後 の3点セット（電気図面チェック）。層1=自動検出（R2容量逆転・R3中性線）、層2=参考提示。</li>
+          <li><b>出力確認の学習</b>：③確定時に、人が直した箇所の差分だけを学習（既存知識は保持＝回帰ゼロ）。</li>
+        </ul>
+        <h3>4. バックアップ／ログ</h3>
+        <p>学習結果は自動で退避されます（<a href="/admin">管理画面</a>で確認・手動退避・ログ閲覧）。</p>
+      </div>
+      <div class="card"><a class="btn" href="/">← ホーム</a></div>'''
+    return _page(body, title='使い方')
 
 
 @app.route('/api/health')
