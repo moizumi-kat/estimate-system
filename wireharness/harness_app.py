@@ -9,6 +9,7 @@
 運用: 詳細は wireharness/運用マニュアル.md を参照。
 """
 import os
+import re
 import glob
 import html
 import hmac
@@ -232,6 +233,10 @@ def index():
       </form>'''
     body = (f'<div class="card"><h2>製番一覧</h2>{table}</div>'
             f'<div class="card"><h2>新しい製番を登録</h2>{form}</div>'
+            f'<div class="card"><h2>単独検図（図面だけを検査）</h2>'
+            f'<p class="muted">ハーネス生成とは別に、図面(DXF)の不具合を検図できます（R1-R7＋H1-H5＋AI補助＋学習）。'
+            f'検図システムと同一エンジンをこのアプリに統合しています。</p>'
+            f'<div class="row"><a class="btn" href="/check">単独検図を実行 ▶</a></div></div>'
             f'<div class="card"><h2>設計不備の学習（修正前後の図面を登録）</h2>'
             f'<p class="muted">設計不備を直した後、<b>修正前</b>と<b>修正後</b>の図面(DXF)を登録すると、'
             f'before→after差分で「実際の直し方」を学習し、次回以降の①設計不備の指摘＋実績修正案に反映します。</p>'
@@ -473,21 +478,169 @@ def help_page():
           <li><b>②ハーネス確認</b>：黄色＝要確認を修正/確認。</li>
           <li><b>③確定・出力＋学習</b>：ボタンでモデル同一形式のExcelを出力（既存システムへ取込→シール印刷）。修正内容は学習されます。</li>
         </ol>
-        <h3>2. 設計不備を学習させる</h3>
+        <h3>2. 単独検図（図面だけを検査）</h3>
+        <ol>
+          <li><a href="/check">単独検図</a> で図面DXFをアップロード→ R1-R7＋H1-H5（＋AI補助）＋学習済み見逃しルールで検査。</li>
+          <li>検図システムと同一エンジンをこのアプリに統合。結果は{場所/問題/提案/根拠}様式で表示（判断は設計）。</li>
+          <li>現場で見つかった「あるべき機器の欠落」等は『見逃し登録』で学習→次回以降 自動指摘。</li>
+        </ol>
+        <h3>3. 設計不備を学習させる（修正前後）</h3>
         <ol>
           <li>ホーム下部または <a href="/design">設計不備を登録／一覧</a> から、<b>修正前</b>と<b>修正後</b>の図面(DXF)を登録。</li>
           <li>before→after差分で「実際の直し方」を学習し、次回以降の①で実績修正案として参照されます。</li>
         </ol>
-        <h3>3. 二つの学習</h3>
+        <h3>4. 二つの学習</h3>
         <ul>
           <li><b>設計不備の学習</b>：修正前/不備/修正後 の3点セット（電気図面チェック）。層1=自動検出（R2容量逆転・R3中性線）、層2=参考提示。</li>
           <li><b>出力確認の学習</b>：③確定時に、人が直した箇所の差分だけを学習（既存知識は保持＝回帰ゼロ）。</li>
         </ul>
-        <h3>4. バックアップ／ログ</h3>
+        <h3>5. バックアップ／ログ</h3>
         <p>学習結果は自動で退避されます（<a href="/admin">管理画面</a>で確認・手動退避・ログ閲覧）。</p>
       </div>
       <div class="card"><a class="btn" href="/">← ホーム</a></div>'''
     return _page(body, title='使い方')
+
+
+def _classify_for_check(paths):
+    """検図(run_check)用に seq / skel / layout(単一) / table(単一) へ振り分ける。"""
+    seq, skel, layout, table = [], [], None, None
+    for p in paths:
+        b = os.path.basename(p)
+        u = b.upper()
+        if '社内確認' in b or '000-Z001' in u or re.search(r'-Z\d', u):
+            table = table or p
+        elif '内部配置' in b or '外形' in b or '配置図' in b or re.search(r'-[DG]\d', u):
+            layout = layout or p
+        elif 'シーケンス' in b or '結線' in b or '展開' in b or re.search(r'-[FH]\d', u):
+            seq.append(p)
+        elif 'スケルトン' in b or '系統' in b or re.search(r'-E\d', u):
+            skel.append(p)
+    return seq, skel, layout, table
+
+
+def _learned_defect_findings(paths):
+    """学習済み見逃しルール(defect_rules)を図面に適用した findings(kenzu形式)。"""
+    try:
+        from wireharness.fromto_qc import defect_rules, tracer
+        from wireharness.fromto_qc.geometry import DrawingModel, norm
+        dev_syms = set()
+        for p in paths:
+            try:
+                m = DrawingModel(p)
+            except Exception:
+                continue
+            for e in m.msp:
+                if e.dxftype() == 'INSERT' and e.attribs:
+                    a = {x.dxf.tag: (x.dxf.text or '').strip() for x in e.attribs}
+                    d = a.get('DEVICE', '')
+                    if d:
+                        dev_syms.add(f"{d}-{a.get('DEVICE1','')}".strip('-'))
+        gousen = {}
+        for p in paths:
+            try:
+                for g, nd in tracer.trace_nodes(p).items():
+                    if str(g).startswith('M@'):
+                        continue
+                    s = gousen.setdefault(str(g), set())
+                    for (d, t, x, y) in nd['members']:
+                        s.add(f"{d}-{t}".strip('-'))
+            except Exception:
+                pass
+        return defect_rules.check(dev_syms, gousen)
+    except Exception:
+        app.logger.exception('learned defect check failed')
+        return []
+
+
+@app.route('/check', methods=['GET', 'POST'])
+def check():
+    """単独検図: 図面(DXF)をアップロード→ R1-R7＋H1-H5(＋AI補助)＋学習済み見逃しルール で検査。
+    検図システム(kenzu_app)と同一エンジン。設計への指摘として {場所/問題/提案/根拠} 様式で表示。"""
+    from wireharness.fromto_qc import run_check as _rc, defect_check as _dc
+    if request.method == 'GET':
+        form = '''
+          <form method="post" enctype="multipart/form-data">
+            <div class="drop">図面DXF一式を選択（シーケンス/結線・スケルトン/系統・内部配置図・社内確認表）<br>
+              <input type="file" name="files" multiple accept=".dxf,.DXF" style="margin-top:8px"></div>
+            <div class="row"><label class="muted"><input type="checkbox" name="ai"> AI補助(R6 SPD警報)も実行（要APIキー）</label></div>
+            <div class="row"><button class="primary" type="submit">検図を実行 ▶</button></div>
+          </form>'''
+        body = (f'<div class="card"><h2>単独検図（図面不具合チェック）</h2>'
+                f'<p class="muted">ハーネス生成とは別に、図面だけを検査できます。R1配置図漏れ/R2容量逆転/'
+                f'R3中性線端子/R4変更漏れ/R5社内確認表/R7接地/H1-H5ハーネス化検図＋学習済みの見逃しルール。'
+                f'判断は設計（本画面は指摘＋修正案の提示）。</p>{form}</div>'
+                f'<div class="card"><a class="btn" href="/">← ホーム</a></div>')
+        return _page(body, title='単独検図')
+    files = request.files.getlist('files')
+    ai = bool(request.form.get('ai'))
+    d = os.path.join(WORK, '_check', datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+    os.makedirs(d, exist_ok=True)
+    saved = []
+    for f in files:
+        if f.filename and f.filename.lower().endswith('.dxf'):
+            p = os.path.join(d, os.path.basename(f.filename))
+            f.save(p)
+            saved.append(p)
+    if not saved:
+        return _page('<div class="card err">DXFファイルを指定してください。</div>'
+                     '<div class="card"><a class="btn" href="/check">← 戻る</a></div>', title='単独検図')
+    seq, skel, layout, table = _classify_for_check(saved)
+    app.logger.info('check files=%d seq=%d skel=%d layout=%s table=%s ai=%s',
+                    len(saved), len(seq), len(skel), bool(layout), bool(table), ai)
+    findings = _rc.run(seq, skel, layout, table, ai=ai)
+    for lf in _learned_defect_findings(saved):
+        findings.append({'rule': lf.get('rule', '学習'), 'severity': 'med', 'confidence': 'med',
+                         '場所': '', '問題': lf.get('detail', ''), '提案': '設計に確認してください。',
+                         '根拠': '学習済み見逃しルール(defect_rules)'})
+    # 集計＋表示
+    bycnt = {}
+    for f in findings:
+        bycnt[f['rule']] = bycnt.get(f['rule'], 0) + 1
+    rows = ''
+    for f in findings:
+        rows += (f'<tr><td><b>{_esc(f.get("rule"))}</b></td><td>{_esc(f.get("severity",""))}</td>'
+                 f'<td>{_esc(f.get("場所",""))}</td><td>{_esc(f.get("問題",""))}</td>'
+                 f'<td>{_esc(f.get("提案",""))}</td><td class="muted">{_esc(f.get("根拠",""))}</td></tr>')
+    table_html = ('<table><tr><th>ルール</th><th>重要度</th><th>場所</th><th>問題</th><th>提案</th><th>根拠</th></tr>'
+                  + (rows or '<tr><td colspan=6 class="muted">指摘はありません（図面不具合は検出されませんでした）。</td></tr>')
+                  + '</table>')
+    missed = '''
+      <form method="post" action="/check/learn_missed" style="margin-top:8px">
+        <div class="row"><span class="muted">見逃し登録（学習）:</span>
+          <input type="text" name="if_base" placeholder="機器A(例 MCCB)" style="width:140px">
+          <span>が有るのに</span>
+          <input type="text" name="need_base" placeholder="機器B(例 ET)" style="width:140px">
+          <span>が無ければ指摘</span>
+          <input type="text" name="name" placeholder="ルール名(任意)" style="width:180px">
+          <button class="primary" type="submit">学習に追加</button></div>
+      </form>'''
+    body = (f'<div class="card"><h2>検図結果：{len(findings)}件　<span class="muted">内訳 {_esc(bycnt)}</span></h2>'
+            f'{table_html}</div>'
+            f'<div class="card"><h2>見逃しを学習させる</h2>'
+            f'<p class="muted">現場で見つかった「本来あるべき機器の欠落」等を登録すると、次回以降の検図で自動指摘します。</p>'
+            f'{missed}</div>'
+            f'<div class="card"><a class="btn" href="/check">別の図面を検図</a>'
+            f'<a class="btn" href="/">← ホーム</a></div>')
+    return _page(body, title='単独検図 結果')
+
+
+@app.route('/check/learn_missed', methods=['POST'])
+def check_learn_missed():
+    from wireharness.fromto_qc import defect_rules
+    if_base = (request.form.get('if_base') or '').strip()
+    need_base = (request.form.get('need_base') or '').strip()
+    name = (request.form.get('name') or '').strip()
+    if not if_base or not need_base:
+        return _page('<div class="card err">機器A・機器Bを入力してください。</div>'
+                     '<div class="card"><a class="btn" href="/check">← 戻る</a></div>', title='単独検図')
+    backup_knowledge(tag='missed')
+    rid = defect_rules.learn_from_missed(if_base, need_base, name=name,
+                                         user=(session.get('user') or ''))
+    app.logger.info('learn_missed %s: %s->%s', rid, if_base, need_base)
+    body = (f'<div class="card"><h2 class="ok">✔ 学習しました（{_esc(rid)}）</h2>'
+            f'<p>{_esc(if_base)} が有るのに {_esc(need_base)} が無ければ、次回以降の検図で指摘します。</p>'
+            f'<div class="row"><a class="btn" href="/check">検図へ</a><a class="btn" href="/">← ホーム</a></div></div>')
+    return _page(body, title='単独検図')
 
 
 @app.route('/api/health')

@@ -15,12 +15,19 @@ import os
 import json
 from .geometry import norm
 
-try:
-    import kenzu_store
-    _DIR = kenzu_store.DATA_DIR
-except Exception:
-    _DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)))), 'kenzu_data')
+# 保存先: ハーネスアプリで動かす時は HARNESS_STATE(永続領域)配下に置く(再デプロイで巻き戻らない)。
+# HARNESS_STATE 未設定時のみ従来どおり kenzu_store.DATA_DIR / kenzu_data を使う
+# (検図アプリ kenzu_app は HARNESS_STATE を設定しないため従来挙動のまま=影響なし)。
+_HSTATE = os.environ.get('HARNESS_STATE')
+if _HSTATE:
+    _DIR = _HSTATE
+else:
+    try:
+        import kenzu_store
+        _DIR = kenzu_store.DATA_DIR
+    except Exception:
+        _DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), 'kenzu_data')
 RULES_PATH = os.path.join(_DIR, 'defect_rules.json')
 
 
