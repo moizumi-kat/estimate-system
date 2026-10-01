@@ -6,3 +6,4 @@ app.py.new
 venv/
 *.env
 kenzu_data/
+wireharness/harness_work/
