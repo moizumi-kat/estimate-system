@@ -555,7 +555,8 @@ def _learned_defect_findings(paths):
 @app.route('/check', methods=['GET', 'POST'])
 def check():
     """単独検図: 図面(DXF)をアップロード→ R1-R7＋H1-H5(＋AI補助)＋学習済み見逃しルール で検査。
-    検図システム(kenzu_app)と同一エンジン。設計への指摘として {場所/問題/提案/根拠} 様式で表示。"""
+    従来の検図と同一エンジン(R1-R7＋H1-H5。旧・単独検図アプリは本アプリに統合)。
+    設計への指摘として {場所/問題/提案/根拠} 様式で表示。"""
     from wireharness.fromto_qc import run_check as _rc, defect_check as _dc
     if request.method == 'GET':
         form = '''

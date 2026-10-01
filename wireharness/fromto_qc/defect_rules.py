@@ -16,8 +16,8 @@ import json
 from .geometry import norm
 
 # 保存先: ハーネスアプリで動かす時は HARNESS_STATE(永続領域)配下に置く(再デプロイで巻き戻らない)。
-# HARNESS_STATE 未設定時のみ従来どおり kenzu_store.DATA_DIR / kenzu_data を使う
-# (検図アプリ kenzu_app は HARNESS_STATE を設定しないため従来挙動のまま=影響なし)。
+# HARNESS_STATE 未設定時(ライブラリ単体利用・CLI等)は従来どおり kenzu_store.DATA_DIR / kenzu_data。
+# ※単独検図アプリ(kenzu_app)はハーネスへ統合済みのため廃止。学習は /check(見逃し登録)から行う。
 _HSTATE = os.environ.get('HARNESS_STATE')
 if _HSTATE:
     _DIR = _HSTATE

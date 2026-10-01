@@ -6,9 +6,12 @@
 
 | システム | gunicorn | ポート | 例ホスト名 |
 |---|---|---|---|
-| 見積＋検図 | app:app | 8000 | estimate.furukawa-lab.com |
-| 検図(現場) | kenzu_app:app | 8001 | kenzu.furukawa-lab.com |
-| ハーネス | wireharness.harness_app:app | **8002** | **harness.furukawa-lab.com** |
+| 見積 | app:app | 8000 | estimate.furukawa-lab.com |
+| ハーネス（**検図統合**） | wireharness.harness_app:app | **8002** | **harness.furukawa-lab.com** |
+
+> ※ 旧・単独検図アプリ(kenzu_app:app, 8001)は**廃止**。検図機能はハーネスアプリの
+>   `/check`（単独検図）＋ ①設計不備 に統合済み。8001 は停止・無効化してよい
+>   （`sudo systemctl disable --now kenzu-system` / nginx の kenzu.conf 削除）。
 
 ## 0. 方針
 - 既存EC2に相乗り（新規に立てる場合も手順は同じ）。

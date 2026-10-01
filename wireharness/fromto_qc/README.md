@@ -126,18 +126,15 @@ python -m wireharness.fromto_qc.run_check \
   --layout 内部配置図.dxf --table 社内確認表.dxf [--ai] [--out report.txt]
 ```
 
-**Web（現場用の単独アプリ `kenzu_app.py`）**: 工場現場で使う独立アプリ。営業が使う
-積算コード選定システム(`app.py`)とは**別プロセス・別アドレス・別ログイン**で動かす
-（部署が違うため入口ごと分離）。検図ロジックは本パッケージをそのまま利用する。
-ブラウザから DXF（複数可・ZIP可）をアップロードするだけで、系統ラベルは不要。
-`sheet_classify.py` が各図面をレイヤ構成・電線数・確認表マークから seq/skel/layout/table に
-自動仕分けして R1-R7＋H1-H5 を実行する。
+**Web（検図はハーネスアプリに統合）**: かつての現場用単独アプリ `kenzu_app.py` は廃止し、
+検図機能は**ハーネスデータ自動生成システム(`wireharness/harness_app.py`)に統合**した。
+検図ロジック(本パッケージ)は共有のまま、入口が1つになった。
 
-- 画面: `GET /`（検図アップロード画面）
-- API: `POST /api/kenzu`（multipart `file` を複数、任意で `ai=1` で R6/SPD警報のAI補助）
-  → `{count, summary, classification, findings[{rule,severity,confidence,場所,問題,提案,根拠}], warnings}`
-- 起動: 開発 `python kenzu_app.py`（PORT 既定 8001） / 本番 `gunicorn kenzu_app:app`
-- ログイン: 環境変数 `KENZU_PASSWORD`（未設定なら認証オフ＝検証のみ）
+- 単独検図: `GET /check`（DXFアップロード）／`POST /check`（R1-R7＋H1-H5、任意で `ai` で R6/SPD警報）
+  → 指摘を `{ルール,重要度,場所,問題,提案,根拠}` で表示。見逃しは `POST /check/learn_missed` で学習。
+- ハーネス①(自動)での設計不備: 誤答ゼロの厳選セット(R2/R3/R4/R7＋生成時整合性)を提示。
+- 起動: `gunicorn wireharness.harness_app:app`（既定8002）。ログイン: `HARNESS_PASSWORD`。
+- CLI は従来どおり: `python -m wireharness.fromto_qc.run_check --seq ... --skel ... [--ai]`。
 
 判断は設計（確認ゲート）。指摘は「こう直したら？」の申し送り材料として設計へ戻す。
 
