@@ -24,30 +24,41 @@
     80/443 を社内IP/VPNのみ許可。可能なら VPC プライベート配置が最も堅牢。両者は併用可。
 - このシステムは外部APIキーを持たない（図面のみでローカル処理）。秘匿情報の露出面が小さい。
 
-## 1. 取得・依存
+## 1. 取得・依存（※見積とは別ディレクトリに clone する）
+> 本ブランチは見積(main)と**履歴が別系統**。見積の作業ディレクトリで checkout 切替すると
+> 見積のコードが置き換わり壊れる。必ず**別フォルダに独立 clone**し、見積には触れないこと。
 ```bash
-# APP_DIR 例: /opt/estimate-system （既存の相乗り先に合わせる）
-cd {APP_DIR}
-git fetch origin && git checkout claude/wire-harness-software-2322ld   # 本番は merge 後の既定ブランチ
-# venv は既存を共用可。無ければ:
+# 見積EC2に相乗り。ただし別ディレクトリ(例 /opt/harness-system)へ clone する。
+sudo mkdir -p /opt/harness-system && sudo chown $(id -un): /opt/harness-system
+git clone https://github.com/moizumi-kat/estimate-system.git /opt/harness-system
+cd /opt/harness-system
+git checkout claude/wire-harness-software-2322ld     # 本番でも当面この評価ブランチを使用
 python3 -m venv venv && ./venv/bin/pip install -U pip
 ./venv/bin/pip install -r wireharness/requirements.txt
 ```
 
-## 2. 永続領域と環境変数
+## 2. 環境変数（ログイン情報）を作成
 ```bash
-sudo mkdir -p /var/lib/harness-system/work /var/lib/harness-system/state
-sudo chown -R {APP_USER}:{APP_USER} /var/lib/harness-system
 sudo cp deploy/harness-system.env.example /etc/harness-system.env
-sudo chmod 600 /etc/harness-system.env      # HARNESS_WORK / HARNESS_STATE を確認
+sudo vi /etc/harness-system.env   # HARNESS_USER/PASSWORD/SECRET・HARNESS_WORK/STATE を設定
+sudo chmod 600 /etc/harness-system.env
 ```
 
-## 3. systemd 常駐
+## 3. 設置（推奨＝ワンショット）
+`/opt/harness-system` で下記を実行すれば、永続領域作成→systemd(8002)→nginx→疎通確認まで自動。
+```bash
+HARNESS_DOMAIN=harness.furukawa-lab.com bash deploy/setup-harness.sh
+```
+手動で行う場合は 3a/4 を参照。
+
+### 3a. systemd 常駐（手動の場合）
 ```bash
 sudo cp deploy/harness-system.service /etc/systemd/system/harness-system.service
-sudo sed -i 's#{APP_DIR}#/opt/estimate-system#g; s/{APP_USER}/ec2-user/g' /etc/systemd/system/harness-system.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now harness-system
+# APP_DIR は clone 先、APP_USER は実行ユーザ(例 ec2-user)
+sudo sed -i 's#{APP_DIR}#/opt/harness-system#g; s/{APP_USER}/ec2-user/g' /etc/systemd/system/harness-system.service
+sudo mkdir -p /var/lib/harness-system/work /var/lib/harness-system/state
+sudo chown -R ec2-user:ec2-user /var/lib/harness-system
+sudo systemctl daemon-reload && sudo systemctl enable --now harness-system
 sudo systemctl status harness-system          # active(running) を確認
 curl -s http://127.0.0.1:8002/api/health       # {"status":"ok",...}
 ```
@@ -77,8 +88,9 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## 8. 更新（再デプロイ）
 ```bash
-cd {APP_DIR} && git pull
-./venv/bin/pip install -r wireharness/requirements.txt    # 依存変化時のみ
+cd /opt/harness-system
+git pull origin claude/wire-harness-software-2322ld        # 評価ブランチを更新
+./venv/bin/pip install -r wireharness/requirements.txt     # 依存変化時のみ
 sudo systemctl restart harness-system
 ```
 - `HARNESS_STATE`/`HARNESS_WORK` は `/var/lib/harness-system/` にあるため、

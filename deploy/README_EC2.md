@@ -44,28 +44,34 @@ curl -fsS http://127.0.0.1:8000/     # 動作確認
 ```
 
 ## B. ハーネス/検図システム（wireharness.harness_app:app / 8002）
-手順の詳細は **`deploy/AWS_ハーネス_デプロイ手順.md`** を参照（永続化・社内限定/ID+PW・DNS/HTTPS・
-検図統合・社内サーバ移行まで）。要点のみ:
+> **重要**: ハーネスのブランチ(`claude/wire-harness-software-2322ld`)は積算(main)と**履歴が別系統**。
+> 積算の作業ディレクトリで checkout 切替をすると積算のコードが置き換わり壊れる。
+> 必ず**別ディレクトリに独立 clone**して運用する（積算には触れない・無停止）。
+
+手順の詳細は **`deploy/AWS_ハーネス_デプロイ手順.md`** を参照。要点のみ:
 ```bash
-cd <アプリのディレクトリ>
-git pull --ff-only
-./venv/bin/pip install -r wireharness/requirements.txt
-sudo mkdir -p /var/lib/harness-system/work /var/lib/harness-system/state
-sudo chown -R {APP_USER}:{APP_USER} /var/lib/harness-system
-sudo cp deploy/harness-system.env.example /etc/harness-system.env   # HARNESS_WORK/STATE/USER/PASSWORD/SECRET
-sudo chmod 600 /etc/harness-system.env
-sudo cp deploy/harness-system.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now harness-system
-sudo cp deploy/nginx-harness.conf /etc/nginx/conf.d/harness.conf    # {HARNESS_DOMAIN} 等を置換
-sudo nginx -t && sudo systemctl reload nginx
+# 積算とは別フォルダに clone（例 /opt/harness-system）
+git clone https://github.com/moizumi-kat/estimate-system.git /opt/harness-system
+cd /opt/harness-system
+git checkout claude/wire-harness-software-2322ld
+python3 -m venv venv && ./venv/bin/pip install -r wireharness/requirements.txt
+sudo cp deploy/harness-system.env.example /etc/harness-system.env   # USER/PASSWORD/SECRET/WORK/STATE
+sudo vi /etc/harness-system.env && sudo chmod 600 /etc/harness-system.env
+# ワンショット設置(永続領域→systemd(8002)→nginx→疎通)
+HARNESS_DOMAIN=harness.furukawa-lab.com bash deploy/setup-harness.sh
 curl -fsS http://127.0.0.1:8002/api/health    # {"status":"ok",...}
 ```
 
 ## C. 更新（再デプロイ）
+積算とハーネスは**別ディレクトリ**なので個別に更新する。
 ```bash
-cd <アプリのディレクトリ> && git pull --ff-only
-./venv/bin/pip install -r requirements.txt -r wireharness/requirements.txt   # 依存変化時
-sudo systemctl restart estimate-system harness-system
+# 積算(main)
+cd <積算のディレクトリ> && git pull --ff-only && ./venv/bin/pip install -r requirements.txt
+sudo systemctl restart estimate-system
+# ハーネス(評価ブランチ)
+cd /opt/harness-system && git pull origin claude/wire-harness-software-2322ld
+./venv/bin/pip install -r wireharness/requirements.txt
+sudo systemctl restart harness-system
 ```
 - ハーネスの学習結果・アップロードは `/var/lib/harness-system/` にあるため更新で保持される。
 
