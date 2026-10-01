@@ -73,11 +73,8 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
         # 不明時は空欄のままとし『要確認』にはしない(非ブロッキング。過検出を避ける)。
         crimp = HL.crimp_of(size, d)
         flags = []
-        # TB端子: 台番号(端子台)は配置図から幾何付番済み。端子番号は主回路=自動付番、制御=空欄が
-        # 正常(手本準拠)。よって『要確認』は台番号すら特定できないTBのみ(接続先が配置図に無い等)。
-        tb_mfg = norm(d) == 'TB' and not no
-        if tb_mfg:
-            flags.append('TB端子(製造アサイン)')
+        # TB台番号は 幾何付番→回路番号→号線名 で自動付番済み。ここまでで台番号が付かないTBは、
+        # 接続先機器に回路番号(DEVICE1)も号線も無い＝設計図面の不備(rows側で設計指摘に回す)。
         # 注) 同一端子が複数号線に現れるのは『分岐』(茂泉様)。等電位を保ったままその端子から
         #     新しい号線が分岐する正常な結線であり、短絡ではない。よって要確認にはしない。
         # ロケータは照合の補助情報(ハーネス配線の正誤ではない)。図面にロケータが無い製番もある。
@@ -87,6 +84,7 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
                 'loc': loc, 'crimp': crimp, 'flags': flags}
 
     rows = []
+    tb_gaps = {}   # 台番号が確定できないTB(=回路番号も号線も無い) → 設計指摘にまとめる
     for i, w in enumerate(routed['wires']):
         size = w.get('size', '')
         fr = endpoint(w['from'], size)
@@ -104,13 +102,25 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
             'route': len(w.get('route', []) or []),
             'flags': flags,
         })
+        # 台番号が付かないTB = 接続先機器に回路番号も号線も無い → 設計指摘(前工程へ)
+        for a, b in ((fr, to), (to, fr)):
+            if norm(a['device']) == 'TB' and not a['no']:
+                key = (b['device'], b.get('terminal', ''))
+                tb_gaps[key] = {
+                    '分類': '端子台の回路番号/号線 未記入',
+                    '該当': f"TB ↔ {b['device']}{(':' + b['terminal']) if b.get('terminal') else ''}",
+                    '号線': w.get('gousen', '') or '(空)',
+                    '解決案': '結線図で、端子台に繋がる機器に回路番号(DEVICE1)または号線を記入してください。'
+                              '未記入のため台番号を一意に確定できません。',
+                }
+    dfx = list(defects or []) + list(tb_gaps.values())
     meta = {
         'seiban': seiban,
         'count': len(rows),
         'total_length': routed.get('total_length', ''),
         'duct_type': routed.get('duct_type', ''),
         'need_confirm': sum(1 for r in rows if r['flags']),
-        'defects': list(defects or []),
+        'defects': dfx,
     }
     return {'meta': meta, 'rows': rows}
 
