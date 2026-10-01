@@ -78,7 +78,32 @@ sudo systemctl restart harness-system
 - `HARNESS_STATE`/`HARNESS_WORK` は `/var/lib/harness-system/` にあるため、
   コード更新で**学習結果・アップロード・バックアップは保持**される。
 
-## 9. バックアップ/復元
+## 9. 社内サーバ(オンプレ)への移行 — クラウド評価後
+本システムは **AWS固有サービスに依存しない**（素のLinux+systemd+gunicorn+nginx、
+データはローカルディレクトリ）。クラウドで評価して問題なければ、**同じ定義ファイルのまま**
+社内サーバへ移せる（ロックインなし）。手順は本書の 1〜8 と同一で、違いは次の3点だけ:
+
+1. **DNS**: Route53 の代わりに**社内DNS**で `harness.furukawa-lab.com`（または社内ホスト名）を
+   社内サーバのIPへ向ける。
+2. **証明書(HTTPS)**: ACM/Let's Encrypt の代わりに**社内CA発行証明書**か自己署名を nginx に設定
+   （社内限定のため外部CAは必須ではない）。社内限定アクセスは nginx allow/deny ＋
+   社内ファイアウォール/ネットワーク分離で担保。
+3. **データ移行**: 評価中に貯まった学習結果・実績を引き継ぐ場合、永続領域をそのままコピー:
+   ```bash
+   # AWS側で固める
+   sudo tar czf harness-state.tgz -C /var/lib harness-system
+   # 社内サーバへ転送し展開
+   sudo tar xzf harness-state.tgz -C /var/lib
+   sudo chown -R {APP_USER}:{APP_USER} /var/lib/harness-system
+   sudo systemctl restart harness-system
+   ```
+   これで `learned.json`／`design_cases.json`／`confirmed/`／アップロード/出力/バックアップが
+   社内サーバへそのまま引き継がれる。
+- アプリ本体は `git clone`（または tar 配布）＋ `pip install -r wireharness/requirements.txt` で同一。
+  外部APIキー等の秘匿情報は持たないため、持ち出し時の露出リスクも小さい。
+- クラウドと社内の**並行稼働**も可能（別ホスト名）。切替時は社内側へデータ移行後、DNSを社内へ向ける。
+
+## 10. バックアップ/復元
 - 学習結果は学習のたびに `HARNESS_WORK/_backup/<日時>/` へ自動退避（直近30世代）。`/admin`で手動退避も可。
 - EBS スナップショットで `/var/lib/harness-system/` ごと定期バックアップを推奨。
 - 復元は `_backup/<日時>/` の learned.json / design_cases.json / confirmed を
