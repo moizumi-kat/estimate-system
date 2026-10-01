@@ -2838,6 +2838,40 @@ def nintei_gate(max_kva, confirmed=None):
     d=next(({'code':c,'qty':conf[c]} for c in conf if conf[c]>0 and any(o['code']==c for o in opts)),{'code':'','qty':0})
     return {'spec':'認定料','options':opts,'default':d}
 
+def _merge_dup_rows(rows):
+    """同一盤内で同一コード(同判定)の機器を1行にまとめ、数量を合算する(社員要望)。
+    まとめ対象=code有り・通常機器行のみ(load_detail/セット行/コード空は対象外=別物として残す)。
+    重複が無い機器は一切変更しない(回帰ゼロ=単独機器の表示・数量はそのまま)。"""
+    def _q(v):
+        m=re.match(r'\s*(\d+)', str(v if v is not None else ''))
+        return int(m.group(1)) if m else 1
+    reps={}      # key -> 代表行(dict・元の参照を保持)
+    result=[]
+    for r in rows:
+        mergeable = bool(r.get('code')) and not r.get('load_detail') and not r.get('is_setcode')
+        if not mergeable:
+            result.append(r); continue
+        # 積算単位=選定コード。判定/突合状態/非計上フラグが同じものだけを合算(別判定は分けて残す)。
+        key=(r.get('code'), r.get('conf'), r.get('cross',''), bool(r.get('absorbed')))
+        if key in reps:
+            rep=reps[key]
+            rep['_mergeN']=rep.get('_mergeN',1)+1
+            rep['_qtysum']=rep.get('_qtysum',_q(rep.get('qty')))+_q(r.get('qty'))
+        else:
+            reps[key]=r; result.append(r)
+    for rep in reps.values():
+        n=rep.get('_mergeN',1)
+        if n>1:
+            rep['qty']=str(rep.get('_qtysum',_q(rep.get('qty'))))
+            # 表示名は「部品名＋仕様」(幹線番号を外した本体)に統一し、合算台数を注記。
+            base=str(rep.get('raw','')); feed=str(rep.get('feed',''))
+            body=base[len(feed):].strip() if feed and base.startswith(feed) else base
+            if body:
+                rep['display']=body; rep['raw']=body
+            rep['note']=((str(rep.get('note','')).strip()+'／') if rep.get('note') else '')+'同一コード%d台を合算'%n
+        rep.pop('_mergeN',None); rep.pop('_qtysum',None)
+    return result
+
 def select_from_extracted(data):
     out=[]
     # 受変電部で上段に出たマルチ指示計のコードを記憶し、下段のV/電流計に継承する。
@@ -3481,6 +3515,7 @@ def select_from_extracted(data):
             if _acc in byCode and _aq>0:
                 rows.append(dict(code=_acc,name=byCode[_acc].get('name',''),conf=_acc_conf,qty=str(_aq),
                     note=_acc_note,load_detail=False))
+        rows=_merge_dup_rows(rows)   # 同一盤内の同一コード機器を1行に集約(数量合算・社員要望)
         _og=dict(panel=p.get('panel',''),rows=rows)
         _ag=accessory_gate(p.get('panel',''), [{'code':c,'qty':q} for c,q in _acc_src])
         if _ag: _og['acc_gate']=_ag
