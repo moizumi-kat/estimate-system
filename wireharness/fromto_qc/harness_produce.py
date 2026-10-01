@@ -208,6 +208,14 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
             pass
     _assign_tb_block(wires_out, dev_lays)
     _assign_maincircuit_tb(wires_out)
+    # L_OUTSIDE(端子台先)の回路番号なし参照記号から生じる「完全未識別の重複配線」を除外。
+    # = 号線が空 かつ 両端とも番号が空(識別情報が一切ない)。実配線は号線/番号を持つので残る。
+    def _unidentified(w):
+        g = str(w.get('gousen', '')).strip()
+        fn = str(w['from'].get('no', '')).strip()
+        tn = str(w['to'].get('no', '')).strip()
+        return (not g) and (not fn) and (not tn)
+    wires_out = [w for w in wires_out if not _unidentified(w)]
     return {'seiban': seiban, 'priority': {'topology': topology, 'physical': physical},
             'duct_type': duct_type, 'wires': wires_out,
             'total_length': round(total, 1), 'duct_util': duct_util,
