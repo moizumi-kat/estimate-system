@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
-"""生成ハーネスの確認レビューUI(表)＋固定ラベルシールへの出力。
+"""生成ハーネスの確認レビューUI(表)＋確定・出力＋学習。
 
 流れ(茂泉様のご要望):
   1) 生成データを表で確認できる形に整える(号線/種別/サイズ/圧着/From-To/ロケータ/測長 等)。
   2) 曖昧箇所を『要確認』として色分け・確認を促す。ご指定の4項目:
        圧着端子サイズ未確定 / ロケータ未取得 / TB仮番号(端子未記入) / 電気QC(同一端子に複数号線)。
   3) 各行を確認 or その場で修正できる。
-  4) 問題が無くなれば『シート出力』ボタンで、固定規格のラベルシール台紙に合わせて印刷。
-     ラベルは面付け・寸法・余白・ピッチを指定でき、絶対配置で台紙にピッタリ合わせる。
-     各マスに収まるようフォントは自動縮小(二分探索)。
+  4) 問題が無くなれば『確定・出力＋学習』ボタンで、モデルと同一フォーマットの Excel/txt を出力する
+     (既存システムが取り込みシールシートへ印刷)。確定した修正内容は学習に反映され、
+     次回以降の自動生成が賢くなる(確定コーパス→learned.json を回帰ゼロでマージ)。
+  ※ ラベルの直接印刷は第二弾の印刷機能として一旦保留(生成コードは温存)。
 """
 import os
 import re
@@ -205,13 +206,13 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
     <span>要確認 <b id="k-need" class="need">0</b></span>
   </div>
   <div class="sp"></div>
-  <button class="primary" id="btn-out" disabled>③ シート出力 ▶</button>
+  <button class="primary" id="btn-out" disabled>③ 確定・出力＋学習 ▶</button>
 </header>
 <div class="wrap">
   <div class="steps">
     <span class="s on" id="st1">① 設計不備の解消</span><span class="arw">→</span>
     <span class="s" id="st2">② ハーネス確認</span><span class="arw">→</span>
-    <span class="s" id="st3">③ シート出力</span>
+    <span class="s" id="st3">③ 確定・出力＋学習</span>
   </div>
 
   <section id="phase1" class="panel">
@@ -228,29 +229,9 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
   <section id="phase2" hidden>
     <div class="bar">
       <button class="ghost" id="back1">◀ ① 設計不備へ戻る</button>
-      <span class="hint">ハーネスデータの確認。黄色＝要確認を修正/確認し、問題なければ「シート出力」。</span>
+      <span class="hint">ハーネスデータの確認。黄色＝要確認を修正/確認し、問題なければ「確定・出力＋学習」。
+        修正内容は確定時に学習され、次回以降の自動生成に反映されます。</span>
     </div>
-    <details class="panel" id="geo">
-      <summary>ラベルシール規格（固定台紙に合わせる）</summary>
-      <div class="grid">
-        <label>プリセット
-          <select id="g-preset">
-            <option value="custom">カスタム（数値指定）</option>
-            <option value="65">エーワン 65面 (38.1×21.2)</option>
-            <option value="44">エーワン 44面 (48.3×25.4)</option>
-          </select></label>
-        <label>用紙<select id="g-page"><option>A4</option><option>A3</option><option>Letter</option></select></label>
-        <label>列数<input id="g-cols" type="number" step="1" value="5"></label>
-        <label>段数<input id="g-rows" type="number" step="1" value="13"></label>
-        <label>ラベル幅 mm<input id="g-lw" type="number" step="0.1" value="38.1"></label>
-        <label>ラベル高 mm<input id="g-lh" type="number" step="0.1" value="21.2"></label>
-        <label>上余白 mm<input id="g-mt" type="number" step="0.1" value="10.7"></label>
-        <label>左余白 mm<input id="g-ml" type="number" step="0.1" value="6.4"></label>
-        <label>横ピッチ mm<input id="g-px" type="number" step="0.1" value="40.6"></label>
-        <label>縦ピッチ mm<input id="g-py" type="number" step="0.1" value="21.2"></label>
-      </div>
-      <p class="hint">※ 固定台紙の型番/寸法に合わせて数値を入れてください。ピッチはラベル中心間隔。</p>
-    </details>
     <div class="bar">
       <label class="chk"><input type="checkbox" id="only-need"> 要確認のみ表示</label>
       <button class="ghost" id="btn-allok">表示中を全て確認済みに</button>
@@ -262,12 +243,27 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
       <th>To場所</th><th>To機器</th><th>番号</th><th>端子</th><th>ﾛｹｰﾀ</th><th>圧着</th>
       <th>測長</th><th>要確認</th><th>確認</th>
     </tr></thead><tbody id="tb"></tbody></table>
+    <div class="panel" id="donebox" hidden style="margin-top:12px"></div>
   </section>
 </div>
 
 <script>
 var DATA = /*__DATA__*/null;
 var rows = DATA.rows, meta = DATA.meta;
+var ORIG = JSON.parse(JSON.stringify(rows));   // 生成時の値(人手修正の差分検出用)
+function corrections(){
+  var out=[];
+  rows.forEach(function(r,i){
+    var o=ORIG[i]; if(!o) return;
+    ['from','to'].forEach(function(s){
+      if((r[s].crimp||'')!==((o[s]||{}).crimp||'')){
+        out.push({field:'crimp',size:(r.size||''),device:(r[s].device||''),
+                  from:((o[s]||{}).crimp||''),to:(r[s].crimp||'')});
+      }
+    });
+  });
+  return out;
+}
 var defects = (meta.defects||[]).map(function(d,i){return {i:i,d:d,act:''};}); // act: '' | 'back' | 'mfg'
 var phase = 1;
 function $(id){return document.getElementById(id);}
@@ -379,41 +375,42 @@ function goPhase(p){
 $('to2').addEventListener('click',function(){ goPhase(2); });
 $('back1').addEventListener('click',function(){ goPhase(1); });
 
-/* ---------- プリセット/寸法 ---------- */
-var PRESET={ '65':{cols:5,rows:13,lw:38.1,lh:21.2,mt:10.7,ml:6.4,px:40.6,py:21.2},
-             '44':{cols:4,rows:11,lw:48.3,lh:25.4,mt:21.2,ml:8.0,px:49.5,py:25.4} };
-$('g-preset').addEventListener('change',function(){var p=PRESET[this.value];if(!p)return;for(var k in p){$('g-'+k).value=p[k];}});
-function geo(){var g=function(id){return parseFloat($('g-'+id).value)||0;};
-  return {page:$('g-page').value,cols:g('cols'),rows:g('rows'),lw:g('lw'),lh:g('lh'),mt:g('mt'),ml:g('ml'),px:g('px'),py:g('py')};}
-
-/* ---------- ③ ラベル出力(固定台紙・絶対配置・フォント自動調整) ---------- */
-function labelHTML(r){
-  function ep(e){var t=e.terminal?(':'+esc(e.terminal)):'';var pl=e.place?('['+esc(e.place)+']'):'';
-    var lc=e.loc?(' <span class="loc">'+esc(e.loc)+'</span>'):'';var cr=e.crimp?(' <span class="cr">'+esc(e.crimp)+'</span>'):'';
-    return pl+esc(e.device)+(e.no?('-'+esc(e.no)):'')+t+lc+cr;}
-  return '<div class="fit"><div class="hd"><b>'+esc(r.gousen||r.color)+'</b><span class="sz">'+esc(r.type)+esc(r.size)+'</span></div>'
-    +'<div class="ep"><i>F</i>'+ep(r.from)+'</div><div class="ep"><i>T</i>'+ep(r.to)+'</div></div>';
-}
+/* ---------- ③ 確定・出力＋学習(モデル同一形式Excel/txtを出力し、修正を学習) ---------- */
 $('btn-out').addEventListener('click',function(){
-  var G=geo(), per=Math.max(1,G.cols*G.rows), pages='', n=rows.length;
-  for(var i=0;i<n;i+=per){var cells='';
-    for(var j=0;j<per;j++){var r=rows[i+j]; if(!r)break;
-      var col=j%G.cols,row=Math.floor(j/G.cols);
-      var x=(G.ml+col*G.px).toFixed(2),y=(G.mt+row*G.py).toFixed(2);
-      cells+='<div class="cell" style="left:'+x+'mm;top:'+y+'mm;width:'+G.lw+'mm;height:'+G.lh+'mm">'+labelHTML(r)+'</div>';}
-    pages+='<div class="page">'+cells+'</div>';}
-  var css='@page{size:'+G.page+';margin:0}*{box-sizing:border-box}body{margin:0;font-family:"Noto Sans JP","Yu Gothic",sans-serif;color:#000}'
-    +'.page{position:relative;width:'+(G.page==="A4"?210:G.page==="A3"?297:216)+'mm;height:'+(G.page==="A4"?297:G.page==="A3"?420:279)+'mm;page-break-after:always}'
-    +'.cell{position:absolute;overflow:hidden;padding:0.6mm;display:flex;align-items:center}.fit{width:100%;line-height:1.13}'
-    +'.hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:0.15mm solid #000;margin-bottom:0.3mm}.hd b{font-weight:700}.sz{opacity:.85}'
-    +'.ep{overflow-wrap:anywhere}.ep i{display:inline-block;width:1.05em;font-style:normal;font-weight:700;opacity:.7}'
-    +'.loc{border:0.15mm solid #000;border-radius:0.6mm;padding:0 0.4mm;font-weight:700;white-space:nowrap}.cr{border:0.15mm dashed #666;border-radius:0.6mm;padding:0 0.3mm}'
-    +'@media screen{body{background:#eee;padding:8px}.page{background:#fff;margin:0 auto 10px;box-shadow:0 1px 6px rgba(0,0,0,.3);outline:1px solid #ccc}.cell{outline:0.2mm dashed #bbb}}';
-  var doc='<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>'+esc(meta.seiban)+' ラベル</title><style>'+css+'</style></head><body>'+pages
-    +'<scr'+'ipt>function fit(el,box){var lo=3,hi=12;for(var k=0;k<14;k++){var m=(lo+hi)/2;el.style.fontSize=m+"pt";'
-    +'if(el.scrollWidth<=box.clientWidth&&el.scrollHeight<=box.clientHeight)lo=m;else hi=m;}el.style.fontSize=lo+"pt";}'
-    +'document.querySelectorAll(".cell .fit").forEach(function(f){fit(f,f.parentNode);});setTimeout(function(){window.print&&window.print();},400);</scr'+'ipt></body></html>';
-  var w=window.open('','_blank'); w.document.write(doc); w.document.close();
+  if($('btn-out').disabled) return;
+  var done=$('donebox');
+  $('btn-out').disabled=true;
+  done.hidden=false;
+  done.innerHTML='<b>確定処理中…</b> モデル形式Excelを出力し、修正内容を学習しています。';
+  fetch('/confirm/'+encodeURIComponent(meta.seiban||''),{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({rows:rows,corrections:corrections()})
+  }).then(function(res){return res.json().then(function(j){return {ok:res.ok,j:j};});})
+  .then(function(o){
+    var j=o.j||{};
+    if(!o.ok || !j.ok){ throw new Error((j&&j.error)||'確定に失敗しました'); }
+    $('st3').className='s done';
+    var L=j.learned||{}, ch=(L['変更点']||[]);
+    var chHtml='';
+    if(ch.length){ chHtml='<div class="hint" style="margin-top:6px">学習した修正（圧着）: '
+      +ch.slice(0,20).map(function(c){return esc(c.key)+'：'+esc(c.before||'(空)')+'→'+esc(c.after);}).join(' ／ ')
+      +(ch.length>20?(' 他'+(ch.length-20)+'件'):'')+'</div>'; }
+    done.innerHTML='<b class="ok">✔ 確定しました（'+esc(j.wires)+'本）。</b> '
+      +'モデル同一フォーマットのExcelを出力しました。既存システムに取り込むとシールシートへ印刷できます。'
+      +'<div class="bar" style="margin-top:8px">'
+      +'<a class="primary" style="text-decoration:none;display:inline-block" href="'+esc(j.download.xlsx)+'">ハーネスデータ Excel をダウンロード</a>'
+      +'<a class="ghost" style="text-decoration:none;display:inline-block;padding:7px 12px;border:1px solid var(--line);border-radius:7px" href="'+esc(j.download.txt)+'">TXT（社内形式）</a>'
+      +'</div>'
+      +'<div class="hint" style="margin-top:6px">人手修正 '+esc(j.corrections||0)+' 件を受付。'
+      +'学習に反映：圧着(サイズ|機器) '+esc(L['修正学習(サイズ|機器)']||0)+' 件'
+      +' ／ (機器)新規 '+esc(L['追加(機器)']||0)+' 件。'
+      +(((j.corrections||0)===0)?'（修正なし＝生成結果をそのまま確定）':'')+'</div>'
+      +chHtml;
+  }).catch(function(err){
+    done.innerHTML='<b style="color:var(--bad)">確定に失敗しました。</b> '+esc(err.message||err)
+      +'<div class="hint">※ この画面はWebアプリ経由で開いてください（ファイル単体では確定できません）。</div>';
+    $('btn-out').disabled=false;
+  });
 });
 
 renderDefects();

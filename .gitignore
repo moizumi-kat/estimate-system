@@ -7,3 +7,6 @@ venv/
 *.env
 kenzu_data/
 wireharness/harness_work/
+
+# ハーネス確定コーパス(運用で蓄積・サーバ側で永続。learned.json は別途コミット)
+wireharness/fromto_qc/confirmed/

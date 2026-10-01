@@ -834,6 +834,78 @@ def to_harness_xlsx(routed, path, seiban='', addr_map=None):
     return path
 
 
+def _harness_rows_from_review(review_rows, seiban=''):
+    """確認UIで人手修正した行 → モデル同一フォーマットの 11セル行リスト。
+    _harness_rows と違い、圧着/場所/機器/番号/端子は"人手が確定した値をそのまま"使う。"""
+    def cells(c):
+        return (list(c) + [''] * 11)[:11]
+
+    out = [cells(['"配線情報リスト 作成日  97,4,26"']), cells([]), cells([]),
+           cells(['', '', '', '', '', '', '', '', '', '', seiban])]
+    prev = None
+    for r in review_rows:
+        typ = (r.get('type') or '').strip()
+        size = (r.get('size') or '').strip()
+        spec = (typ, size)
+        if spec != prev:
+            out.append(cells(['', '*', '*', typ, size, '*', '*', '*', '*']))
+        else:
+            out.append(cells(['', '*', '*', '*', '*', '*', '*', '*', '*']))
+        prev = spec
+        g = r.get('color') or r.get('gousen', '')   # 電源線は色、制御線は号線(モデル準拠)
+        for side in ('from', 'to'):
+            e = r.get(side) or {}
+            no = e.get('no', '')
+            if re.match(r'^仮\d', str(no)):
+                no = ''
+            out.append(cells(['', g, '*', e.get('crimp', ''), e.get('place', ''),
+                               e.get('device', ''), no, e.get('terminal', '')]))
+    return out
+
+
+def _rows_to_txt(rows, path, encoding='utf-8-sig'):
+    lines = ['\t'.join('' if x is None else str(x) for x in r) for r in rows]
+    with open(path, 'w', encoding=encoding, newline='') as f:
+        f.write('\r\n'.join(lines) + '\r\n')
+    return path
+
+
+def _rows_to_xlsx(rows, path, title=''):
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = (title or 'harness')[:31]
+    for r in rows:
+        ws.append(['' if x is None else str(x) for x in r])
+    wb.save(path)
+    return path
+
+
+def confirm_and_learn(review_rows, corrections=None, seiban='', out_dir='.'):
+    """確認UIの「確定・出力＋学習」エントリ。
+    人手で確定したハーネスデータを (1)モデル同一フォーマットの最終Excel/txtとして書き出し、
+    (2)確定シートをコーパスへ記録(監査/バッチ再学習用)、
+    (3)人手の"修正(diff)"だけを権威データとして learned.json に学習(回帰ゼロ)。
+    corrections: [{'field':'crimp','size':..,'device':..,'to':..}, ...]（確認UIが算出）。"""
+    import os as _os
+    from . import harness_learn as _HL
+    rows11 = _harness_rows_from_review(review_rows, seiban=seiban)
+    base = seiban or 'harness'
+    _os.makedirs(out_dir, exist_ok=True)
+    txt = _os.path.join(out_dir, f'{base}_ハーネスデータ.txt')
+    _rows_to_txt(rows11, txt)
+    xlsx = _os.path.join(out_dir, f'{base}_ハーネスデータ.xlsx')
+    try:
+        _rows_to_xlsx(rows11, xlsx, title=seiban)
+    except Exception:
+        xlsx = None
+    _HL.record_confirmed_sheet(seiban, rows11)
+    stats = _HL.learn_corrections(corrections or [])
+    return {'files': {'harness_txt': txt, 'harness_xlsx': xlsx},
+            'wires': len(review_rows), 'corrections': len(corrections or []),
+            'learned': stats}
+
+
 def to_label_sheet_html(routed, path, seiban='', addr_map=None,
                         cols=5, rows=10, cell_w_mm=38.0, cell_h_mm=25.0,
                         page='A4', margin_mm=8.0):

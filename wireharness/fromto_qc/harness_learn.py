@@ -23,6 +23,20 @@ from .geometry import norm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LEARNED_PATH = os.path.join(HERE, 'learned.json')
+# 人手で確定(承認)したハーネスシートの蓄積先。確認UIの「確定・出力＋学習」で追記され、
+# ここから圧着等を再学習して learned.json に反映する(運用で賢くなる)。
+CONFIRMED_DIR = os.path.join(HERE, 'confirmed')
+
+
+def _read_text(path):
+    """確定コーパス等のテキストを文字コード自動判定で読む(utf-8-sig→cp932→utf-8)。"""
+    raw = open(path, 'rb').read()
+    for enc in ('utf-8-sig', 'cp932', 'utf-8'):
+        try:
+            return raw.decode(enc)
+        except Exception:
+            continue
+    return raw.decode('cp932', 'replace')
 
 
 def _panel_kind(files):
@@ -189,6 +203,157 @@ def learn_crimp(sheet_txt_paths, min_n=3, min_conf=0.7, save=True):
         with open(LEARNED_PATH, 'w', encoding='utf-8') as f:
             json.dump(k, f, ensure_ascii=False, indent=1)
     return table
+
+
+# ---------------------------------------------------------------------------
+# 出力の修正を受け付けて学習する(運用学習) — 確認UIの「確定・出力＋学習」から呼ぶ
+# ---------------------------------------------------------------------------
+
+def _crimp_tally_from_text(sheet_texts):
+    """ハーネスシート本文(文字列)群 → (電線サイズ,機器)→Counter(圧着) の集計。"""
+    tally = collections.defaultdict(collections.Counter)
+    for raw in sheet_texts:
+        size_now = ''
+        for r in csv.reader(raw.splitlines(), delimiter='\t'):
+            c = [x.strip() for x in (r + [''] * 11)[:11]]
+            if c[1] == '*':
+                if c[3] not in ('', '*'):
+                    size_now = c[4]
+                continue
+            dev = c[5]
+            if dev and dev != '*':
+                tally[(size_now, norm(dev))][c[3]] += 1
+    return tally
+
+
+def _tables_from_tally(tally, min_n, min_conf):
+    """集計 → (crimp_table, crimp_by_device)。件数 min_n 以上・占有率 min_conf 以上のみ採用。"""
+    table = {}
+    for (sz, dev), cnt in tally.items():
+        n = sum(cnt.values())
+        val, v = cnt.most_common(1)[0]
+        conf = v / n if n else 0
+        if n >= min_n and conf >= min_conf:
+            table[f'{sz}|{dev}'] = [val, round(conf, 3), n]
+    by_dev = collections.defaultdict(collections.Counter)
+    for (sz, dev), cnt in tally.items():
+        by_dev[dev] += cnt
+    dev_table = {}
+    for dev, cnt in by_dev.items():
+        n = sum(cnt.values())
+        val, v = cnt.most_common(1)[0]
+        conf = v / n if n else 0
+        if n >= min_n and conf >= min_conf:
+            dev_table[dev] = [val, round(conf, 3), n]
+    return table, dev_table
+
+
+def confirmed_paths():
+    """確定コーパス(人手承認済みハーネスシート)のパス一覧。"""
+    return sorted(glob.glob(os.path.join(CONFIRMED_DIR, '*.txt')))
+
+
+def _safe_name(s):
+    return ''.join(c for c in str(s) if c.isalnum() or c in '-_') or 'harness'
+
+
+def record_confirmed_sheet(seiban, rows_11):
+    """人手で確定したハーネスシート(11列の行リスト)を確定コーパスに保存(製番ごと最新で上書き)。"""
+    os.makedirs(CONFIRMED_DIR, exist_ok=True)
+    p = os.path.join(CONFIRMED_DIR, _safe_name(seiban) + '.txt')
+    lines = ['\t'.join('' if x is None else str(x) for x in r) for r in rows_11]
+    with open(p, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write('\r\n'.join(lines) + '\r\n')
+    return p
+
+
+def learn_corrections(corrections, save=True):
+    """人手の『修正(diff)』だけを権威データとして学習する(確認UIの確定時)。
+
+    確定シート"全体"ではなく、自動生成値と異なるセル(＝人が直した所)だけを学習する。
+    これにより、1製番の自動生成値が歴史的コーパス由来の既存知識を退行させることを防ぐ(回帰ゼロ)。
+      ・圧着(crimp)の修正 → (サイズ|機器) を正解として上書き学習(占有率1.0=権威)。
+      ・(機器) 粗いフォールバックは、既知機器は温存し、未知機器のみ・修正が一意のとき追加。
+      ・同一キーに矛盾する修正があれば採らない(誤答ゼロ)。
+    corrections: [{'field':'crimp','size':..,'device':..,'to':..}, ...]
+    """
+    k = load()
+    ct = dict(k.get('crimp_table', {}))
+    cd = dict(k.get('crimp_by_device', {}))
+    bykey = collections.defaultdict(collections.Counter)
+    bydev = collections.defaultdict(collections.Counter)
+    for c in corrections or []:
+        if c.get('field') != 'crimp':
+            continue
+        sz = (c.get('size') or '').strip()
+        dev = norm(c.get('device') or '')
+        val = (c.get('to') or '').strip()
+        if not dev:
+            continue
+        bykey[(sz, dev)][val] += 1
+        bydev[dev][val] += 1
+    applied = []
+    for (sz, dev), cnt in bykey.items():
+        if len(cnt) != 1:                 # 矛盾する修正は採らない
+            continue
+        val = next(iter(cnt))
+        key = f'{sz}|{dev}'
+        before = ct.get(key, ['', 0, 0])[0]
+        if before == val:
+            continue
+        ct[key] = [val, 1.0, int(sum(cnt.values()))]   # 権威: 占有率1.0
+        applied.append({'key': key, 'before': before, 'after': val})
+    dev_added = 0
+    for dev, cnt in bydev.items():
+        if dev in cd or len(cnt) != 1:    # 既知機器は温存、矛盾は不可
+            continue
+        val = next(iter(cnt))
+        cd[dev] = [val, 1.0, int(sum(cnt.values()))]
+        dev_added += 1
+    k['crimp_table'] = ct
+    k['crimp_by_device'] = cd
+    if save:
+        with open(LEARNED_PATH, 'w', encoding='utf-8') as f:
+            json.dump(k, f, ensure_ascii=False, indent=1)
+    return {'修正学習(サイズ|機器)': len(applied),
+            '追加(機器)': dev_added, '変更点': applied}
+
+
+def relearn_from_confirmed(min_n=3, min_conf=0.7, save=True):
+    """確定コーパス(全体)から圧着を再学習し、既存 learned.json へ"追加のみ"で反映する(管理/バッチ用)。
+
+    既存キーは一切上書きしない(回帰ゼロ)。確定シートで新しく現れた (サイズ,機器) の
+    うち空欄でない値のみ追加する。人手修正の反映は learn_corrections で行う(こちらは権威上書き)。
+    """
+    paths = confirmed_paths()
+    texts = []
+    for p in paths:
+        try:
+            texts.append(_read_text(p))
+        except Exception:
+            continue
+    tally = _crimp_tally_from_text(texts)
+    newtab, newdev = _tables_from_tally(tally, min_n, min_conf)
+    k = load()
+    base_t = dict(k.get('crimp_table', {}))
+    base_d = dict(k.get('crimp_by_device', {}))
+    added = 0
+    for key, val in newtab.items():
+        if key not in base_t and val[0] != '':     # 新規かつ非空のみ追加
+            base_t[key] = val
+            added += 1
+    added_dev = 0
+    for key, val in newdev.items():
+        if key not in base_d and val[0] != '':
+            base_d[key] = val
+            added_dev += 1
+    k['crimp_table'] = base_t
+    k['crimp_by_device'] = base_d
+    k['confirmed_count'] = len(paths)
+    if save:
+        with open(LEARNED_PATH, 'w', encoding='utf-8') as f:
+            json.dump(k, f, ensure_ascii=False, indent=1)
+    return {'確定シート数': len(paths), '追加(サイズ|機器)': added, '追加(機器)': added_dev}
 
 
 def crimp_of(size, device):

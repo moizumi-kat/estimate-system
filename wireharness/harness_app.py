@@ -86,7 +86,6 @@ def index():
         if s['has_out']:
             sb = _esc(s['seiban'])
             links = (f'<a class="btn" href="/review/{sb}">確認UI ▶</a> '
-                     f'<a class="btn" href="/labels/{sb}">ラベル</a> '
                      f'<a class="btn" href="/outputs/{sb}">出力一覧</a>')
         else:
             links = '<span class="muted">未生成</span>'
@@ -157,10 +156,36 @@ def review(seiban):
 
 @app.route('/labels/<seiban>')
 def labels(seiban):
+    # 印刷は既存システム(Excel取込)が担うためUIからは非表示。
+    # ラベル直接印刷は第二弾の印刷機能として再有効化する想定で、生成・ルートは温存。
     p, safe = _out_path(seiban, '_ラベルシート.html')
     if not os.path.exists(p):
         abort(404)
     return Response(open(p, encoding='utf-8').read(), mimetype='text/html')
+
+
+@app.route('/confirm/<seiban>', methods=['POST'])
+def confirm(seiban):
+    """確認UIの「確定・出力＋学習」。人手修正後の行を受け取り、
+    モデル同一フォーマットの最終Excel/txtを書き出し、確定データを学習に反映する。"""
+    d, safe = _seiban_dir(seiban)
+    outdir = os.path.join(d, 'out')
+    if not os.path.isdir(outdir):
+        return {'ok': False, 'error': '製番が見つかりません。'}, 404
+    data = request.get_json(force=True, silent=True) or {}
+    rows = data.get('rows') or []
+    corrections = data.get('corrections') or []
+    if not rows:
+        return {'ok': False, 'error': '確定する行がありません。'}, 400
+    try:
+        res = HP.confirm_and_learn(rows, corrections=corrections, seiban=safe, out_dir=outdir)
+    except Exception:
+        return {'ok': False, 'error': traceback.format_exc()}, 500
+    return {'ok': True, 'seiban': safe,
+            'download': {'xlsx': f'/download/{safe}/_ハーネスデータ.xlsx',
+                         'txt': f'/download/{safe}/_ハーネスデータ.txt'},
+            'learned': res.get('learned'), 'wires': res.get('wires'),
+            'corrections': res.get('corrections')}
 
 
 @app.route('/outputs/<seiban>')
@@ -175,7 +200,6 @@ def outputs(seiban):
     body = (f'<div class="card"><h2>出力一覧：{_esc(safe)}</h2>'
             f'<table><tr><th>種別</th><th>ファイル</th><th></th></tr>{items}</table>'
             f'<div class="row"><a class="btn" href="/review/{_esc(safe)}">確認UI ▶</a>'
-            f'<a class="btn" href="/labels/{_esc(safe)}">ラベルシート</a>'
             f'<a class="btn" href="/">← 製番一覧</a></div></div>')
     return _page(body)
 
