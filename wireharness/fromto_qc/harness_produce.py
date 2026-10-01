@@ -332,12 +332,12 @@ _DESIGN_FIX = {
     'terminal_no': ('端子台の端子番号 未記入',
                     '結線図で端子台の端子番号(何番に繋ぐか)を記入してください。'
                     '未記入だと繋ぎ込み数が正しく評価できません。'),
-    'wire_size':  ('電線サイズ 未記入',
+    'wire_size':  ('【生成時整合性】電線サイズ 未記入',
                    'CABLE(電線サイズ)の DENSEN に実サイズ(例 HIV1.25sq)を記入してください。'
                    '未記入は社内標準で仮補完しています(要確認)。'),
-    'float':      ('浮き線端(結線先なし)',
+    'float':      ('【生成時整合性】浮き線端(結線先なし)',
                    '線端がどの機器にも届いていません。結線先の機器・端子を明記してください。'),
-    'near':       ('近接ギャップ(未接続)',
+    'near':       ('【生成時整合性】近接ギャップ(未接続)',
                    '線端が機器端子の直前で止まっています。端子まで接続してください。'),
     'short':      ('短絡疑い(同一端子が複数号線)',
                    '同じ端子が異なる号線に現れています。図面の結線を確認してください。'),
@@ -1045,7 +1045,10 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     # 層2=R7接地 参考)を①設計不備へ追加。ケースベースの実績修正案を添える。回帰ゼロのため保護。
     try:
         from . import design_check as _dcheck
-        extra = _dcheck.review_design_items(seq_paths=seq, skel_paths=skel)
+        # R4(親無し接点)用に内部配置/外形図を layout として渡す(純DCTダクトは除外)
+        _lay = [p for p in dct if ('内部配置' in _os_basename(p) or '外形' in _os_basename(p)
+                or re.search(r'-[DG]\d', _os_basename(p).upper())) and 'DCT' not in _os_basename(p).upper()]
+        extra = _dcheck.review_design_items(seq_paths=seq, skel_paths=skel, layout_paths=_lay)
         if extra:
             fb.setdefault('items', [])
             fb['items'].extend(extra)

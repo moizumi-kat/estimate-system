@@ -204,14 +204,66 @@ def _precedent(category, limit=2):
 _RULE_CATEGORY = {'R2': '定格・仕様変更', 'R3': '相・電圧', 'R7': 'その他'}
 
 
-def review_design_items(seq_paths=None, skel_paths=None):
-    """①設計不備UI向け: 既存の決定論チェッカーを横断検証どおりの範囲で走らせ、
-    ケースベースの実績修正案を添えて 2層(層1=自動検出 / 層2=参考)で返す。
+def _orphan_contacts_strict(control_models, physical_models):
+    """R4(親無し接点)の誤答ゼロ版。横断検証に基づく補正:
+    ・対象は『警報/補助』接点のみ(MCCB/ELCB一律は除外＝過検出源)。
+    ・物理図(スケルトン＋内部配置図)が無ければ判定不能＝スキップ(誤検出防止)。
+    正常全セット(5-29026-5/4-21088/5-12043)で過検出0件を確認済み。"""
+    from .geometry import norm as _n, SKIP_DEVICES as _SKIP
+    if not physical_models:
+        return []
+    phys = set()
+    for m in physical_models:
+        for sym, dev, dev1, parts in _dc_records(m):
+            phys.add(_n(sym))
+            phys.add(_cat(dev, parts, dev1))
+    out = []
+    seen = set()
+    for m in control_models:
+        for e in m.msp:
+            if e.dxftype() != 'INSERT' or not e.attribs:
+                continue
+            a = {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}
+            dev = a.get('DEVICE', '')
+            if not dev or dev in _SKIP:
+                continue
+            cmnt = a.get('CMNTJ1', '') + a.get('CMNTJ2', '')
+            if not ('警報' in cmnt or '補助' in cmnt):      # 警報/補助接点のみ
+                continue
+            sym = f"{dev}-{a.get('DEVICE1','')}" if a.get('DEVICE1') else dev
+            key = _n(sym)
+            if key in seen or key in phys or _cat(dev, a.get('PARTS', ''), a.get('DEVICE1', '')) in phys:
+                continue
+            seen.add(key)
+            out.append({'場所': sym, 'cmnt': cmnt or '接点'})
+    return out
 
-    横断検証(design_cases.json の detection)の結論に厳密に従う:
-      層1(高信頼・正常図面で過検出ゼロ): R2容量逆転(スケルトン限定)・R3中性線端子(V→N)
-      層2(参考・断定しない)           : R7接地結線漏れ 等(正常図面で誤発火あり→人が判断)
-    戻り: design_feedback と同じ {分類,該当,号線,解決案} 形式(分類に層のタグを付す)。失敗時は空。
+
+# defect_check の内部関数を薄く借用(R4厳格版用)
+def _dc_records(model):
+    from . import defect_check as _dc
+    return _dc._dev_records(model)
+
+
+def _cat(dev, parts, dev1):
+    from . import defect_check as _dc
+    return _dc._cat_key(dev, parts, dev1)
+
+
+def review_design_items(seq_paths=None, skel_paths=None, layout_paths=None):
+    """①設計不備UI向け: 既存の決定論チェッカーを横断検証どおりの範囲で走らせ、
+    ケースベースの実績修正案を添えて 2層・明示グループで返す。
+
+    横断検証の結論に厳密に従う(誤答ゼロ):
+      【生成時整合性】層1: R4親無し接点(警報/補助のみ・配置図必須)  …正常全セットで過検出0
+         (float/near/サイズ未記入/回路・号線無TB は harness_produce 側で層1提示＝生成時矛盾)
+      【参考・要確認】層2: R2容量逆転・R3中性線端子(V→N)・R7接地結線漏れ
+         …トポロジを持たない発見的ルール。真の不備も拾うが並列分岐等で誤発火し得る→人が判断。
+    ※R2は主幹/分岐を位置で推定するため、同一段の並列分岐(定格違い)を逆転と誤認する例を確認
+      (4-21088 MCCB109/110, 5-12043 MCCB508/510)。真の主従は結線トポロジが必要なため層2に留置。
+    ※R1配置図漏れは除外を重ねても正常図面で過検出が残る(進相ｺﾝﾃﾞﾝｻ/計器/補助ﾘﾚｰ等は
+      配置図に載らないのが正常)ため不採用。機器マスタで『配置必須カテゴリ』定義後に再検討。
+    戻り: design_feedback と同じ {分類,該当,号線,解決案} 形式(分類にグループのタグを付す)。失敗時は空。
     """
     from . import defect_check as _dc
     from .geometry import DrawingModel as _DM
@@ -227,38 +279,46 @@ def review_design_items(seq_paths=None, skel_paths=None):
 
     seq = _models(seq_paths)
     skel = _models(skel_paths)
+    layout = _models(layout_paths)
     items = []
 
-    def _agg(rule, findings, tier, tier_tag):
+    def _agg(rule, findings, tier, tag):
         if not findings:
             return
         places = [f.get('場所', '') for f in findings if f.get('場所')]
         problem = findings[0].get('問題', '')
         suggest = findings[0].get('提案', '')
         prec = _precedent(_RULE_CATEGORY.get(rule, ''))
-        fix = suggest
-        if prec:
-            fix = suggest + '（過去実績: ' + ' / '.join(prec) + '）'
-        items.append({'分類': f'{tier_tag}{problem[:28]}',
+        fix = suggest + ('（過去実績: ' + ' / '.join(prec) + '）' if prec else '')
+        items.append({'分類': f'{tag}{problem[:28]}',
                       '該当': f'{len(findings)}箇所' + (f'（{places[0]} 他）' if len(places) > 1 else (f'（{places[0]}）' if places else '')),
                       '号線': '', '解決案': fix, 'tier': tier, 'rule': rule})
 
-    # 層1: R2(スケルトン限定)・R3(シーケンス＋スケルトン) — 横断検証で過検出ゼロ
+    # 【生成時整合性】層1: R4親無し接点(警報/補助のみ・配置図必須) — 横断検証で過検出ゼロ。
+    # 配置図が無いと親機器の有無を判定できず誤発火し得るため、layout がある時のみ実行。
+    try:
+        r4 = _orphan_contacts_strict(seq, skel + layout) if layout else []
+    except Exception:
+        r4 = []
+    _agg('R4', [{'場所': x['場所'],
+                 '問題': f"制御図に接点があるが親機器が主回路/配置図に無い({x['場所']}:{x['cmnt']})＝変更の取り残しの疑い",
+                 '提案': '回路変更で機器が削除されたなら制御図の接点も削除、必要なら主回路/配置図に機器を追加してください。'}
+                for x in r4], 1, '【生成時整合性】')
+    # 【参考・要確認】層2: 発見的ルール(トポロジ無し)。真の不備も拾うが誤発火し得る→人が判断。
     r2 = []
     for m in skel:
         try:
             r2 += _dc.rule_R2_capacity(m)
         except Exception:
             pass
-    _agg('R2', r2, 1, '【自動検出】')
+    _agg('R2', r2, 2, '【参考・要確認】')
     r3 = []
     for m in seq + skel:
         try:
             r3 += _dc.rule_R3_neutral(m)
         except Exception:
             pass
-    _agg('R3', r3, 1, '【自動検出】')
-    # 層2: R7接地結線漏れ — 正常図面で誤発火例あり。断定せず参考提示(人が判断)
+    _agg('R3', r3, 2, '【参考・要確認】')
     r7 = []
     for m in seq + skel:
         try:
@@ -266,10 +326,8 @@ def review_design_items(seq_paths=None, skel_paths=None):
         except Exception:
             pass
     _agg('R7', r7, 2, '【参考・要確認】')
-    # 注) 端子台記載漏れ等は図面属性だけでは誤答ゼロの自動検出が不可(例 5-12110-38:
-    #     501/502はTB無しで正常・503のみ要追加＝回路の負荷有無が属性に無い)。
-    #     またケースのブロック存在だけの照合は正常図面にも誤って付くため per図面の自動照合はしない。
-    #     これらは /design の過去ケース一覧(受動的な参照ライブラリ)で人が参照する運用とする。
+    # 注) 端子台記載漏れ/R1配置図漏れは図面属性だけでは誤答ゼロの自動検出が不可。過去ケースは
+    #     /design の参照ライブラリで人が参照する運用とする。
     return items
 
 

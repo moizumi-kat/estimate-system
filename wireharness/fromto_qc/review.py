@@ -108,7 +108,7 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
             if norm(a['device']) == 'TB' and not a['no']:
                 key = (b['device'], b.get('terminal', ''))
                 tb_gaps[key] = {
-                    '分類': '端子台の回路番号/号線 未記入',
+                    '分類': '【生成時整合性】端子台の回路番号/号線 未記入',
                     '該当': f"TB ↔ {b['device']}{(':' + b['terminal']) if b.get('terminal') else ''}",
                     '号線': w.get('gousen', '') or '(空)',
                     '解決案': '結線図で、端子台に繋がる機器に回路番号(DEVICE1)または号線を記入してください。'
