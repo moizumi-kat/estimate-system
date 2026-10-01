@@ -1,80 +1,6 @@
 {
  "cases": [
   {
-   "seiban": "5-21183-9",
-   "sheet": "F001",
-   "revisions": [
-    {
-     "n": "1",
-     "date": "'26.07.18",
-     "detail": "C)線番号変更",
-     "name": "東 梅"
-    }
-   ],
-   "defect_texts": [
-    "C)線番号変更",
-    "警報電源と制御電源がある。ブザー回路にSPD劣化接点の警報があるが、主幹ブレーカがトリップした後にSPDが故障した場合、警報（ブザー）が鳴らない回路になっている。",
-    "変更でブザー回路は制御電源ではなく警報電源にした。"
-   ],
-   "categories": [
-    "線番・号線",
-    "端子台・記載漏れ",
-    "接点・警報",
-    "電源経路"
-   ],
-   "devices": [
-    "ARROW",
-    "H_SENBAN",
-    "V_VOLTAGE"
-   ],
-   "diff": {
-    "blocks_added": [
-     {
-      "name": "ARROW",
-      "n": 2
-     },
-     {
-      "name": "H_SENBAN",
-      "n": 2
-     },
-     {
-      "name": "V_VOLTAGE",
-      "n": 1
-     }
-    ],
-    "blocks_removed": [],
-    "attrs_added": [
-     {
-      "block": "V_VOLTAGE",
-      "tag": "VOLTAGE1",
-      "value": "AC-GC200V",
-      "n": 1
-     },
-     {
-      "block": "H_SENBAN",
-      "tag": "線番",
-      "value": "1R2",
-      "n": 1
-     },
-     {
-      "block": "H_SENBAN",
-      "tag": "線番",
-      "value": "1S",
-      "n": 1
-     }
-    ],
-    "attrs_removed": [],
-    "attrs_changed": [],
-    "texts_added": [],
-    "texts_removed": []
-   },
-   "sources": {
-    "before": "5-21183-9_before_F001.dxf",
-    "after": "5-21183-9_after_F001.dxf",
-    "pdf": true
-   }
-  },
-  {
    "seiban": "3-27012-24",
    "sheet": "F001",
    "revisions": [
@@ -157,6 +83,11 @@
     "before": "3-27012-24_before_F001.dxf",
     "after": "3-27012-24_after_F001.dxf",
     "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
+    "after有": true
    }
   },
   {
@@ -205,6 +136,15 @@
     "before": "4-26020-17_before_E002.dxf",
     "after": "4-26020-17_after_E002.dxf",
     "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [
+     "R2"
+    ],
+    "修正後クリア": [
+     "R2"
+    ],
+    "after有": true
    }
   },
   {
@@ -314,6 +254,56 @@
     "before": "5-12110-38_before_H006.dxf",
     "after": "5-12110-38_after_H006.dxf",
     "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
+    "after有": true
+   }
+  },
+  {
+   "seiban": "5-12142",
+   "sheet": "Z001",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.01",
+     "detail": "C)社内表追加",
+     "name": "大澤"
+    },
+    {
+     "n": "2",
+     "date": "'26.07.14",
+     "detail": "C)社内表共通4変更",
+     "name": "大澤"
+    }
+   ],
+   "defect_texts": [
+    "C)社内表追加",
+    "C)社内表共通4変更"
+   ],
+   "categories": [
+    "その他"
+   ],
+   "devices": [],
+   "diff": {
+    "blocks_added": [],
+    "blocks_removed": [],
+    "attrs_added": [],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "5-12142_before_Z001.dxf",
+    "after": "5-12142_after_Z001.dxf",
+    "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
+    "after有": true
    }
   },
   {
@@ -385,6 +375,80 @@
     "before": "5-21058-95_before_H006.dxf",
     "after": "5-21058-95_after_H006.dxf",
     "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
+    "after有": true
+   }
+  },
+  {
+   "seiban": "5-21183-18",
+   "sheet": "H001",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.14",
+     "detail": "C)アース渡り線変更",
+     "name": "東 梅"
+    }
+   ],
+   "defect_texts": [
+    "C)アース渡り線変更"
+   ],
+   "categories": [
+    "その他"
+   ],
+   "devices": [
+    "MC36f_ETBAR-1-3"
+   ],
+   "diff": {
+    "blocks_added": [
+     {
+      "name": "MC36f_ETBAR-1-3",
+      "n": 1
+     }
+    ],
+    "blocks_removed": [],
+    "attrs_added": [],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [
+     {
+      "layer": "0",
+      "text": "*SPDET(19項目)",
+      "n": 1
+     },
+     {
+      "layer": "TEMPLATE",
+      "text": "*EET",
+      "n": 1
+     },
+     {
+      "layer": "0",
+      "text": "*ET",
+      "n": 1
+     }
+    ],
+    "texts_removed": [
+     {
+      "layer": "0",
+      "text": "*EET",
+      "n": 1
+     }
+    ]
+   },
+   "sources": {
+    "before": "5-21183-18_before_H001.dxf",
+    "after": "5-21183-18_after_H001.dxf",
+    "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [
+     "R7"
+    ],
+    "修正後クリア": [],
+    "after有": true
    }
   },
   {
@@ -452,18 +516,200 @@
     "before": "5-21183-24_before_H001.dxf",
     "after": "5-21183-24_after_H001.dxf",
     "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [
+     "R7"
+    ],
+    "修正後クリア": [
+     "R7"
+    ],
+    "after有": true
+   }
+  },
+  {
+   "seiban": "5-21183-9",
+   "sheet": "F001",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.18",
+     "detail": "C)線番号変更",
+     "name": "東 梅"
+    }
+   ],
+   "defect_texts": [
+    "C)線番号変更",
+    "警報電源と制御電源がある。ブザー回路にSPD劣化接点の警報があるが、主幹ブレーカがトリップした後にSPDが故障した場合、警報（ブザー）が鳴らない回路になっている。",
+    "変更でブザー回路は制御電源ではなく警報電源にした。"
+   ],
+   "categories": [
+    "線番・号線",
+    "端子台・記載漏れ",
+    "接点・警報",
+    "電源経路"
+   ],
+   "devices": [
+    "ARROW",
+    "H_SENBAN",
+    "V_VOLTAGE"
+   ],
+   "diff": {
+    "blocks_added": [
+     {
+      "name": "ARROW",
+      "n": 2
+     },
+     {
+      "name": "H_SENBAN",
+      "n": 2
+     },
+     {
+      "name": "V_VOLTAGE",
+      "n": 1
+     }
+    ],
+    "blocks_removed": [],
+    "attrs_added": [
+     {
+      "block": "V_VOLTAGE",
+      "tag": "VOLTAGE1",
+      "value": "AC-GC200V",
+      "n": 1
+     },
+     {
+      "block": "H_SENBAN",
+      "tag": "線番",
+      "value": "1R2",
+      "n": 1
+     },
+     {
+      "block": "H_SENBAN",
+      "tag": "線番",
+      "value": "1S",
+      "n": 1
+     }
+    ],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "5-21183-9_before_F001.dxf",
+    "after": "5-21183-9_after_F001.dxf",
+    "pdf": true
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
+    "after有": true
+   }
+  },
+  {
+   "seiban": "5-21208-30",
+   "sheet": "H001",
+   "revisions": [],
+   "defect_texts": [],
+   "categories": [
+    "その他"
+   ],
+   "devices": [],
+   "diff": {
+    "blocks_added": [],
+    "blocks_removed": [],
+    "attrs_added": [],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "5-21208-30_before_H001.dxf",
+    "after": "",
+    "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
+    "after有": false
+   }
+  },
+  {
+   "seiban": "5-21208-30",
+   "sheet": "H002",
+   "revisions": [],
+   "defect_texts": [],
+   "categories": [
+    "その他"
+   ],
+   "devices": [],
+   "diff": {
+    "blocks_added": [],
+    "blocks_removed": [],
+    "attrs_added": [],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "5-21208-30_before_H002.dxf",
+    "after": "",
+    "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
+    "after有": false
+   }
+  },
+  {
+   "seiban": "6-21072-1",
+   "sheet": "E001",
+   "revisions": [],
+   "defect_texts": [
+    "1Φ3Wなのに負荷TBがVになっている",
+    "スケルトンにある端子が【端子台表】にない"
+   ],
+   "categories": [
+    "端子台・記載漏れ",
+    "相・電圧"
+   ],
+   "devices": [],
+   "diff": {
+    "blocks_added": [],
+    "blocks_removed": [],
+    "attrs_added": [],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "6-21072-1_before_E001.dxf",
+    "after": "",
+    "pdf": true
+   },
+   "detection": {
+    "層1検出ルール": [
+     "R3"
+    ],
+    "修正後クリア": [],
+    "after有": false
    }
   }
  ],
  "summary": {
-  "件数": 6,
+  "件数": 11,
   "分類別": {
+   "その他": 6,
    "接点・警報": 3,
-   "端子台・記載漏れ": 2,
-   "その他": 2,
+   "端子台・記載漏れ": 3,
+   "定格・仕様変更": 1,
    "線番・号線": 1,
    "電源経路": 1,
-   "定格・仕様変更": 1
+   "相・電圧": 1
   }
  }
 }

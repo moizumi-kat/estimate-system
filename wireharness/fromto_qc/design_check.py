@@ -151,12 +151,22 @@ def classify(detail_texts):
     return hit or ['その他']
 
 
-def build_case(seiban, sheet, before_path, after_path, pdf_text=''):
-    """1ケース(修正前/修正後/不備内容)→ 構造化した不備ケース。"""
+_EMPTY_DIFF = {'blocks_added': [], 'blocks_removed': [], 'attrs_added': [],
+               'attrs_removed': [], 'attrs_changed': [], 'texts_added': [], 'texts_removed': []}
+
+
+def build_case(seiban, sheet, before_path, after_path=None, pdf_text=''):
+    """1ケース(修正前/修正後/不備内容)→ 構造化した不備ケース。
+    after_path=None なら『不備のみ(修正後図面なし)』ケースとして差分は空で記録する。"""
     db = ezdxf.readfile(before_path)
-    da = ezdxf.readfile(after_path)
-    revisions = extract_revisions(da) or extract_revisions(db)
-    diff = diff_features(drawing_features(db), drawing_features(da))
+    if after_path:
+        da = ezdxf.readfile(after_path)
+        revisions = extract_revisions(da) or extract_revisions(db)
+        diff = diff_features(drawing_features(db), drawing_features(da))
+    else:
+        da = None
+        revisions = extract_revisions(db)
+        diff = dict(_EMPTY_DIFF)
     rev_details = [r['detail'] for r in revisions if r.get('detail')]
     pdf_lines = [ln.strip() for ln in (pdf_text or '').splitlines()
                  if ln.strip() and ln.strip() not in ('kensa', '四角形', '矢印', 'テキスト ボックス', 'テキストボックス')]
@@ -170,7 +180,7 @@ def build_case(seiban, sheet, before_path, after_path, pdf_text=''):
         'devices': _devices_in_diff(diff),
         'diff': diff,
         'sources': {'before': os.path.basename(before_path),
-                    'after': os.path.basename(after_path),
+                    'after': os.path.basename(after_path) if after_path else '',
                     'pdf': bool(pdf_text)},
     }
 
