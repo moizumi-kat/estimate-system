@@ -91,6 +91,144 @@
    }
   },
   {
+   "seiban": "4-21240-33",
+   "sheet": "D001",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.14",
+     "detail": "C)内部機器配置変更",
+     "name": "笹 山"
+    }
+   ],
+   "defect_texts": [
+    "C)内部機器配置変更"
+   ],
+   "categories": [
+    "その他"
+   ],
+   "devices": [
+    "101",
+    "2",
+    "52X",
+    "AI_MS4S",
+    "AIf_RU4S"
+   ],
+   "diff": {
+    "blocks_added": [
+     {
+      "name": "AIf_RU4S",
+      "n": 1
+     },
+     {
+      "name": "AI_MS4S",
+      "n": 1
+     }
+    ],
+    "blocks_removed": [],
+    "attrs_added": [
+     {
+      "block": "AIf_RU4S",
+      "tag": "PARTS",
+      "value": "AXR",
+      "n": 1
+     },
+     {
+      "block": "AIf_RU4S",
+      "tag": "MAKER",
+      "value": "ｱｲﾃﾞｯｸ",
+      "n": 1
+     },
+     {
+      "block": "AIf_RU4S",
+      "tag": "TYPE",
+      "value": "RU4S-□",
+      "n": 1
+     },
+     {
+      "block": "AIf_RU4S",
+      "tag": "QUANTITY",
+      "value": "1",
+      "n": 1
+     },
+     {
+      "block": "AIf_RU4S",
+      "tag": "PMT",
+      "value": "0,34.75,29,-34.75",
+      "n": 1
+     },
+     {
+      "block": "AIf_RU4S",
+      "tag": "DEVICE1",
+      "value": "101",
+      "n": 1
+     },
+     {
+      "block": "AI_MS4S",
+      "tag": "PARTS",
+      "value": "TM",
+      "n": 1
+     },
+     {
+      "block": "AI_MS4S",
+      "tag": "DEVICE",
+      "value": "2",
+      "n": 1
+     },
+     {
+      "block": "AI_MS4S",
+      "tag": "DEVICE1",
+      "value": "101",
+      "n": 1
+     },
+     {
+      "block": "AI_MS4S",
+      "tag": "MAKER",
+      "value": "富士",
+      "n": 1
+     },
+     {
+      "block": "AI_MS4S",
+      "tag": "TYPE",
+      "value": "MS4S□",
+      "n": 1
+     },
+     {
+      "block": "AI_MS4S",
+      "tag": "QUANTITY",
+      "value": "1",
+      "n": 1
+     },
+     {
+      "block": "AI_MS4S",
+      "tag": "PMT",
+      "value": "0,35,50,-39",
+      "n": 1
+     },
+     {
+      "block": "AIf_RU4S",
+      "tag": "DEVICE",
+      "value": "52X",
+      "n": 1
+     }
+    ],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "4-21240-33_before_D001.dxf",
+    "after": "4-21240-33_after_D001.dxf",
+    "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
+    "after有": true
+   }
+  },
+  {
    "seiban": "4-26020-17",
    "sheet": "E002",
    "revisions": [
@@ -144,6 +282,84 @@
     "修正後クリア": [
      "R2"
     ],
+    "after有": true
+   }
+  },
+  {
+   "seiban": "5-12110-38",
+   "sheet": "G001",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.06.12",
+     "detail": "C)寸法訂正",
+     "name": "阿部(稜)"
+    },
+    {
+     "n": "2",
+     "date": "'26.06.16",
+     "detail": "C)内部機器配置訂正",
+     "name": "阿部(稜)"
+    },
+    {
+     "n": "3",
+     "date": "'26.07.09",
+     "detail": "C)503回路端子台追加",
+     "name": "阿部(稜)"
+    }
+   ],
+   "defect_texts": [
+    "C)寸法訂正",
+    "C)内部機器配置訂正",
+    "C)503回路端子台追加"
+   ],
+   "categories": [
+    "端子台・記載漏れ"
+   ],
+   "devices": [
+    "TB503",
+    "U_TB2_BN100Wx3_W",
+    "X_RAIL_9W"
+   ],
+   "diff": {
+    "blocks_added": [
+     {
+      "name": "U_TB2_BN100Wx3_W",
+      "n": 1
+     },
+     {
+      "name": "X_RAIL_9W",
+      "n": 1
+     }
+    ],
+    "blocks_removed": [],
+    "attrs_added": [
+     {
+      "block": "U_TB2_BN100Wx3_W",
+      "tag": "DEVICE",
+      "value": "TB503",
+      "n": 1
+     },
+     {
+      "block": "U_TB2_BN100Wx3_W",
+      "tag": "TYPE_SPEC",
+      "value": "BN100Wx3",
+      "n": 1
+     }
+    ],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "5-12110-38_before_G001.dxf",
+    "after": "5-12110-38_after_G001.dxf",
+    "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
     "after有": true
    }
   },
@@ -374,6 +590,50 @@
    "sources": {
     "before": "5-21058-95_before_H006.dxf",
     "after": "5-21058-95_after_H006.dxf",
+    "pdf": false
+   },
+   "detection": {
+    "層1検出ルール": [],
+    "修正後クリア": [],
+    "after有": true
+   }
+  },
+  {
+   "seiban": "5-21183-18",
+   "sheet": "G001",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.12",
+     "detail": "C)遮熱板変更、塩ビ板追加",
+     "name": "東 梅"
+    }
+   ],
+   "defect_texts": [
+    "C)遮熱板変更、塩ビ板追加"
+   ],
+   "categories": [
+    "その他"
+   ],
+   "devices": [],
+   "diff": {
+    "blocks_added": [],
+    "blocks_removed": [],
+    "attrs_added": [],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [
+     {
+      "layer": "Dim_BoxTool",
+      "text": "塩ビ板2分割ビス止め",
+      "n": 1
+     }
+    ],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "5-21183-18_before_G001.dxf",
+    "after": "5-21183-18_after_G001.dxf",
     "pdf": false
    },
    "detection": {
@@ -701,11 +961,11 @@
   }
  ],
  "summary": {
-  "件数": 11,
+  "件数": 14,
   "分類別": {
-   "その他": 6,
+   "その他": 8,
+   "端子台・記載漏れ": 4,
    "接点・警報": 3,
-   "端子台・記載漏れ": 3,
    "定格・仕様変更": 1,
    "線番・号線": 1,
    "電源経路": 1,
