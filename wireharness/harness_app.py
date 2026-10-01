@@ -11,16 +11,24 @@
 import os
 import glob
 import html
+import hmac
 import shutil
+import secrets
 import logging
 import datetime
 import traceback
 from logging.handlers import RotatingFileHandler
-from flask import Flask, request, redirect, url_for, send_file, abort, Response
+from flask import Flask, request, redirect, url_for, send_file, abort, Response, session
 
 from wireharness.fromto_qc import harness_produce as HP
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 80 * 1024 * 1024  # 80MB(大容量の配置図DXFに対応)
+# セッション署名鍵。未設定なら起動毎にランダム(本番は HARNESS_SECRET を固定)。
+app.secret_key = os.environ.get('HARNESS_SECRET', secrets.token_hex(16))
+# 画面ログイン(評価フェーズはID+パスワードで可)。HARNESS_PASSWORD 未設定なら認証オフ(ローカル試用)。
+HARNESS_USER = os.environ.get('HARNESS_USER', '')          # 空ならID照合なし(パスワードのみ)
+HARNESS_PASSWORD = os.environ.get('HARNESS_PASSWORD', '')
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORK = os.environ.get('HARNESS_WORK', os.path.join(HERE, 'harness_work'))
 os.makedirs(WORK, exist_ok=True)
@@ -76,6 +84,67 @@ def _on_error(e):
             'お手数ですが管理者へログ(app.log)の確認をご依頼ください。</div>'
             '<div class="card"><a class="btn" href="/">← ホームへ</a></div>')
     return _page(body, title='エラー'), 500
+
+
+# --- 画面ログイン(ID+パスワード。評価フェーズ向け。社内限定運用と併用可) ---
+_LOGIN_HTML = '''<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>ハーネスシステム ログイン</title>
+<style>body{font-family:"Noto Sans JP","Yu Gothic",sans-serif;background:#eef1f5;display:flex;
+align-items:center;justify-content:center;height:100vh;margin:0}
+.box{background:#fff;border:1px solid #ccd3de;border-radius:10px;padding:30px;width:320px}
+h1{font-size:16px;color:#16233c;margin:0 0 18px}input{width:100%;padding:10px;margin-top:8px;
+border:1px solid #ccd3de;border-radius:7px;font-size:14px;box-sizing:border-box}
+button{width:100%;margin-top:14px;padding:11px;background:#1f4fb0;color:#fff;border:0;border-radius:8px;
+font-size:14px;font-weight:700;cursor:pointer}.e{color:#c0392b;font-size:12px;margin-top:10px}</style>
+</head><body><form class="box" method="post" action="/login">
+<h1>ハーネスデータ自動生成システム</h1>
+{USER}<input type="password" name="pw" placeholder="パスワード" autofocus>
+<button>ログイン</button>{ERR}</form></body></html>'''
+
+
+def _login_page(err=''):
+    user_field = ('<input type="text" name="user" placeholder="ID" autofocus>'
+                  if HARNESS_USER else '')
+    html_ = _LOGIN_HTML.replace('{USER}', user_field).replace(
+        '{ERR}', f'<div class="e">{_esc(err)}</div>' if err else '')
+    return Response(html_, mimetype='text/html')
+
+
+@app.before_request
+def _require_login():
+    if not HARNESS_PASSWORD:                      # 未設定=認証オフ(ローカル試用)
+        return None
+    p = request.path
+    if p == '/login' or p == '/api/health' or p.startswith('/static'):
+        return None
+    if session.get('auth'):
+        return None
+    if p.startswith('/api/') or p.startswith('/confirm'):
+        return Response('{"ok":false,"error":"未認証"}', status=401, mimetype='application/json')
+    return redirect('/login')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not HARNESS_PASSWORD:
+        return redirect('/')
+    if request.method == 'POST':
+        ok_pw = hmac.compare_digest(request.form.get('pw', ''), HARNESS_PASSWORD)
+        ok_user = (not HARNESS_USER) or hmac.compare_digest(request.form.get('user', ''), HARNESS_USER)
+        if ok_pw and ok_user:
+            session['auth'] = True
+            session['user'] = request.form.get('user', '') or 'user'
+            app.logger.info('login ok user=%s', session['user'])
+            return redirect('/')
+        app.logger.info('login failed')
+        return _login_page('IDまたはパスワードが違います')
+    return _login_page()
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/login')
 
 # 出力種別 → (ファイル接尾, 表示名, ダウンロード時のMIME)
 OUTPUTS = [
@@ -169,7 +238,9 @@ def index():
             f'<div class="row"><a class="btn" href="/design">設計不備を登録／一覧 ▶</a></div></div>'
             f'<div class="card muted">社内サーバ共有・ブラウザ動作。'
             f'正常な図面はハーネス生成まで全自動、図面不備は確認UIの①で前工程へ提示します。'
-            f'　<a href="/help">使い方</a> ・ <a href="/admin">管理（バックアップ/ログ）</a></div>')
+            f'　<a href="/help">使い方</a> ・ <a href="/admin">管理（バックアップ/ログ）</a>'
+            + ('　・ <a href="/logout">ログアウト</a>' if HARNESS_PASSWORD else '')
+            + '</div>')
     return _page(body)
 
 

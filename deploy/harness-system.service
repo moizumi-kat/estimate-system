@@ -18,6 +18,8 @@ WorkingDirectory={APP_DIR}
 #   HARNESS_STATE=/var/lib/harness-system/state   学習結果(learned.json/design_cases.json/confirmed)の
 #                                                 永続化先。再デプロイ(git pull)で巻き戻らないよう
 #                                                 コード木の外へ外部化(初回はリポジトリ値から自動シード)。
+#   HARNESS_USER / HARNESS_PASSWORD / HARNESS_SECRET  画面ログイン(評価フェーズはID+PWで可)。
+#                                                 PASSWORD未設定なら認証オフ。
 EnvironmentFile=/etc/harness-system.env
 # ハーネス生成(DXF解析・測長)は重いので timeout を大きめに。ワーカ数はvCPUに合わせて調整。
 ExecStart={APP_DIR}/venv/bin/gunicorn wireharness.harness_app:app \
