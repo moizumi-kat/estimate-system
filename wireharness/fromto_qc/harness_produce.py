@@ -1041,6 +1041,17 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     dec = duct_decision(seq, skel_paths=skel, seiban=seiban, dct_paths=dct)
     ec = electrical_check(seq, skel_paths=skel, seiban=seiban)
     fb = design_feedback(seq, skel_paths=skel, seiban=seiban, out_dir=out_dir)
+    # 設計不備の学習(ループA): 横断検証済みの決定論ルール(層1=R2スケルトン限定/R3中性線、
+    # 層2=R7接地 参考)を①設計不備へ追加。ケースベースの実績修正案を添える。回帰ゼロのため保護。
+    try:
+        from . import design_check as _dcheck
+        extra = _dcheck.review_design_items(seq_paths=seq, skel_paths=skel)
+        if extra:
+            fb.setdefault('items', [])
+            fb['items'].extend(extra)
+            fb.setdefault('summary', {})['指摘件数'] = len(fb['items'])
+    except Exception:
+        pass
     corr = device_correspondence(files, seiban=seiban, out_dir=out_dir)
     amap = addr_map_from_correspondence(corr)
     _os.makedirs(out_dir, exist_ok=True)

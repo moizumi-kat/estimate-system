@@ -185,6 +185,90 @@ def build_case(seiban, sheet, before_path, after_path=None, pdf_text=''):
     }
 
 
+def _precedent(category, limit=2):
+    """ケースベースから当該分類の過去実績(修正の文言)を引く＝実績ベースの修正案根拠。"""
+    outs = []
+    for c in load_cases().get('cases', []):
+        if category in c.get('categories', []):
+            for r in c.get('revisions', []):
+                if r.get('detail'):
+                    outs.append(f"{c['seiban']}:{r['detail']}")
+    seen = []
+    for o in outs:
+        if o not in seen:
+            seen.append(o)
+    return seen[:limit]
+
+
+# 検出ルール → ケース分類(実績修正案の紐付け)。横断検証で過検出ゼロを確認した層のみ層1。
+_RULE_CATEGORY = {'R2': '定格・仕様変更', 'R3': '相・電圧', 'R7': 'その他'}
+
+
+def review_design_items(seq_paths=None, skel_paths=None):
+    """①設計不備UI向け: 既存の決定論チェッカーを横断検証どおりの範囲で走らせ、
+    ケースベースの実績修正案を添えて 2層(層1=自動検出 / 層2=参考)で返す。
+
+    横断検証(design_cases.json の detection)の結論に厳密に従う:
+      層1(高信頼・正常図面で過検出ゼロ): R2容量逆転(スケルトン限定)・R3中性線端子(V→N)
+      層2(参考・断定しない)           : R7接地結線漏れ 等(正常図面で誤発火あり→人が判断)
+    戻り: design_feedback と同じ {分類,該当,号線,解決案} 形式(分類に層のタグを付す)。失敗時は空。
+    """
+    from . import defect_check as _dc
+    from .geometry import DrawingModel as _DM
+
+    def _models(paths):
+        out = []
+        for p in (paths or []):
+            try:
+                out.append(_DM(p))
+            except Exception:
+                pass
+        return out
+
+    seq = _models(seq_paths)
+    skel = _models(skel_paths)
+    items = []
+
+    def _agg(rule, findings, tier, tier_tag):
+        if not findings:
+            return
+        places = [f.get('場所', '') for f in findings if f.get('場所')]
+        problem = findings[0].get('問題', '')
+        suggest = findings[0].get('提案', '')
+        prec = _precedent(_RULE_CATEGORY.get(rule, ''))
+        fix = suggest
+        if prec:
+            fix = suggest + '（過去実績: ' + ' / '.join(prec) + '）'
+        items.append({'分類': f'{tier_tag}{problem[:28]}',
+                      '該当': f'{len(findings)}箇所' + (f'（{places[0]} 他）' if len(places) > 1 else (f'（{places[0]}）' if places else '')),
+                      '号線': '', '解決案': fix, 'tier': tier, 'rule': rule})
+
+    # 層1: R2(スケルトン限定)・R3(シーケンス＋スケルトン) — 横断検証で過検出ゼロ
+    r2 = []
+    for m in skel:
+        try:
+            r2 += _dc.rule_R2_capacity(m)
+        except Exception:
+            pass
+    _agg('R2', r2, 1, '【自動検出】')
+    r3 = []
+    for m in seq + skel:
+        try:
+            r3 += _dc.rule_R3_neutral(m)
+        except Exception:
+            pass
+    _agg('R3', r3, 1, '【自動検出】')
+    # 層2: R7接地結線漏れ — 正常図面で誤発火例あり。断定せず参考提示(人が判断)
+    r7 = []
+    for m in seq + skel:
+        try:
+            r7 += _dc.rule_R7_earth(m)
+        except Exception:
+            pass
+    _agg('R7', r7, 2, '【参考・要確認】')
+    return items
+
+
 def load_cases():
     try:
         return json.load(open(CASES_PATH, encoding='utf-8'))

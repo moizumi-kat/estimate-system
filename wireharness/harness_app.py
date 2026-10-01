@@ -106,6 +106,10 @@ def index():
       </form>'''
     body = (f'<div class="card"><h2>製番一覧</h2>{table}</div>'
             f'<div class="card"><h2>新しい製番を登録</h2>{form}</div>'
+            f'<div class="card"><h2>設計不備の学習（修正前後の図面を登録）</h2>'
+            f'<p class="muted">設計不備を直した後、<b>修正前</b>と<b>修正後</b>の図面(DXF)を登録すると、'
+            f'before→after差分で「実際の直し方」を学習し、次回以降の①設計不備の指摘＋実績修正案に反映します。</p>'
+            f'<div class="row"><a class="btn" href="/design">設計不備を登録／一覧 ▶</a></div></div>'
             f'<div class="card muted">社内サーバ共有・ブラウザ動作。'
             f'正常な図面はハーネス生成まで全自動、図面不備は確認UIの①で前工程へ提示します。</div>')
     return _page(body)
@@ -212,6 +216,83 @@ def download(seiban, suffix):
     if not os.path.exists(p):
         abort(404)
     return send_file(p, as_attachment=True, download_name=f'{safe}{suffix}')
+
+
+@app.route('/design')
+def design_home():
+    """設計不備の学習ページ: 修正前後の図面を登録、蓄積済みケース一覧。"""
+    from wireharness.fromto_qc import design_check as DC
+    data = DC.load_cases()
+    cases = data.get('cases', [])
+    summary = data.get('summary', {})
+    rows = ''
+    for c in cases:
+        det = c.get('detection', {})
+        l1 = '／'.join(det.get('層1検出ルール', []) or []) or '—'
+        rows += (f'<tr><td><b>{_esc(c["seiban"])}</b></td><td>{_esc(c["sheet"])}</td>'
+                 f'<td>{_esc("／".join(c.get("categories", [])))}</td>'
+                 f'<td>{_esc("／".join(r.get("detail","") for r in c.get("revisions", [])) or "—")}</td>'
+                 f'<td>{_esc(l1)}</td></tr>')
+    table = ('<table><tr><th>製番</th><th>シート</th><th>分類</th><th>不備内容(改訂)</th>'
+             '<th>層1自動検出</th></tr>'
+             + (rows or '<tr><td colspan=5 class="muted">まだ登録がありません。</td></tr>') + '</table>')
+    form = '''
+      <form method="post" action="/design/learn" enctype="multipart/form-data">
+        <div class="row"><label>製番 <input type="text" name="seiban" placeholder="例 6-21072-1" required></label>
+          <label>シート <input type="text" name="sheet" placeholder="例 E001"></label></div>
+        <div class="row"><label>修正前 DXF <input type="file" name="before" accept=".dxf,.DXF" required></label></div>
+        <div class="row"><label>修正後 DXF <input type="file" name="after" accept=".dxf,.DXF">
+          <span class="muted">（未修正でも登録可。あれば差分から直し方を学習）</span></label></div>
+        <div class="row"><label>不備メモ（任意） <input type="text" name="note" placeholder="例 1Φ3WなのにTBがV" style="width:360px"></label></div>
+        <div class="row"><button class="primary" type="submit">登録して学習 ▶</button></div>
+      </form>'''
+    body = (f'<div class="card"><h2>設計不備ケース（学習済み {summary.get("件数", len(cases))} 件）</h2>{table}'
+            f'<p class="muted">分類別: {_esc(summary.get("分類別", {}))}</p></div>'
+            f'<div class="card"><h2>修正前後の図面を登録して学習</h2>{form}</div>'
+            f'<div class="card"><a class="btn" href="/">← 製番一覧</a></div>')
+    return _page(body, title='設計不備の学習')
+
+
+@app.route('/design/learn', methods=['POST'])
+def design_learn():
+    from wireharness.fromto_qc import design_check as DC
+    seiban = (request.form.get('seiban') or '').strip()
+    sheet = (request.form.get('sheet') or '').strip()
+    note = (request.form.get('note') or '').strip()
+    before = request.files.get('before')
+    after = request.files.get('after')
+    if not seiban or not before or not before.filename:
+        return _page('<div class="card err">製番と修正前DXFは必須です。</div>'
+                     '<div class="card"><a class="btn" href="/design">← 戻る</a></div>')
+    d = os.path.join(WORK, '_design', _seiban_dir(seiban)[1])
+    os.makedirs(d, exist_ok=True)
+    bpath = os.path.join(d, f'before_{os.path.basename(before.filename)}')
+    before.save(bpath)
+    apath = None
+    if after and after.filename:
+        apath = os.path.join(d, f'after_{os.path.basename(after.filename)}')
+        after.save(apath)
+    try:
+        case = DC.build_case(seiban, sheet or 'sheet', bpath, apath, pdf_text=note)
+        data = DC.add_cases([case])
+    except Exception:
+        return _page(f'<div class="card err">学習でエラーが発生しました:\n{_esc(traceback.format_exc())}</div>'
+                     '<div class="card"><a class="btn" href="/design">← 戻る</a></div>')
+    diff = case['diff']
+    nchg = len(diff['attrs_changed'])
+    nba = sum(x['n'] for x in diff['blocks_added'])
+    nbr = sum(x['n'] for x in diff['blocks_removed'])
+    body = (f'<div class="card"><h2 class="ok">✔ 登録・学習しました</h2>'
+            f'<p>製番 <b>{_esc(seiban)}</b> / シート {_esc(sheet or "sheet")}</p>'
+            f'<p>分類: <b>{_esc("／".join(case["categories"]))}</b></p>'
+            f'<p>不備内容(改訂/メモ): {_esc("／".join(case["defect_texts"]) or "—")}</p>'
+            f'<p>修正の実体（before→after差分）: ブロック +{nba}/-{nbr}・属性変更 {nchg} 件'
+            f'{"（修正後なし＝不備のみ登録）" if not apath else ""}</p>'
+            f'<p class="muted">蓄積ケース数: {data.get("summary", {}).get("件数")} 件。'
+            f'次回以降の①設計不備で、この分類の実績修正案として参照されます。</p>'
+            f'<div class="row"><a class="btn" href="/design">設計不備一覧へ</a>'
+            f'<a class="btn" href="/">← 製番一覧</a></div></div>')
+    return _page(body, title='設計不備の学習')
 
 
 @app.route('/api/health')
