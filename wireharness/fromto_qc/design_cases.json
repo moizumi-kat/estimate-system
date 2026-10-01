@@ -1,0 +1,469 @@
+{
+ "cases": [
+  {
+   "seiban": "5-21183-9",
+   "sheet": "F001",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.18",
+     "detail": "C)線番号変更",
+     "name": "東 梅"
+    }
+   ],
+   "defect_texts": [
+    "C)線番号変更",
+    "警報電源と制御電源がある。ブザー回路にSPD劣化接点の警報があるが、主幹ブレーカがトリップした後にSPDが故障した場合、警報（ブザー）が鳴らない回路になっている。",
+    "変更でブザー回路は制御電源ではなく警報電源にした。"
+   ],
+   "categories": [
+    "線番・号線",
+    "端子台・記載漏れ",
+    "接点・警報",
+    "電源経路"
+   ],
+   "devices": [
+    "ARROW",
+    "H_SENBAN",
+    "V_VOLTAGE"
+   ],
+   "diff": {
+    "blocks_added": [
+     {
+      "name": "ARROW",
+      "n": 2
+     },
+     {
+      "name": "H_SENBAN",
+      "n": 2
+     },
+     {
+      "name": "V_VOLTAGE",
+      "n": 1
+     }
+    ],
+    "blocks_removed": [],
+    "attrs_added": [
+     {
+      "block": "V_VOLTAGE",
+      "tag": "VOLTAGE1",
+      "value": "AC-GC200V",
+      "n": 1
+     },
+     {
+      "block": "H_SENBAN",
+      "tag": "線番",
+      "value": "1R2",
+      "n": 1
+     },
+     {
+      "block": "H_SENBAN",
+      "tag": "線番",
+      "value": "1S",
+      "n": 1
+     }
+    ],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "5-21183-9_before_F001.dxf",
+    "after": "5-21183-9_after_F001.dxf",
+    "pdf": true
+   }
+  },
+  {
+   "seiban": "3-27012-24",
+   "sheet": "F001",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.14",
+     "detail": "C)警報接点取消",
+     "name": "佐藤（拓）"
+    }
+   ],
+   "defect_texts": [
+    "C)警報接点取消"
+   ],
+   "categories": [
+    "接点・警報"
+   ],
+   "devices": [
+    "105",
+    "106",
+    "ELCB",
+    "_CROSSPOINT1",
+    "_LS_AH-T"
+   ],
+   "diff": {
+    "blocks_added": [],
+    "blocks_removed": [
+     {
+      "name": "_CROSSPOINT1",
+      "n": 4
+     },
+     {
+      "name": "_LS_AH-T",
+      "n": 2
+     }
+    ],
+    "attrs_added": [],
+    "attrs_removed": [
+     {
+      "block": "_LS_AH-T",
+      "tag": "DEVICE",
+      "value": "ELCB",
+      "n": 2
+     },
+     {
+      "block": "_LS_AH-T",
+      "tag": "CMNTJ1",
+      "value": "警報接点",
+      "n": 2
+     },
+     {
+      "block": "_LS_AH-T",
+      "tag": "PMT",
+      "value": "-45,0,25,-100",
+      "n": 2
+     },
+     {
+      "block": "_LS_AH-T",
+      "tag": "TB",
+      "value": "0,0,0,-100",
+      "n": 2
+     },
+     {
+      "block": "_LS_AH-T",
+      "tag": "DEVICE1",
+      "value": "105",
+      "n": 1
+     },
+     {
+      "block": "_LS_AH-T",
+      "tag": "DEVICE1",
+      "value": "106",
+      "n": 1
+     }
+    ],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "3-27012-24_before_F001.dxf",
+    "after": "3-27012-24_after_F001.dxf",
+    "pdf": false
+   }
+  },
+  {
+   "seiban": "4-26020-17",
+   "sheet": "E002",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.06.22",
+     "detail": "C)SPD回路訂正(線種)",
+     "name": "相澤(賢)"
+    },
+    {
+     "n": "2",
+     "date": "'26.07.15",
+     "detail": "C)ELCB205定格変更(75AT)",
+     "name": "相澤(賢)"
+    }
+   ],
+   "defect_texts": [
+    "C)SPD回路訂正(線種)",
+    "C)ELCB205定格変更(75AT)"
+   ],
+   "categories": [
+    "定格・仕様変更",
+    "接点・警報"
+   ],
+   "devices": [],
+   "diff": {
+    "blocks_added": [],
+    "blocks_removed": [],
+    "attrs_added": [],
+    "attrs_removed": [],
+    "attrs_changed": [
+     {
+      "block": "LB_ELB-T",
+      "tag": "SPEC1",
+      "before": "3P100/100AT",
+      "after": "3P100/75AT"
+     }
+    ],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "4-26020-17_before_E002.dxf",
+    "after": "4-26020-17_after_E002.dxf",
+    "pdf": false
+   }
+  },
+  {
+   "seiban": "5-12110-38",
+   "sheet": "H006",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.09",
+     "detail": "C)503回路端子台追加",
+     "name": "阿部(稜)"
+    }
+   ],
+   "defect_texts": [
+    "C)503回路端子台追加"
+   ],
+   "categories": [
+    "端子台・記載漏れ"
+   ],
+   "devices": [
+    "503",
+    "LU0001_1",
+    "TB"
+   ],
+   "diff": {
+    "blocks_added": [
+     {
+      "name": "LU0001_1",
+      "n": 1
+     }
+    ],
+    "blocks_removed": [],
+    "attrs_added": [
+     {
+      "block": "LU0001_1",
+      "tag": "PARTS",
+      "value": "TB",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "DEVICE",
+      "value": "TB",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "DEVICE1",
+      "value": "503",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "MAKER",
+      "value": "ｱｲﾃﾞｯｸ",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "TYPE",
+      "value": "BN100W",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "SPEC5",
+      "value": "3P",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "QUANTITY",
+      "value": "2",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "CODE",
+      "value": "173294",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "GCODE",
+      "value": "UI_BN100W_3",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "PMT",
+      "value": "-10,10,10,-10",
+      "n": 1
+     },
+     {
+      "block": "LU0001_1",
+      "tag": "TERMINAL",
+      "value": "U,N,W",
+      "n": 1
+     }
+    ],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "5-12110-38_before_H006.dxf",
+    "after": "5-12110-38_after_H006.dxf",
+    "pdf": false
+   }
+  },
+  {
+   "seiban": "5-21058-95",
+   "sheet": "H006",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.25",
+     "detail": "C)結線図変更",
+     "name": "大澤"
+    },
+    {
+     "n": "2",
+     "date": "'26.08.04",
+     "detail": "A)伝送ユニット変更",
+     "name": "大澤"
+    }
+   ],
+   "defect_texts": [
+    "C)結線図変更",
+    "A)伝送ユニット変更"
+   ],
+   "categories": [
+    "その他"
+   ],
+   "devices": [
+    "MC34_LNS-51",
+    "_CROSSPOINT1",
+    "_crossPoint1"
+   ],
+   "diff": {
+    "blocks_added": [
+     {
+      "name": "_crossPoint1",
+      "n": 20
+     }
+    ],
+    "blocks_removed": [
+     {
+      "name": "_CROSSPOINT1",
+      "n": 16
+     },
+     {
+      "name": "MC34_LNS-51",
+      "n": 1
+     }
+    ],
+    "attrs_added": [],
+    "attrs_removed": [],
+    "attrs_changed": [
+     {
+      "block": "LU3_CPU_2-2",
+      "tag": "TYPE",
+      "before": "WRT2050",
+      "after": "WRT2055K"
+     }
+    ],
+    "texts_added": [
+     {
+      "layer": "TEMPLATE",
+      "text": "岡本さん260714",
+      "n": 1
+     }
+    ],
+    "texts_removed": []
+   },
+   "sources": {
+    "before": "5-21058-95_before_H006.dxf",
+    "after": "5-21058-95_after_H006.dxf",
+    "pdf": false
+   }
+  },
+  {
+   "seiban": "5-21183-24",
+   "sheet": "H001",
+   "revisions": [
+    {
+     "n": "1",
+     "date": "'26.07.14",
+     "detail": "C)アース渡り線変更",
+     "name": "東 梅"
+    }
+   ],
+   "defect_texts": [
+    "C)アース渡り線変更"
+   ],
+   "categories": [
+    "その他"
+   ],
+   "devices": [
+    "MC36f_ETBAR-1-3",
+    "_LZ3_ET-1"
+   ],
+   "diff": {
+    "blocks_added": [
+     {
+      "name": "MC36f_ETBAR-1-3",
+      "n": 1
+     },
+     {
+      "name": "_LZ3_ET-1",
+      "n": 1
+     }
+    ],
+    "blocks_removed": [],
+    "attrs_added": [],
+    "attrs_removed": [],
+    "attrs_changed": [],
+    "texts_added": [
+     {
+      "layer": "TEMPLATE",
+      "text": "*EET",
+      "n": 1
+     },
+     {
+      "layer": "0",
+      "text": "*ET",
+      "n": 1
+     },
+     {
+      "layer": "0",
+      "text": "*SPDET(19項目)",
+      "n": 1
+     }
+    ],
+    "texts_removed": [
+     {
+      "layer": "0",
+      "text": "*EET",
+      "n": 1
+     }
+    ]
+   },
+   "sources": {
+    "before": "5-21183-24_before_H001.dxf",
+    "after": "5-21183-24_after_H001.dxf",
+    "pdf": false
+   }
+  }
+ ],
+ "summary": {
+  "件数": 6,
+  "分類別": {
+   "接点・警報": 3,
+   "端子台・記載漏れ": 2,
+   "その他": 2,
+   "線番・号線": 1,
+   "電源経路": 1,
+   "定格・仕様変更": 1
+  }
+ }
+}
