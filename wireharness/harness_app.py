@@ -22,7 +22,9 @@ os.makedirs(WORK, exist_ok=True)
 
 # 出力種別 → (ファイル接尾, 表示名, ダウンロード時のMIME)
 OUTPUTS = [
-    ('_ハーネスデータ.txt', 'ハーネスデータ(社内形式)', 'text/plain; charset=utf-8'),
+    ('_ハーネスデータ.xlsx', 'ハーネスデータ Excel(既存システム取込→シール印刷)',
+     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+    ('_ハーネスデータ.txt', 'ハーネスデータ(社内形式TAB)', 'text/plain; charset=utf-8'),
     ('_ハーネス.csv', 'ハーネス(測長/ルート)', 'text/csv; charset=utf-8'),
     ('_機器対応表.csv', '機器対応表(正式↔仮名)', 'text/csv; charset=utf-8'),
     ('_設計指摘書.csv', '設計指摘書(前工程へ)', 'text/csv; charset=utf-8'),

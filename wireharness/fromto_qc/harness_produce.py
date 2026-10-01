@@ -772,35 +772,65 @@ def to_harness_txt(routed, path, seiban='', addr_map=None, encoding='utf-8-sig')
         # 手本に倣い、扉付け機器で場所未指定なら『扉』(内部配置図に無いのが正常)
         return e.get('place', '') or ('扉' if _door(e.get('device', '')) else '')
 
-    def row(cells):
-        c = (list(cells) + [''] * 11)[:11]
-        return '\t'.join('' if x is None else str(x) for x in c)
+    rows = _harness_rows(routed, seiban=seiban, _door=_door, _place=_place)
+    lines = ['\t'.join('' if x is None else str(x) for x in r) for r in rows]
+    with open(path, 'w', encoding=encoding, newline='') as f:
+        f.write('\r\n'.join(lines) + '\r\n')
+    return path
 
-    def gname(w):
-        # 電源線(色付き)は号線欄に色、制御線は号線番号(モデル準拠)
-        return w.get('color') or w.get('gousen', '')
 
-    lines = [row(['"配線情報リスト 作成日  97,4,26"']), row([]), row([]),
-             row(['', '', '', '', '', '', '', '', '', '', seiban])]
+def _harness_rows(routed, seiban='', _door=None, _place=None):
+    """ハーネスシート(モデル同一フォーマット)の全行を 11セルのリストで返す。
+    txt(TAB) と xlsx の共通ソース。行構成: 行0タイトル/行3製番/以降 仕様ヘッダ＋端点2行＋区切り。
+    列: 0空,1=号線(電源線は色),2=*,3=圧着,4=場所,5=機器,6=番号,7=端子,8-10空。"""
+    from . import harness_learn as _HL
+    if _place is None:
+        from .layout import DOOR_BASE as _DOOR
+
+        def _door(dv):
+            b = ''.join(ch for ch in str(dv).split('-')[0] if not ch.isdigit())
+            return dv in _DOOR or b in _DOOR
+
+        def _place(e):
+            return e.get('place', '') or ('扉' if _door(e.get('device', '')) else '')
+
+    def cells(c):
+        return (list(c) + [''] * 11)[:11]
+
+    rows = [cells(['"配線情報リスト 作成日  97,4,26"']), cells([]), cells([]),
+            cells(['', '', '', '', '', '', '', '', '', '', seiban])]
     prev = None
     for w in routed['wires']:
         size = w.get('size', '')
         spec = (_HL.wire_type(w.get('kind'), w.get('gousen'), w.get('color')), size)
         if spec != prev:
-            lines.append(row(['', '*', '*', spec[0], spec[1], '*', '*', '*', '*']))
+            rows.append(cells(['', '*', '*', spec[0], spec[1], '*', '*', '*', '*']))
         else:
-            lines.append(row(['', '*', '*', '*', '*', '*', '*', '*', '*']))
+            rows.append(cells(['', '*', '*', '*', '*', '*', '*', '*', '*']))
         prev = spec
-        g = gname(w)
+        g = w.get('color') or w.get('gousen', '')   # 電源線は色、制御線は号線(モデル準拠)
         for e in (w['from'], w['to']):
-            crimp = _HL.crimp_of(size, e.get('device', ''))   # (サイズ,機器)→圧着(学習)
+            crimp = _HL.crimp_of(size, e.get('device', ''))
             no = e.get('no', '')
-            if re.match(r'^仮\d', str(no)):     # TB端子は製造アサイン。仮Nは出さず空欄(手本準拠)
+            if re.match(r'^仮\d', str(no)):
                 no = ''
-            lines.append(row(['', g, '*', crimp, _place(e),
-                              e.get('device', ''), no, e.get('terminal', '')]))
-    with open(path, 'w', encoding=encoding, newline='') as f:
-        f.write('\r\n'.join(lines) + '\r\n')
+            rows.append(cells(['', g, '*', crimp, _place(e),
+                               e.get('device', ''), no, e.get('terminal', '')]))
+    return rows
+
+
+def to_harness_xlsx(routed, path, seiban='', addr_map=None):
+    """生成ハーネスを『ハーネスデータシート』と同一フォーマットの Excel(.xlsx) で出力。
+    既存システムがこのExcelを読み込み、シールシートへ印刷する運用(茂泉様)。
+    セル配置は txt(11列)と同一。"""
+    import openpyxl
+    rows = _harness_rows(routed, seiban=seiban)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = (seiban or 'harness')[:31]
+    for r in rows:
+        ws.append(['' if x is None else str(x) for x in r])
+    wb.save(path)
     return path
 
 
@@ -948,6 +978,12 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     # ハーネスデータシートと同じネイティブ形式(11列TAB)でも出力(社内運用そのまま)
     htxt = _os.path.join(out_dir, f'{base}_ハーネスデータ.txt')
     to_harness_txt(routed, htxt, seiban=seiban, addr_map=amap)
+    # 既存システム取込用: モデル同一フォーマットの Excel(.xlsx)。これでシールシートへ印刷。
+    hxlsx = _os.path.join(out_dir, f'{base}_ハーネスデータ.xlsx')
+    try:
+        to_harness_xlsx(routed, hxlsx, seiban=seiban, addr_map=amap)
+    except Exception:
+        hxlsx = None
     # マス目シール印刷用(各マスにフォント自動調整)
     lbl = _os.path.join(out_dir, f'{base}_ラベルシート.html')
     to_label_sheet_html(routed, lbl, seiban=seiban, addr_map=amap)
@@ -957,8 +993,8 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     _review.to_review_html(routed, rvw, seiban=seiban, addr_map=amap, ec=ec,
                            defects=fb.get('items'))
     return {'seiban': seiban,
-            'files': {'review_html': rvw, 'harness_txt': htxt, 'harness_csv': hcsv,
-                      'label_sheet_html': lbl,
+            'files': {'review_html': rvw, 'harness_txt': htxt, 'harness_xlsx': hxlsx,
+                      'harness_csv': hcsv, 'label_sheet_html': lbl,
                       'design_feedback_csv': fb.get('file'),
                       'device_map_csv': corr.get('file')},
             'electrical': ec['summary'],
