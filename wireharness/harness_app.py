@@ -576,6 +576,56 @@ def _learned_defect_findings(paths):
         return []
 
 
+def _harness_readiness(paths):
+    """ハーネス生成の条件確認: 号線/電線サイズ/結線が揃い生成可能かを判定する。
+    戻り: {'verdict','counts','issues':[{分類,該当,号線,解決案}]}。失敗時も安全に返す。"""
+    try:
+        seq, skel, dct = HP._classify_seiban_files(paths)
+        if not (seq or skel):
+            return {'verdict': 'NG', 'counts': {},
+                    'issues': [{'分類': 'シーケンス/スケルトン図なし',
+                                '該当': f'{len(paths)}ファイル', '号線': '',
+                                '解決案': '結線図(F/H)またはスケルトン(E/G)を含めてください。'}]}
+        from wireharness.fromto_qc import tracer
+        gousen = set()
+        for p in seq + skel:
+            try:
+                for g in tracer.trace_nodes(p):
+                    if not str(g).startswith('M@'):
+                        gousen.add(str(g))
+            except Exception:
+                pass
+        fb = HP.design_feedback(seq, skel_paths=skel)
+        s = fb.get('summary', {})
+        counts = {'結線図(seq)': len(seq), 'スケルトン(skel)': len(skel), '配置図': len(dct),
+                  '号線数': len(gousen), '電線サイズ未記入回路': s.get('電線サイズ未記入回路', 0),
+                  '浮き線端': s.get('浮き線端', 0), '近接ギャップ': s.get('近接ギャップ', 0)}
+        issues = list(fb.get('items', []))
+        blocking = (len(gousen) == 0) or counts['電線サイズ未記入回路'] > 0 or counts['浮き線端'] > 0
+        verdict = '要確認' if blocking else 'OK'
+        return {'verdict': verdict, 'counts': counts, 'issues': issues}
+    except Exception:
+        app.logger.exception('harness readiness failed')
+        return {'verdict': '判定不可', 'counts': {}, 'issues': []}
+
+
+def _readiness_card(ready):
+    v = ready.get('verdict', '')
+    color = {'OK': 'var(--ok)', '要確認': '#9a6700', 'NG': 'var(--bad,#c0392b)'}.get(v, 'var(--muted)')
+    counts = '　'.join(f'{k}: <b>{_esc(val)}</b>' for k, val in ready.get('counts', {}).items())
+    iss = ''
+    for it in ready.get('issues', []):
+        iss += (f'<tr><td>{_esc(it.get("分類"))}</td><td>{_esc(it.get("該当"))}</td>'
+                f'<td class="muted">{_esc(it.get("解決案"))}</td></tr>')
+    iss_tbl = (f'<table style="margin-top:8px"><tr><th>項目</th><th>該当</th><th>対応</th></tr>{iss}</table>'
+               if iss else '<p class="muted" style="margin-top:6px">生成を妨げる不足は見つかりませんでした。</p>')
+    return (f'<div class="card"><h2>ハーネス生成条件の確認：'
+            f'<span style="color:{color}">{_esc(v)}</span></h2>'
+            f'<p class="muted">{counts}</p>{iss_tbl}'
+            f'<p class="muted" style="margin-top:6px">※「OK」は生成に必要な号線・電線サイズ・結線が'
+            f'揃っている目安です。要確認項目は設計へ戻すか製造で手直しできます。</p></div>')
+
+
 @app.route('/check', methods=['GET', 'POST'])
 def check():
     """単独検図: 図面(DXF)をアップロード→ R1-R7＋H1-H5(＋AI補助)＋学習済み見逃しルール で検査。
@@ -617,6 +667,7 @@ def check():
         findings.append({'rule': lf.get('rule', '学習'), 'severity': 'med', 'confidence': 'med',
                          '場所': '', '問題': lf.get('detail', ''), '提案': '設計に確認してください。',
                          '根拠': '学習済み見逃しルール(defect_rules)'})
+    ready = _harness_readiness(saved)
     # 集計＋表示
     bycnt = {}
     for f in findings:
@@ -639,7 +690,8 @@ def check():
           <input type="text" name="name" placeholder="ルール名(任意)" style="width:180px">
           <button class="primary" type="submit">学習に追加</button></div>
       </form>'''
-    body = (f'<div class="card"><h2>検図結果：{len(findings)}件　<span class="muted">内訳 {_esc(bycnt)}</span></h2>'
+    body = (f'{_readiness_card(ready)}'
+            f'<div class="card"><h2>検図結果：{len(findings)}件　<span class="muted">内訳 {_esc(bycnt)}</span></h2>'
             f'{table_html}</div>'
             f'<div class="card"><h2>見逃しを学習させる</h2>'
             f'<p class="muted">現場で見つかった「本来あるべき機器の欠落」等を登録すると、次回以降の検図で自動指摘します。</p>'
