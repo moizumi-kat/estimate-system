@@ -86,6 +86,7 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
         placed = False
         for si, (name, r, dt, d) in enumerate(sheets):
             xmin, ymax = r['xmin'], r['ymax']
+            mr = max(6.0, round(max(r['w'], r['h']) / 190.0, 1))   # 図面サイズに応じたマーカー半径
             fp = _endpoint_xy(dt, d, frm.get('device', ''), frm.get('no', ''), frm.get('terminal', ''))
             tp = _endpoint_xy(dt, d, to.get('device', ''), to.get('no', ''), to.get('terminal', ''))
             pts = []
@@ -98,7 +99,7 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
             base = col or '#8a93a0'
             for (X, Y) in pts:
                 overlays[si].append(
-                    f'<circle class="mk" data-w="{i}" cx="{X}" cy="{Y}" r="4" '
+                    f'<circle class="mk" data-w="{i}" cx="{X}" cy="{Y}" r="{mr}" '
                     f'style="--bc:{base}"/>')
             if len(pts) == 2:
                 (x1, y1), (x2, y2) = pts
@@ -164,11 +165,14 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
  .dwg line,.dwg path,.dwg circle{{fill:none;stroke:#334;stroke-width:0.4;vector-effect:non-scaling-stroke}}
  .dwg .wm{{stroke:#c0392b}} .dwg .we{{stroke:#1a9a3a}} .dwg .wc{{stroke:#666}} .dwg .gm{{stroke:#aab4c2}}
  .dwg .sol{{fill:#334;stroke:none}} .dwg text{{fill:#333;font-family:sans-serif}}
- /* マーカー: 既定=半透明、選択=橙で拡大、確認=緑 */
- .ov .mk{{fill:var(--bc);fill-opacity:.35;stroke:#fff;stroke-width:.6;vector-effect:non-scaling-stroke}}
- .ov .ln{{stroke:#e0a800;stroke-width:1.6;vector-effect:non-scaling-stroke;display:none}}
- .ov .mk.sel{{fill:#e0a800;fill-opacity:1;r:7}} .ov .ln.sel{{display:inline}}
- .ov .mk.done{{fill:#1a9a3a;fill-opacity:.9}}
+ /* マーカー/線: 既定=半透明、選択=橙で太く拡大、確認=緑の太線を図面に残す */
+ .ov .mk{{fill:var(--bc);fill-opacity:.5;stroke:#333;stroke-width:.6;vector-effect:non-scaling-stroke;
+   transform-box:fill-box;transform-origin:center;transition:transform .08s}}
+ .ov .ln{{fill:none;stroke-width:3;vector-effect:non-scaling-stroke;display:none;stroke-linecap:round}}
+ .ov .mk.done{{fill:#1a9a3a;fill-opacity:.95}}
+ .ov .ln.done{{display:inline;stroke:#1a9a3a;stroke-width:4;opacity:.95}}
+ .ov .mk.sel{{fill:#ff5a00;fill-opacity:1;stroke:#7a2600;stroke-width:2.4;transform:scale(2.1)}}
+ .ov .ln.sel{{display:inline;stroke:#ff3b00;stroke-width:7;opacity:1}}
  .ov-term .tl{{fill:#6a1b9a;font-size:6px;font-family:sans-serif;paint-order:stroke;
    stroke:#fff;stroke-width:1.4px;stroke-linejoin:round}}
  body:not(.showterm) .ov-term{{display:none}}
@@ -194,7 +198,7 @@ try{{done=JSON.parse(localStorage.getItem(KEY)||'{{}}')||{{}};}}catch(e){{done={
 function mkAll(w){{return document.querySelectorAll('.ov [data-w="'+w+'"]');}}
 function rowOf(w){{return document.querySelector('#tb tr[data-w="'+w+'"]');}}
 function applyDone(w){{var on=!!done[w];var r=rowOf(w);if(r){{r.classList.toggle('done',on);var c=r.querySelector('.cf');if(c)c.checked=on;}}
-  mkAll(w).forEach(function(el){{if(el.classList.contains('mk'))el.classList.toggle('done',on);}});}}
+  mkAll(w).forEach(function(el){{el.classList.toggle('done',on);}});}}
 function recount(){{var n=Object.keys(done).filter(function(k){{return done[k];}}).length;document.getElementById('cdone').textContent=n;}}
 var sel=null;
 function select(w){{
