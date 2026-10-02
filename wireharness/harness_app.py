@@ -199,28 +199,65 @@ def _page(body, title='ハーネスデータ自動生成システム'):
  .err{{background:#fdecea;border:1px solid #f3c9c3;color:#8a1c12;border-radius:8px;padding:12px;white-space:pre-wrap}}
  .ok{{color:var(--ok);font-weight:700}} a{{color:var(--accent)}}
  .row{{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}}
+ .menu{{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}}
+ .mcard{{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+   padding:18px;text-decoration:none;color:var(--ink);transition:.1s}}
+ .mcard:hover{{border-color:var(--accent);box-shadow:0 2px 10px rgba(31,79,176,.12)}}
+ .mcard .n{{display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:50%;
+   background:var(--accent);color:#fff;font-weight:700;font-size:13px;margin-right:8px}}
+ .mcard b{{font-size:15px}} .mcard p{{color:var(--muted);font-size:12.5px;margin:8px 0 0}}
 </style></head><body>
 <header>ハーネスデータ自動生成システム</header>
 <div class="wrap">{body}</div></body></html>'''
 
 
-@app.route('/')
-def index():
-    seibans = _list_seibans()
+def _seiban_table():
     rows = ''
-    for s in seibans:
-        links = ''
+    for s in _list_seibans():
+        sb = _esc(s['seiban'])
         if s['has_out']:
-            sb = _esc(s['seiban'])
             links = (f'<a class="btn" href="/review/{sb}">確認UI ▶</a> '
-                     f'<a class="btn" href="/outputs/{sb}">出力一覧</a>')
+                     f'<a class="btn" href="/outputs/{sb}">出力 ▶</a>')
         else:
             links = '<span class="muted">未生成</span>'
-        rows += (f'<tr><td><b>{_esc(s["seiban"])}</b></td><td>{s["n_in"]}枚</td>'
+        rows += (f'<tr><td><b>{sb}</b></td><td>{s["n_in"]}枚</td>'
                  f'<td>{"生成済" if s["has_out"] else "―"}</td><td>{links}</td></tr>')
-    table = ('<table><tr><th>製番</th><th>図面</th><th>状態</th><th>操作</th></tr>'
-             + (rows or '<tr><td colspan=4 class="muted">まだ製番がありません。下から図面を登録してください。</td></tr>')
-             + '</table>')
+    return ('<table><tr><th>製番</th><th>図面</th><th>状態</th><th>操作</th></tr>'
+            + (rows or '<tr><td colspan=4 class="muted">まだ製番がありません。「ハーネスデータ生成」から登録してください。</td></tr>')
+            + '</table>')
+
+
+@app.route('/')
+def index():
+    menu = (
+        '<div class="menu">'
+        '<a class="mcard" href="/devices"><b><span class="n">1</span>機器一覧</b>'
+        '<p>図面からデバイス名を<b>盤毎</b>に抽出してCSV出力。</p></a>'
+        '<a class="mcard" href="/check"><b><span class="n">2</span>検図</b>'
+        '<p>図面の不具合チェック（R1-R7等）＋<b>ハーネス生成条件の確認</b>。</p></a>'
+        '<a class="mcard" href="/new"><b><span class="n">3</span>ハーネスデータ生成</b>'
+        '<p>図面を登録→自動生成→確認UI（①設計不備→②確認→③確定）。</p></a>'
+        '<a class="mcard" href="#seibans"><b><span class="n">4</span>ハーネスデータ出力</b>'
+        '<p>生成済み製番のExcel等をダウンロード（下の一覧から）。</p></a>'
+        '</div>')
+    extra = (
+        '<div class="card"><h2>設計不備の学習（修正前後の図面を登録）</h2>'
+        '<p class="muted">設計不備を直した後、修正前/修正後の図面(DXF)を登録すると、before→after差分で'
+        '「実際の直し方」を学習し、次回以降の①設計不備に反映します。</p>'
+        '<div class="row"><a class="btn" href="/design">設計不備を登録／一覧 ▶</a></div></div>')
+    body = (f'<div class="card"><h2>メニュー</h2>{menu}</div>'
+            f'<div class="card" id="seibans"><h2>製番一覧（生成・出力）</h2>{_seiban_table()}'
+            f'<div class="row"><a class="btn primary" href="/new">＋ 新しい製番を生成</a></div></div>'
+            f'{extra}'
+            f'<div class="card muted">社内サーバ共有・ブラウザ動作。'
+            f'<a href="/help">使い方</a> ・ <a href="/admin">管理（バックアップ/ログ）</a>'
+            + ('　・ <a href="/logout">ログアウト</a>' if HARNESS_PASSWORD else '')
+            + '</div>')
+    return _page(body)
+
+
+@app.route('/new')
+def new_seiban():
     form = '''
       <form method="post" action="/generate" enctype="multipart/form-data">
         <div class="row"><label>製番 <input type="text" name="seiban" placeholder="例 5-29026-5" required></label></div>
@@ -231,22 +268,9 @@ def index():
         <div class="row"><button class="primary" type="submit">図面を登録して一括生成 ▶</button>
           <span class="muted">アップロード→自動生成→確認UIへ</span></div>
       </form>'''
-    body = (f'<div class="card"><h2>製番一覧</h2>{table}</div>'
-            f'<div class="card"><h2>新しい製番を登録</h2>{form}</div>'
-            f'<div class="card"><h2>単独検図（図面だけを検査）</h2>'
-            f'<p class="muted">ハーネス生成とは別に、図面(DXF)の不具合を検図できます（R1-R7＋H1-H5＋AI補助＋学習）。'
-            f'検図システムと同一エンジンをこのアプリに統合しています。</p>'
-            f'<div class="row"><a class="btn" href="/check">単独検図を実行 ▶</a></div></div>'
-            f'<div class="card"><h2>設計不備の学習（修正前後の図面を登録）</h2>'
-            f'<p class="muted">設計不備を直した後、<b>修正前</b>と<b>修正後</b>の図面(DXF)を登録すると、'
-            f'before→after差分で「実際の直し方」を学習し、次回以降の①設計不備の指摘＋実績修正案に反映します。</p>'
-            f'<div class="row"><a class="btn" href="/design">設計不備を登録／一覧 ▶</a></div></div>'
-            f'<div class="card muted">社内サーバ共有・ブラウザ動作。'
-            f'正常な図面はハーネス生成まで全自動、図面不備は確認UIの①で前工程へ提示します。'
-            f'　<a href="/help">使い方</a> ・ <a href="/admin">管理（バックアップ/ログ）</a>'
-            + ('　・ <a href="/logout">ログアウト</a>' if HARNESS_PASSWORD else '')
-            + '</div>')
-    return _page(body)
+    body = (f'<div class="card"><h2>ハーネスデータ生成：新しい製番を登録</h2>{form}</div>'
+            f'<div class="card"><a class="btn" href="/">← メニュー</a></div>')
+    return _page(body, title='ハーネスデータ生成')
 
 
 @app.route('/generate', methods=['POST'])
@@ -642,6 +666,61 @@ def check_learn_missed():
             f'<p>{_esc(if_base)} が有るのに {_esc(need_base)} が無ければ、次回以降の検図で指摘します。</p>'
             f'<div class="row"><a class="btn" href="/check">検図へ</a><a class="btn" href="/">← ホーム</a></div></div>')
     return _page(body, title='単独検図')
+
+
+@app.route('/devices', methods=['GET', 'POST'])
+def devices():
+    """機器一覧: 図面(DXF)から機器(デバイス名)を盤記号(TITLE1)ごとに抽出してCSV出力。"""
+    from wireharness.fromto_qc import panel_devices as PD
+    if request.method == 'GET':
+        form = '''
+          <form method="post" enctype="multipart/form-data">
+            <div class="drop">図面DXF（複数可。シーケンス/スケルトン/外形図など）<br>
+              <input type="file" name="files" multiple accept=".dxf,.DXF" style="margin-top:8px"></div>
+            <div class="row"><button class="primary" type="submit">機器を盤毎に抽出 ▶</button></div>
+          </form>'''
+        body = (f'<div class="card"><h2>機器一覧（デバイス名を盤毎に出力）</h2>'
+                f'<p class="muted">図面タイトル枠の盤記号(TITLE1)ごとに機器をまとめて一覧・CSV出力します。</p>{form}</div>'
+                f'<div class="card"><a class="btn" href="/">← メニュー</a></div>')
+        return _page(body, title='機器一覧')
+    files = request.files.getlist('files')
+    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    d = os.path.join(WORK, '_devices', ts)
+    os.makedirs(d, exist_ok=True)
+    saved = []
+    for f in files:
+        if f.filename and f.filename.lower().endswith('.dxf'):
+            p = os.path.join(d, os.path.basename(f.filename))
+            f.save(p)
+            saved.append(p)
+    if not saved:
+        return _page('<div class="card err">DXFファイルを指定してください。</div>'
+                     '<div class="card"><a class="btn" href="/devices">← 戻る</a></div>', title='機器一覧')
+    app.logger.info('devices files=%d', len(saved))
+    panels = PD.devices_by_panel(saved)
+    PD.to_csv(panels, os.path.join(d, '機器一覧.csv'))
+    blocks = ''
+    for pnl in panels:
+        rows = ''.join(f'<tr><td>{_esc(x["sym"])}</td><td>{_esc(x["parts"])}</td>'
+                       f'<td class="muted">{_esc(x["sheets"])}</td></tr>' for x in pnl['devices'])
+        blocks += (f'<div class="card"><h2>盤 {_esc(pnl["panel"])}'
+                   f'<span class="muted">　製番 {_esc(pnl["seiban"]) or "-"}／機器 {len(pnl["devices"])}点'
+                   f'／シート {_esc("・".join(pnl["sheets"]))}</span></h2>'
+                   f'<table><tr><th>機器記号</th><th>種別</th><th>出現シート</th></tr>{rows}</table></div>')
+    body = (f'<div class="card"><h2>機器一覧：{len(panels)}盤・合計{sum(len(p["devices"]) for p in panels)}機器</h2>'
+            f'<div class="row"><a class="btn primary" href="/devices/csv/{ts}">CSVダウンロード</a>'
+            f'<a class="btn" href="/devices">別の図面</a><a class="btn" href="/">← メニュー</a></div></div>'
+            f'{blocks or "<div class=card class=muted>機器が検出されませんでした。</div>"}')
+    return _page(body, title='機器一覧')
+
+
+@app.route('/devices/csv/<token>')
+def devices_csv(token):
+    safe = ''.join(c for c in token if c.isalnum() or c == '_')
+    p = os.path.join(WORK, '_devices', safe, '機器一覧.csv')
+    if not os.path.exists(p):
+        abort(404)
+    return send_file(p, as_attachment=True, download_name='機器一覧.csv')
 
 
 @app.route('/api/health')
