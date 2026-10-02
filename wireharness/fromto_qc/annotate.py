@@ -63,6 +63,19 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
         dt, d = _sheet_index(p)
         sheets.append([os.path.basename(p), r, dt, d])
 
+    # 端子番号ラベル(各機器の接続点に端子番号を図面上に記載。トグルで表示)
+    term_ov = [[] for _ in sheets]
+    for si, (name, r, dt, d) in enumerate(sheets):
+        xmin, ymax = r['xmin'], r['ymax']
+        for (sym, term), (x, y) in dt.items():
+            t = str(term).strip()
+            if not t or t == '?':
+                continue
+            X = round(x - xmin, 1)
+            Y = round(ymax - y, 1)
+            term_ov[si].append(
+                f'<text class="tl" x="{X + 2}" y="{Y - 2}">{_esc(t)}</text>')
+
     wires = []            # list行データ(JS/表示用)
     overlays = [[] for _ in sheets]   # シートごとのSVG断片
     no_pos = 0
@@ -122,6 +135,7 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
         draw += (f'<div class="sheet"><div class="sh">{_esc(name)}</div>'
                  f'<div class="svgbox"><svg viewBox="0 0 {r["w"]} {r["h"]}" preserveAspectRatio="xMidYMid meet">'
                  f'<g class="dwg">{r["body"]}</g>'
+                 f'<g class="ov-term">{"".join(term_ov[si])}</g>'
                  f'<g class="ov">{"".join(overlays[si])}</g></svg></div></div>')
 
     total = len(wires)
@@ -155,12 +169,16 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
  .ov .ln{{stroke:#e0a800;stroke-width:1.6;vector-effect:non-scaling-stroke;display:none}}
  .ov .mk.sel{{fill:#e0a800;fill-opacity:1;r:7}} .ov .ln.sel{{display:inline}}
  .ov .mk.done{{fill:#1a9a3a;fill-opacity:.9}}
+ .ov-term .tl{{fill:#6a1b9a;font-size:6px;font-family:sans-serif;paint-order:stroke;
+   stroke:#fff;stroke-width:1.4px;stroke-linejoin:round}}
+ body:not(.showterm) .ov-term{{display:none}}
  .btn{{font:inherit;border:1px solid #ccd3de;background:#fff;border-radius:7px;padding:4px 10px;cursor:pointer}}
 </style></head>
 <body>
 <header><span class="ttl">確認図面 {_esc(seiban)}</span>
  <span class="cov">確認済 <b id="cdone">0</b> / {total} 本<span id="cnopos"></span></span>
  <label><input type="checkbox" id="only"> 未確認のみ</label>
+ <label><input type="checkbox" id="showterm"> 端子番号を表示</label>
  <button class="btn" id="clear">確認をクリア</button>
  <span style="flex:1"></span><a href="/">← メニュー</a></header>
 <div class="main">
@@ -192,6 +210,8 @@ document.getElementById('tb').addEventListener('click',function(e){{
     applyDone(w);recount();return;}}
   select(w);
 }});
+document.getElementById('showterm').addEventListener('change',function(){{
+  document.body.classList.toggle('showterm',this.checked);}});
 document.getElementById('only').addEventListener('change',function(){{
   var on=this.checked;document.querySelectorAll('#tb tr[data-w]').forEach(function(tr){{
     var w=tr.getAttribute('data-w');tr.style.display=(on&&done[w])?'none':'';}});
