@@ -53,58 +53,99 @@ def _endpoint_xy(idx_dt, idx_d, dev, no, term):
     return (idx_dt.get((sym, str(term))) or idx_d.get(sym))
 
 
+def _endpoint_g(ep_to_g, dev, no, term):
+    sym = _sym(dev, no)
+    return ep_to_g.get((sym, str(term))) or ep_to_g.get(sym)
+
+
+def _sheet_graph(path):
+    """シート → (位置辞書 dt,d / 端点→号線 ep_to_g / 号線→線分 g_segs)。
+    号線(等電位ノード)に属する実際の配線線分を取り出し、線のハイライトに使う。"""
+    by_dt, by_d, ep_to_g, g_segs = {}, {}, {}, {}
+    try:
+        from . import tracer as T
+        c = T._build_components(path)
+        m, segs, find = c['m'], c['segs'], c['find']
+        comp_terms = c['comp_terms']
+        assign = T._assign_gousen(m, segs, find)
+    except Exception:
+        return by_dt, by_d, ep_to_g, g_segs
+    comp2g = {}
+    for g, comps in assign.items():
+        for comp in comps:
+            comp2g[comp] = str(g)
+    for comp, terms in comp_terms.items():
+        g = comp2g.get(comp)
+        for (d, t, x, y) in terms:
+            by_dt.setdefault((str(d), str(t)), (x, y))
+            by_d.setdefault(str(d), (x, y))
+            if g:
+                ep_to_g.setdefault((str(d), str(t)), g)
+                ep_to_g.setdefault(str(d), g)
+    comp_segs = {}
+    for i in range(len(segs)):
+        comp_segs.setdefault(find(i), []).append(i)
+    for g, comps in assign.items():
+        lst = []
+        for comp in comps:
+            for i in comp_segs.get(comp, []):
+                lst.append(segs[i])
+        g_segs[str(g)] = lst
+    return by_dt, by_d, ep_to_g, g_segs
+
+
 def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
-    sheets = []   # (name, render, idx_dt, idx_d)
+    sheets = []   # [name, render, dt, d, ep_to_g, g_segs]
     for p in list(skel_paths or []) + list(seq_paths or []):
         try:
             r = dxf_svg.render([p])
         except Exception:
             continue
-        dt, d = _sheet_index(p)
-        sheets.append([os.path.basename(p), r, dt, d])
+        dt, d, ep2g, gseg = _sheet_graph(p)
+        sheets.append([os.path.basename(p), r, dt, d, ep2g, gseg])
 
     # 端子番号ラベル(各機器の接続点に端子番号を図面上に記載。トグルで表示)
     term_ov = [[] for _ in sheets]
-    for si, (name, r, dt, d) in enumerate(sheets):
+    for si, sh in enumerate(sheets):
+        r, dt = sh[1], sh[2]
         xmin, ymax = r['xmin'], r['ymax']
         for (sym, term), (x, y) in dt.items():
             t = str(term).strip()
             if not t or t == '?':
                 continue
-            X = round(x - xmin, 1)
-            Y = round(ymax - y, 1)
             term_ov[si].append(
-                f'<text class="tl" x="{X + 2}" y="{Y - 2}">{_esc(t)}</text>')
+                f'<text class="tl" x="{round(x - xmin, 1) + 2}" y="{round(ymax - y, 1) - 2}">{_esc(t)}</text>')
 
     wires = []            # list行データ(JS/表示用)
     overlays = [[] for _ in sheets]   # シートごとのSVG断片
     no_pos = 0
     for i, w in enumerate(routed.get('wires', [])):
         frm, to = w['from'], w['to']
-        g = w.get('gousen', '')
         col = _POWER.get(w.get('color'), '')
         placed = False
-        for si, (name, r, dt, d) in enumerate(sheets):
+        for si, sh in enumerate(sheets):
+            r, dt, d, ep2g, gseg = sh[1], sh[2], sh[3], sh[4], sh[5]
             xmin, ymax = r['xmin'], r['ymax']
-            mr = max(6.0, round(max(r['w'], r['h']) / 190.0, 1))   # 図面サイズに応じたマーカー半径
+            mr = max(4.0, round(max(r['w'], r['h']) / 300.0, 1))
+            # この線(From-To)が属する号線 → その号線の実配線線分をハイライト対象にする
+            g = (_endpoint_g(ep2g, frm.get('device', ''), frm.get('no', ''), frm.get('terminal', '')) or
+                 _endpoint_g(ep2g, to.get('device', ''), to.get('no', ''), to.get('terminal', '')))
+            segs = gseg.get(g, []) if g else []
             fp = _endpoint_xy(dt, d, frm.get('device', ''), frm.get('no', ''), frm.get('terminal', ''))
             tp = _endpoint_xy(dt, d, to.get('device', ''), to.get('no', ''), to.get('terminal', ''))
-            pts = []
-            for p_ in (fp, tp):
-                if p_:
-                    pts.append((round(p_[0] - xmin, 1), round(ymax - p_[1], 1)))
-            if not pts:
+            if not segs and not (fp or tp):
                 continue
             placed = True
-            base = col or '#8a93a0'
-            for (X, Y) in pts:
+            for (p1, p2) in segs:
+                x1, y1 = round(p1[0] - xmin, 1), round(ymax - p1[1], 1)
+                x2, y2 = round(p2[0] - xmin, 1), round(ymax - p2[1], 1)
                 overlays[si].append(
-                    f'<circle class="mk" data-w="{i}" cx="{X}" cy="{Y}" r="{mr}" '
-                    f'style="--bc:{base}"/>')
-            if len(pts) == 2:
-                (x1, y1), (x2, y2) = pts
-                overlays[si].append(
-                    f'<line class="ln" data-w="{i}" x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"/>')
+                    f'<line class="wln" data-w="{i}" x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"/>')
+            for p_ in (fp, tp):
+                if p_:
+                    overlays[si].append(
+                        f'<circle class="mk" data-w="{i}" cx="{round(p_[0] - xmin, 1)}" '
+                        f'cy="{round(ymax - p_[1], 1)}" r="{mr}"/>')
         if not placed:
             no_pos += 1
         wires.append({
@@ -132,7 +173,8 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
 
     # 図面(SVG＋オーバーレイ)
     draw = ''
-    for si, (name, r, dt, d) in enumerate(sheets):
+    for si, sh in enumerate(sheets):
+        name, r = sh[0], sh[1]
         draw += (f'<div class="sheet"><div class="sh">{_esc(name)}</div>'
                  f'<div class="svgbox"><svg viewBox="0 0 {r["w"]} {r["h"]}" preserveAspectRatio="xMidYMid meet">'
                  f'<g class="dwg">{r["body"]}</g>'
@@ -165,14 +207,13 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
  .dwg line,.dwg path,.dwg circle{{fill:none;stroke:#334;stroke-width:0.4;vector-effect:non-scaling-stroke}}
  .dwg .wm{{stroke:#c0392b}} .dwg .we{{stroke:#1a9a3a}} .dwg .wc{{stroke:#666}} .dwg .gm{{stroke:#aab4c2}}
  .dwg .sol{{fill:#334;stroke:none}} .dwg text{{fill:#333;font-family:sans-serif}}
- /* マーカー/線: 既定=半透明、選択=橙で太く拡大、確認=緑の太線を図面に残す */
- .ov .mk{{fill:var(--bc);fill-opacity:.5;stroke:#333;stroke-width:.6;vector-effect:non-scaling-stroke;
-   transform-box:fill-box;transform-origin:center;transition:transform .08s}}
- .ov .ln{{fill:none;stroke-width:3;vector-effect:non-scaling-stroke;display:none;stroke-linecap:round}}
- .ov .mk.done{{fill:#1a9a3a;fill-opacity:.95}}
- .ov .ln.done{{display:inline;stroke:#1a9a3a;stroke-width:4;opacity:.95}}
- .ov .mk.sel{{fill:#ff5a00;fill-opacity:1;stroke:#7a2600;stroke-width:2.4;transform:scale(2.1)}}
- .ov .ln.sel{{display:inline;stroke:#ff3b00;stroke-width:7;opacity:1}}
+ /* ハイライトは「配線ライン」が主役。既定は非表示、選択=太い橙、確認=緑の太線を図面に残す */
+ .ov .wln{{fill:none;stroke-width:3;vector-effect:non-scaling-stroke;display:none;stroke-linecap:round;stroke-linejoin:round}}
+ .ov .wln.done{{display:inline;stroke:#13a53a;stroke-width:4.5;opacity:.95}}
+ .ov .wln.sel{{display:inline;stroke:#ff3b00;stroke-width:8;opacity:1}}
+ /* 端点は補助的に小さく表示 */
+ .ov .mk{{fill:#8a93a0;fill-opacity:.25;stroke:none}}
+ .ov .mk.done{{fill:#13a53a;fill-opacity:.7}} .ov .mk.sel{{fill:#ff5a00;fill-opacity:.9}}
  .ov-term .tl{{fill:#6a1b9a;font-size:6px;font-family:sans-serif;paint-order:stroke;
    stroke:#fff;stroke-width:1.4px;stroke-linejoin:round}}
  body:not(.showterm) .ov-term{{display:none}}
