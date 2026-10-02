@@ -183,6 +183,7 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
             wires_out.append({'gousen': w['gousen'], 'kind': w.get('kind', ''),
                               'size': w['size'], 'color': w.get('color', ''),
                               'from': w['from'], 'to': w['to'],
+                              'from_pos': list(w['from_pos']), 'to_pos': list(w['to_pos']),
                               'length': round(length, 1), 'route': [list(p) for p in path]})
     else:
         # ダクト網なし: マンハッタン長で近似(経路は直結)
@@ -193,6 +194,7 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
             wires_out.append({'gousen': w['gousen'], 'kind': w.get('kind', ''),
                               'size': w['size'], 'color': w.get('color', ''),
                               'from': w['from'], 'to': w['to'],
+                              'from_pos': list(fp), 'to_pos': list(tp),
                               'length': round(length, 1), 'route': [list(fp), list(tp)]})
     # 端子台の台番号を配置図(D/G, 格子枠)のTBブロックから幾何的に付番 → 端子(相/回路)を付番。
     dev_lays = []
