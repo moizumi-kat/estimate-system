@@ -217,6 +217,7 @@ def _seiban_table():
         sb = _esc(s['seiban'])
         if s['has_out']:
             links = (f'<a class="btn" href="/review/{sb}">確認UI ▶</a> '
+                     f'<a class="btn" href="/drawing/{sb}">確認図面 ▶</a> '
                      f'<a class="btn" href="/outputs/{sb}">出力 ▶</a>')
         else:
             links = '<span class="muted">未生成</span>'
@@ -354,6 +355,15 @@ def confirm(seiban):
             'corrections': res.get('corrections')}
 
 
+@app.route('/drawing/<seiban>')
+def drawing(seiban):
+    """確認用の注記付き図面(SVG)。"""
+    p, safe = _out_path(seiban, '_確認図面.html')
+    if not os.path.exists(p):
+        abort(404)
+    return Response(open(p, encoding='utf-8').read(), mimetype='text/html')
+
+
 @app.route('/outputs/<seiban>')
 def outputs(seiban):
     d, safe = _seiban_dir(seiban)
@@ -366,6 +376,7 @@ def outputs(seiban):
     body = (f'<div class="card"><h2>出力一覧：{_esc(safe)}</h2>'
             f'<table><tr><th>種別</th><th>ファイル</th><th></th></tr>{items}</table>'
             f'<div class="row"><a class="btn" href="/review/{_esc(safe)}">確認UI ▶</a>'
+            f'<a class="btn" href="/drawing/{_esc(safe)}">確認図面(SVG) ▶</a>'
             f'<a class="btn" href="/">← 製番一覧</a></div></div>')
     return _page(body)
 

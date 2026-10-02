@@ -1078,9 +1078,16 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     rvw = _os.path.join(out_dir, f'{base}_確認.html')
     _review.to_review_html(routed, rvw, seiban=seiban, addr_map=amap, ec=ec,
                            defects=fb.get('items'))
+    # 確認用の注記付き図面(SVG・配線色/号線/機器:端子を図面に重ねる)
+    dwg = _os.path.join(out_dir, f'{base}_確認図面.html')
+    try:
+        from . import annotate as _annotate
+        _annotate.write(routed, seq, skel, dwg, seiban=seiban)
+    except Exception:
+        dwg = None
     return {'seiban': seiban,
             'files': {'review_html': rvw, 'harness_txt': htxt, 'harness_xlsx': hxlsx,
-                      'harness_csv': hcsv, 'label_sheet_html': lbl,
+                      'harness_csv': hcsv, 'label_sheet_html': lbl, 'drawing_html': dwg,
                       'design_feedback_csv': fb.get('file'),
                       'device_map_csv': corr.get('file')},
             'electrical': ec['summary'],
