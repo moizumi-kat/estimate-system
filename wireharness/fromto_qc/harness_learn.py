@@ -229,6 +229,80 @@ def learn_crimp(sheet_txt_paths, min_n=3, min_conf=0.7, save=True):
     return table
 
 
+def _dev_base(s):
+    """機器記号 → 機器種別(ベース)。'-' より前の英字部を大文字化。
+    例: 'MCCB-102'→'MCCB', 'X1'→'X', 'TB'→'TB'。
+    英字が無い純数字記号(JIS機器番号: 52=電磁接触器, 51=熱動継電器, 43=切替SW 等)は
+    その番号自体を種別キーにする。図面のDEVICE属性・台帳col5の双方に使える。"""
+    head = str(s or '').split('-')[0]
+    letters = ''.join(ch for ch in head if not ch.isdigit()).upper()
+    if letters:
+        return letters
+    return ''.join(ch for ch in head if ch.isdigit())   # 純数字記号は番号を種別キーに
+
+
+def learn_terminals(sheet_txt_paths, min_n=5, save=True):
+    """モデルハーネスシート(.txt)から『機器種別→端子番号の付け方(語彙)』ルールを学習する。
+
+    茂泉様ご要望: 端子番号の付け方をモデルシートのルールとして取得する。
+    各行の col5=機器種別, col7=端子 を集計し、機器種別(ベース)ごとに
+    「実際に出現した端子記号の語彙＋頻度」を保存する。これにより図面へ端子番号を
+    付与・検証する際、その機器で"実在する端子だけ"を根拠に判断できる(◎誤答ゼロ)。
+
+    空欄端子は '' キーとして件数のみ保持(OL/LUG/端子台など端子番号を持たない接点の根拠)。
+    件数 min_n 未満の機器種別は不採用(薄いデータで誤ルール化しない)。
+    learned.json の 'terminal_rule' に統合。
+      値: {機器種別: {'terms': [[端子, 件数], ...降順], 'n': 総数, 'distinct': 異なり数}}
+    戻り: 採用した機器種別→語彙サマリ。
+    """
+    tally = collections.defaultdict(collections.Counter)   # base -> Counter(terminal)
+    for p in sheet_txt_paths:
+        try:
+            raw = open(p, 'rb').read().decode('cp932', 'replace')
+        except Exception:
+            continue
+        for r in csv.reader(raw.splitlines(), delimiter='\t'):
+            c = [x.strip() for x in (r + [''] * 11)[:11]]
+            if c[1] == '*':            # 仕様ヘッダ行(種別/サイズ)は対象外
+                continue
+            dev = c[5]
+            if not dev or dev == '*':
+                continue
+            base = _dev_base(dev)
+            if not base:               # col5が空/純数字=機器種別が特定できない行は除外(ノイズ)
+                continue
+            tally[base][c[7]] += 1
+    rule = {}
+    for base, cnt in tally.items():
+        n = sum(cnt.values())
+        if n < min_n:
+            continue
+        terms = [[t, v] for t, v in cnt.most_common()]
+        rule[base] = {'terms': terms, 'n': n, 'distinct': len(cnt)}
+    if save:
+        k = load()
+        k['terminal_rule'] = rule
+        k['terminal_rule_sources'] = len(sheet_txt_paths)
+        with open(LEARNED_PATH, 'w', encoding='utf-8') as f:
+            json.dump(k, f, ensure_ascii=False, indent=1)
+    return rule
+
+
+def terminal_vocab(device):
+    """機器(記号 or 種別)に対し、学習済みで実在が確認された端子記号の集合(空欄除く)。
+    未学習・薄データの機器種別は空集合(= その機器では端子番号を断定しない=誤答ゼロ)。"""
+    rule = load().get('terminal_rule', {})
+    r = rule.get(_dev_base(device))
+    if not r:
+        return set()
+    return {t for t, _ in r.get('terms', []) if t}
+
+
+def terminal_known(device, term):
+    """その機器種別で、与えた端子記号が実在ルールに合致するか(表示/検証の根拠)。"""
+    return str(term or '').strip() in terminal_vocab(device)
+
+
 # ---------------------------------------------------------------------------
 # 出力の修正を受け付けて学習する(運用学習) — 確認UIの「確定・出力＋学習」から呼ぶ
 # ---------------------------------------------------------------------------
