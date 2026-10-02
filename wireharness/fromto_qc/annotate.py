@@ -74,23 +74,20 @@ def _sheet_graph(path):
     for g, comps in assign.items():
         for comp in comps:
             comp2g[comp] = str(g)
-    for comp, terms in comp_terms.items():
-        g = comp2g.get(comp)
-        for (d, t, x, y) in terms:
-            by_dt.setdefault((str(d), str(t)), (x, y))
-            by_d.setdefault(str(d), (x, y))
-            if g:
-                ep_to_g.setdefault((str(d), str(t)), g)
-                ep_to_g.setdefault(str(d), g)
+    # 成分ごとの線分(ラベルの有無に関わらず全成分)。無名成分(主回路の遮断器間配線など)も
+    # ハイライトできるよう、号線ラベルが無ければ成分IDをキーにする。
     comp_segs = {}
     for i in range(len(segs)):
-        comp_segs.setdefault(find(i), []).append(i)
-    for g, comps in assign.items():
-        lst = []
-        for comp in comps:
-            for i in comp_segs.get(comp, []):
-                lst.append(segs[i])
-        g_segs[str(g)] = lst
+        comp_segs.setdefault(find(i), []).append(segs[i])
+    for comp in set(comp_segs) | set(comp_terms):
+        gkey = comp2g.get(comp) or f'C@{comp}'
+        for (d, t, x, y) in comp_terms.get(comp, ()):
+            by_dt.setdefault((str(d), str(t)), (x, y))
+            by_d.setdefault(str(d), (x, y))
+            ep_to_g.setdefault((str(d), str(t)), gkey)
+            ep_to_g.setdefault(str(d), gkey)
+        if comp_segs.get(comp):
+            g_segs[gkey] = comp_segs[comp]
     return by_dt, by_d, ep_to_g, g_segs
 
 
@@ -121,16 +118,17 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
     no_pos = 0
     for i, w in enumerate(routed.get('wires', [])):
         frm, to = w['from'], w['to']
+        gousen = w.get('gousen', '')
         col = _POWER.get(w.get('color'), '')
         placed = False
         for si, sh in enumerate(sheets):
             r, dt, d, ep2g, gseg = sh[1], sh[2], sh[3], sh[4], sh[5]
             xmin, ymax = r['xmin'], r['ymax']
             mr = max(4.0, round(max(r['w'], r['h']) / 300.0, 1))
-            # この線(From-To)が属する号線 → その号線の実配線線分をハイライト対象にする
-            g = (_endpoint_g(ep2g, frm.get('device', ''), frm.get('no', ''), frm.get('terminal', '')) or
-                 _endpoint_g(ep2g, to.get('device', ''), to.get('no', ''), to.get('terminal', '')))
-            segs = gseg.get(g, []) if g else []
+            # この線(From-To)が属する成分キー → その成分の実配線線分をハイライト対象にする
+            cg = (_endpoint_g(ep2g, frm.get('device', ''), frm.get('no', ''), frm.get('terminal', '')) or
+                  _endpoint_g(ep2g, to.get('device', ''), to.get('no', ''), to.get('terminal', '')))
+            segs = gseg.get(cg, []) if cg else []
             fp = _endpoint_xy(dt, d, frm.get('device', ''), frm.get('no', ''), frm.get('terminal', ''))
             tp = _endpoint_xy(dt, d, to.get('device', ''), to.get('no', ''), to.get('terminal', ''))
             if not segs and not (fp or tp):
@@ -149,7 +147,7 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
         if not placed:
             no_pos += 1
         wires.append({
-            'i': i, 'g': g, 'col': col,
+            'i': i, 'g': gousen, 'col': col,
             'type': (w.get('color') or '') + (w.get('kind') or ''), 'size': w.get('size', ''),
             'frm': (frm.get('place', ''), _sym(frm.get('device', ''), frm.get('no', '')), frm.get('terminal', '')),
             'to': (to.get('place', ''), _sym(to.get('device', ''), to.get('no', '')), to.get('terminal', '')),
