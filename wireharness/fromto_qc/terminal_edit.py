@@ -104,7 +104,7 @@ def build_html(seq_paths, skel_paths, seiban='', routed=None):
             # 未確定(未/候補)の点は空いている所が分かるよう小さな四角マーカー
             marks.append(
                 f'<rect id="mk-{c["id"]}" class="pm {cls}" data-pt="{c["id"]}" '
-                f'x="{c["X"] - 3}" y="{c["Y"] - 3}" width="6" height="6"/>')
+                f'x="{c["X"] - 4}" y="{c["Y"] - 4}" width="8" height="8" rx="1.5"/>')
         draw += (f'<div class="sheet"><div class="sh">{_esc(sh["name"])}</div>'
                  f'<div class="svgbox"><svg viewBox="0 0 {r["w"]} {r["h"]}" preserveAspectRatio="xMidYMid meet">'
                  f'<g class="dwg">{r["body"]}</g>'
@@ -180,12 +180,16 @@ def build_html(seq_paths, skel_paths, seiban='', routed=None):
  .dwg line,.dwg path,.dwg circle{{fill:none;stroke:#334;stroke-width:0.4;vector-effect:non-scaling-stroke}}
  .dwg .wm{{stroke:#c0392b}} .dwg .we{{stroke:#1a9a3a}} .dwg .wc{{stroke:#666}} .dwg .gm{{stroke:#aab4c2}}
  .dwg .sol{{fill:#334;stroke:none}} .dwg text{{fill:#333;font-family:sans-serif}}
- .ov-term .tl{{font-size:7px;font-weight:700;font-family:sans-serif;paint-order:stroke;stroke:#fff;stroke-width:1.8px;stroke-linejoin:round}}
- .ov-term .tl.ok{{fill:#1a7a3a}} .ov-term .tl.cand{{fill:#6a1b9a}} .ov-term .tl.none{{fill:#c24a00}}
- .ov-term .tl.sel{{fill:#ff3b00;font-size:11px;stroke-width:2.4px}}
- .pmk .pm{{fill:none;stroke-width:1.2px;vector-effect:non-scaling-stroke}}
+ .ov-term .tl{{font-size:10px;font-weight:800;font-family:sans-serif;paint-order:stroke;stroke:#fff;stroke-width:2.6px;stroke-linejoin:round;cursor:pointer}}
+ .ov-term .tl.ok{{fill:#117a35}} .ov-term .tl.cand{{fill:#7a1fd0}} .ov-term .tl.none{{fill:#d35400}}
+ .ov-term .tl.sel{{fill:#ff2d00;font-size:13px;stroke-width:3px}}
+ .pmk .pm{{fill:#fff;fill-opacity:.65;stroke-width:1.6px;vector-effect:non-scaling-stroke;cursor:pointer}}
  .pmk .pm.none{{stroke:#e0820f}} .pmk .pm.cand{{stroke:#8a3bd0}} .pmk .pm.ok{{display:none}}
- .pmk .pm.sel{{stroke:#ff3b00;stroke-width:2.4px;display:block}}
+ .pmk .pm.sel{{stroke:#ff2d00;stroke-width:2.6px;display:block}}
+ #dedit{{position:fixed;z-index:50;display:none;width:84px;font:inherit;font-weight:700;
+   border:2px solid #e0a800;border-radius:6px;padding:3px 6px;background:#fffdf5;box-shadow:0 3px 12px rgba(0,0,0,.25)}}
+ #dhint{{position:fixed;z-index:50;display:none;background:#16233c;color:#fff;font-size:11px;
+   padding:3px 7px;border-radius:6px;transform:translateY(-120%)}}
  .sheet{{margin-bottom:10px}} .sheet .sh{{padding:5px 8px;font-weight:700;border-bottom:1px solid #eef1f5}}
  .ftt.hot{{color:#1f4fb0;font-weight:700}}
  .note{{font-size:11px;color:#55607a;padding:4px 10px}}
@@ -206,8 +210,9 @@ def build_html(seq_paths, skel_paths, seiban='', routed=None):
     <thead><tr><th>#</th><th>号線</th><th>種/ｻｲｽﾞ</th><th>From</th><th>To</th><th>測長</th></tr></thead>
     <tbody>{ft_rows or '<tr><td colspan=6 class=note>From-To未生成</td></tr>'}</tbody></table></div></div>
  </div>
- <div class="right card"><div class="ch">図面（接続点に端子番号を記載。行選択で該当点を強調 / □=未確定の接続点）</div>{draw}</div>
+ <div class="right card"><div class="ch">図面（端子番号をクリックで直接編集。□=未確定の接続点もクリックで入力）</div>{draw}</div>
 </div>
+<input id="dedit" autocomplete="off"><div id="dhint"></div>
 <script>
 var POINTS={json.dumps(pt_js, ensure_ascii=False)};
 var TERMS={json.dumps(term_js, ensure_ascii=False)};
@@ -230,6 +235,26 @@ function renderPoint(pid){{
 function setTerm(pid,val){{TERMS[pid]=val;renderPoint(pid);counts();}}
 function counts(){{var ok=0,un=0;for(var k in TERMS){{((TERMS[k]||'').trim()?ok++:un++);}}
   document.getElementById('cok').textContent=ok;document.getElementById('cun').textContent=un;}}
+// 図面上で端子番号を直接編集する小さな入力欄
+var ded=document.getElementById('dedit'), dhint=document.getElementById('dhint'), edPid=null;
+function closeEditor(apply){{
+  if(edPid!==null&&apply){{setTerm(edPid,ded.value.trim());var inp=document.querySelector('.ei[data-pt="'+edPid+'"]');if(inp)inp.value=ded.value.trim();}}
+  ded.style.display='none';dhint.style.display='none';edPid=null;
+}}
+function openEditor(pid){{
+  selPoint(pid);edPid=pid;
+  var el=document.getElementById('lab-'+pid)||document.getElementById('mk-'+pid);
+  var rc=el.getBoundingClientRect();
+  ded.value=(TERMS[pid]||'');
+  ded.style.left=Math.min(window.innerWidth-96,rc.left)+'px';
+  ded.style.top=(rc.bottom+4)+'px';ded.style.display='block';
+  var P=POINTS[pid];
+  dhint.textContent=P.sym+(P.cand&&P.cand.length?('  候補: '+P.cand.slice(0,10).join(' / ')):'  候補なし(手入力)');
+  dhint.style.left=ded.style.left;dhint.style.top=ded.style.top;dhint.style.display='block';
+  ded.focus();ded.select();
+}}
+ded.addEventListener('keydown',function(e){{if(e.key==='Enter'){{closeEditor(true);}}else if(e.key==='Escape'){{closeEditor(false);}}}});
+ded.addEventListener('blur',function(){{closeEditor(true);}});
 var sel=null;
 function selPoint(pid){{
   if(sel){{document.querySelectorAll('[data-pt="'+sel+'"]').forEach(function(e){{e.classList.remove('sel');}});}}
@@ -243,6 +268,10 @@ document.addEventListener('input',function(e){{if(e.target.classList.contains('e
   setTerm(e.target.getAttribute('data-pt'),e.target.value);}}}});
 document.addEventListener('click',function(e){{
   var t=e.target;
+  if(t===ded)return;
+  // 図面上の端子番号/マーカーを直接クリック → その場で編集
+  if(t.classList&&(t.classList.contains('tl')||t.classList.contains('pm'))&&t.getAttribute('data-pt')){{
+    openEditor(t.getAttribute('data-pt'));return;}}
   if(t.classList.contains('chip')){{var pid=t.getAttribute('data-pt');var v=t.getAttribute('data-v');
     TERMS[pid]=v;var inp=document.querySelector('.ei[data-pt="'+pid+'"]');if(inp)inp.value=v;
     renderPoint(pid);counts();selPoint(pid);return;}}
