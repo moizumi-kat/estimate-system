@@ -2542,7 +2542,7 @@ SC_OPTIONS={'meter':['普通角','広角','マルチ'],'phase':['1φ3W','3φ3W',
             'role':['受電盤','饋電盤','一段積','二段積','三段積','母線連絡','母線連絡+一段積'],
             'vcb':['8KA','12.5KA'],'op':['手動','電動','電動引出','電磁','電磁引出PF'],'cap':[]}
 SC_REQ={'低圧':['meter','phase','cap'],'高圧':['role','meter','vcb','op'],
-        '段積':['role','meter','vcb'],'段積VCS':['role','op'],'JEM':[]}
+        '段積':['role','meter','vcb'],'段積VCS':['role','op'],'JEM':[],'コンデンサ':[]}
 SC_ALWAYS_CONFIRM={'meter','op'}   # 計器種別・VCB操作方式(手動/電動/引出)は単線図で誤読しやすく
                                    # 誤るとセットコードが変わる(◎誤答)→常に人が確認。実見積書照合で
                                    # 八戸受電盤が op=手動 と誤抽出(正解=電動)だった実例に基づく。
@@ -2592,10 +2592,13 @@ def sc_classify(panel_name):
     _is_tr=re.search(r'TR盤|ＴＲ盤|変圧器盤|ﾄﾗﾝｽ盤',n)
     if _is_mccb and not _is_tr: return {'settype':None}   # MCCB盤=個別
     if re.search(r'スコット|ｽｺｯﾄ',n): return {'settype':'低圧','phase':'スコット'}
-    if _is_tr or (re.search(r'低圧',n) and re.search(r'電灯|動力',n)):
+    # 低圧TR盤(17系セット選択可)=受変電のTR二次側。TR盤/変圧器盤のほか、電灯盤/動力盤(一般・非常等)も対象。
+    # ※分電盤/制御盤は上で既にNone。相はTR itemから自動把握するので名称phaseは予備。既定=個別(ゲートで17系選択)。
+    if _is_tr or re.search(r'電灯盤|動力盤',n) or (re.search(r'低圧',n) and re.search(r'電灯|動力',n)):
         ph='3φ3W' if re.search(r'動力',n) else ('1φ3W' if re.search(r'電灯',n) else '')
         return {'settype':'低圧','phase':ph}
-    if re.search(r'コンデンサ|ｺﾝﾃﾞﾝｻ',n): return {'settype':None}
+    # コンデンサ盤は段積VCS(16系)にもなり得る(城山=16026 二段積/電磁引出PF)。既定=個別、ゲートで段積VCSセット選択。
+    if re.search(r'コンデンサ|ｺﾝﾃﾞﾝｻ',n): return {'settype':'コンデンサ'}
     return {'settype':None}
 
 def sc_needs_confirm(attrs):
@@ -2647,6 +2650,13 @@ def sc_confirm_form(attrs):
     if st=='低圧':
         out.append({'spec':'低圧計上','options':['個別','17系セット'],'default':(attrs.get('低圧計上') or '個別')})
         out.append({'spec':'meter','options':_sc_valid_options('低圧','meter',attrs),'default':_sc_default('meter',SC_OPTIONS.get('meter',[]),attrs)})
+        return out
+    # コンデンサ盤は「個別」か「段積VCSセット(16系)」かを人が選ぶ。既定=個別。段積VCS選択時は段数(role)・VCS型(op)も確定。
+    # VCS素/引出PFは図面から判別不能(7-4)→op候補を提示し人が確定(確定まで○)。
+    if st=='コンデンサ':
+        out.append({'spec':'コンデンサ計上','options':['個別','段積VCSセット'],'default':(attrs.get('コンデンサ計上') or '個別')})
+        out.append({'spec':'role','options':['一段積','二段積','三段積'],'default':(attrs.get('role') if attrs.get('role') in ('一段積','二段積','三段積') else '')})
+        out.append({'spec':'op','options':['電磁','電磁引出PF'],'default':(attrs.get('op') or '電磁引出PF')})
         return out
     # 受変電の受電/饋電盤は「段積み(16系)」にもなり得る。段積みか否か・段数は単線図から確実に読めないため、
     # 確認ゲートで人が選ぶ(茂泉様確定・◎誤答ゼロ)。settype=段積を選ぶと16系段積セット、高圧のままなら従来。
@@ -2963,7 +2973,7 @@ def select_from_extracted(data):
         _panel_tr_kva=None; _panel_tr_phase=None
         for _it in p.get('items',[]):
             _nm=str(_it.get('name',''))
-            if re.search(r'(?<![A-Za-z])TR(?![A-Za-z])|変圧器|ﾄﾗﾝｽ|トランス', _nm) and re.search(r'kva', _nm, re.I):
+            if re.search(r'(?<![A-Za-z])TR(?![A-Za-z])|変圧器|ﾄﾗﾝｽ|トランス|スコット|ｽｺｯﾄ|scott|(?<![a-z])T\s*:', _nm, re.I) and re.search(r'kva', _nm, re.I):
                 _mk=re.search(r'(\d+\.?\d*)\s*kva', _nm, re.I)
                 if _mk: _panel_tr_kva=_mk.group(1)+'KVA'
                 if re.search(r'スコット|ｽｺｯﾄ|scott', _nm, re.I): _panel_tr_phase='スコット'
@@ -2986,7 +2996,11 @@ def select_from_extracted(data):
         # 【低圧17系】案件で個別/セットを使い分ける(茂泉様確定)。既定=個別(尼崎手本=個別)。
         #   確認ゲートで「17系セット」を選んだ低圧TR盤のみセット発火(YUASA手本=セット)。MCCB盤は個別。
         _low_set = _cls0.get('settype')=='低圧' and _sa.get('低圧計上')=='17系セット'
-        _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype')=='JEM' or _low_set
+        # コンデンサ盤: ゲートで「段積VCSセット」を選んだ時のみ16系セット発火(既定=個別)。settypeを段積VCSへ。
+        _cond_set = _cls0.get('settype')=='コンデンサ' and _sa.get('コンデンサ計上')=='段積VCSセット'
+        if _cond_set:
+            _sa=dict(_sa); _sa['settype']='段積VCS'
+        _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype')=='JEM' or _low_set or _cond_set
         # 低圧17系(セット選択時のみ): 相/容量をTR itemから補完(TR支給のkVA/相で最近傍上位)。
         if _low_set:
             _sa=dict(_sa); _sa.setdefault('settype','低圧')
@@ -3270,6 +3284,12 @@ def select_from_extracted(data):
                             sel=dict(code=_cc,conf='○',note=f'回路種別=直入L-S(標準)仮定・確認ゲートで確定({_pk}kW枠)',candidates=[])
             # セット内包品(計器/TR/LBS/LG-RY等)はセットコードから積算ソフトが展開→個別計上しない
             if _set_expand and sel.get('code') in _set_expand:
+                continue
+            # セット内包の主開閉器(VCB/VCS/DS/LBS/LA=43系)は変種違い(手動/引出・VCS素/引出PF等)で
+            # 個別選定コードがexpandと完全一致しないことがある→同一デバイス(先頭4桁一致)ならセット内包と
+            # みなして抑制(二重計上防止)。43系に限定し、別容量MCB等(40/50/60系)には影響させない。
+            if _set_expand and sel.get('code','')[:2]=='43' and \
+               sel.get('code','')[:4] in {c[:4] for c in _set_expand if c[:2]=='43'}:
                 continue
             # 動力TRの11009(エネセーバLBS)発火時、内包のSC-TRIP等は名称で抑制(個別選定が△になるため)。
             if '46300' in _set_expand and re.search(r'SC-?TRIP|ｽﾄﾘｯﾌﾟ', nm, re.I):
