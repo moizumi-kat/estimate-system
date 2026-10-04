@@ -2871,6 +2871,65 @@ def nintei_gate(max_kva, confirmed=None):
     d=next(({'code':c,'qty':conf[c]} for c in conf if conf[c]>0 and any(o['code']==c for o in opts)),{'code':'','qty':0})
     return {'spec':'認定料','options':opts,'default':d}
 
+def _panel_base_key(name):
+    """盤名のベースキー: 丸数字(①-⑳)と括弧内パネルコード(LA/GL1/非常 等)と空白を除去。
+    受変電側(低圧電灯盤No.1③)と分電側(低圧電灯盤No.1(LA))を同一物理盤として突合するため。"""
+    n=str(name or '')
+    n=re.sub(r'[①-⑳⓪❶-❿➀-➓㉑-㉟㊱-㊿]','',n)  # 丸数字類
+    n=re.sub(r'[（(][^）)]*[）)]','',n)   # 括弧内(パネルコード)
+    n=re.sub(r'\s+','',n)
+    return n.strip()
+
+def _panel_loose_key(name):
+    """重複候補フラグ用のゆるいキー: ベースキーから中点・No.等も除去(数字は残し No.1/No.2 を区別)。"""
+    n=_panel_base_key(name)
+    for t in ('・','No.','NO.','No','ＮＯ','№','.','／','/'): n=n.replace(t,'')
+    return n
+
+def _merge_cross_drawing_panels(out):
+    """【多図面の重複排除 #4】同一物理盤が受変電側(単線図)と分電側(分電盤結線図)で2回抽出される。
+    (1)ベースキー完全一致の盤は1盤に自動統合(補完部品を結合・_merge_dup_rowsで同一コード合算)。
+    (2)名称ゆれ(No./中点等)で完全一致しない盤は『重複候補』として警告(人が統合・◎誤答ゼロ)。"""
+    groups={}; order=[]
+    for pg in out:
+        k=_panel_base_key(pg.get('panel',''))
+        if k not in groups: groups[k]=[]; order.append(k)
+        groups[k].append(pg)
+    merged=[]
+    for k in order:
+        grp=groups[k]
+        if len(grp)==1 or not k:
+            merged.append(grp[0]); continue
+        base=dict(grp[0]); names=[g.get('panel','') for g in grp]
+        allrows=[]
+        for g in grp: allrows+=g.get('rows',[])
+        base['rows']=_merge_dup_rows(allrows)   # 統合後に同一コードを合算(分離器/主幹等の重複はqty合算で可視化)
+        base['merged_from']=names
+        base['merge_note']=('複数図面を同一物理盤として統合(%s)。受変電側(主幹/SPD/分離器)と分電側で'
+                            '共通する機器が重複している場合は員数をご確認ください。'%('／'.join(names)))
+        for g in grp[1:]:   # outline/付属品ゲート等はいずれかが持っていれば継承
+            for key in ('outline','outline_note','outline_hint','sheet_metal','acc_gate'):
+                if not base.get(key) and g.get(key): base[key]=g[key]
+        merged.append(base)
+    # (2)重複候補フラグ: loose一致、またはprefix+数字(低圧動力盤 vs 低圧動力盤No.1)の近縁を警告。
+    keys=[(_panel_loose_key(p.get('panel','')),p) for p in merged]
+    for i in range(len(keys)):
+        ki,pi=keys[i]
+        if not ki: continue
+        for j in range(i+1,len(keys)):
+            kj,pj=keys[j]
+            if not kj: continue
+            match=(ki==kj) or (kj.startswith(ki) and re.fullmatch(r'\d+',kj[len(ki):])) \
+                  or (ki.startswith(kj) and re.fullmatch(r'\d+',ki[len(kj):]))
+            if match:
+                pi.setdefault('_dup',set()).add(pj.get('panel',''))
+                pj.setdefault('_dup',set()).add(pi.get('panel',''))
+    for p in merged:
+        if p.get('_dup'):
+            p['dup_candidates']=sorted(p.pop('_dup'))
+            p['dup_note']='⚠ 重複候補: 「%s」と同一物理盤の可能性(多図面で別名抽出)。同一なら1盤に統合してください。'%('／'.join(p['dup_candidates']))
+    return merged
+
 def _merge_dup_rows(rows):
     """同一盤内で同一コード(同判定)の機器を1行にまとめ、数量を合算する(社員要望)。
     まとめ対象=code有り・通常機器行のみ(load_detail/セット行/コード空は対象外=別物として残す)。
@@ -3652,6 +3711,8 @@ def select_from_extracted(data):
         if _tgt is not None:
             for _c,_q,_nt in _grows:
                 _tgt['rows'].append(dict(code=_c,name=byCode[_c].get('name',''),conf='○',qty=str(_q),note=_nt,load_detail=False))
+    # 【#4 多図面の重複排除】同一物理盤(受変電側/分電側)をベースキー一致で自動統合＋近縁は重複候補を警告。
+    out = _merge_cross_drawing_panels(out)
     _DRAWING_KIND.set(None)   # 後続処理へ図面種別ヒントを漏らさない
     return out
 
@@ -3677,6 +3738,11 @@ def make_excel(panels):
                 parts.append('%s(%s)'%(cc, byCode.get(cc,{}).get('name','')[:16]))
         return ' / '.join(parts)
     for p in panels:
+        # 【#4】多図面統合/重複候補の注記を盤見出し直前に1行表示(人が員数・統合を確認)。
+        if (p.get('merge_note') or p.get('dup_note')) and p.get('panel','')!=prev:
+            _msg=' / '.join(x for x in [('🔗 '+p['merge_note']) if p.get('merge_note') else '', p.get('dup_note','')] if x)
+            ws.append([p.get('panel',''),_msg,'','','','','','','','',''])
+            for c in ws[ws.max_row]: c.font=Font(name=FONT,size=9,color='9A3B00'); c.border=bd; c.alignment=Alignment(vertical='center',wrap_text=True)
         for r in p['rows']:
             is_detail=r.get('load_detail')
             # 付属品/外形図/セット行は raw/qty 等のキーが無いことがある→全て .get で安全に取得。

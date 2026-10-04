@@ -349,6 +349,8 @@ function render(d,filter){
     if(!rows.length)continue;
     h+='<tr class="pnl"><td colspan="7">'+esc(p.panel)+
        (p.outline_note?'<span style="margin-left:12px;font-size:12px;color:#357;font-weight:500">📐 '+esc(p.outline_note)+'</span>':'')+
+       (p.merge_note?'<div style="margin-top:3px;font-size:11.5px;color:#2a6a2a;font-weight:500">🔗 '+esc(p.merge_note)+'</div>':'')+
+       (p.dup_note?'<div style="margin-top:3px;font-size:11.5px;color:#9a3b00;font-weight:600">'+esc(p.dup_note)+'</div>':'')+
        '</td></tr>';
     if(p.sheet_metal){
       const sm=p.sheet_metal;
