@@ -143,9 +143,27 @@ $('goExtract').onclick=async()=>{
   controller=new AbortController();
   const fd=new FormData();curFiles.forEach(f=>fd.append('file',f));
   try{
+    // 抽出はサーバで裏実行(大きい図面でもタイムアウトしない)。開始→進捗をポーリング。
     const r=await fetch('/api/extract',{method:'POST',body:fd,signal:controller.signal});
-    const d=await r.json();
-    if(!r.ok)throw new Error(d.error||'抽出に失敗しました');
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error||'抽出に失敗しました');
+    const jid=j.job_id;
+    let d=null, waited=0;
+    while(true){
+      await new Promise(res=>setTimeout(res,3000));
+      if(controller.signal.aborted)return;
+      waited+=3;
+      busy('[1/2] 図面から部品を抽出しています…（'+curFiles.length+'件・'+waited+'秒経過／重い図面は数分かかります）');
+      let sj;
+      try{
+        const sr=await fetch('/api/extract/status/'+jid,{signal:controller.signal});
+        sj=await sr.json();
+      }catch(e){ if(e.name==='AbortError')return; continue; }  // 一時的な通信エラーは継続
+      if(sj.status==='done'){ d=sj.result; break; }
+      if(sj.status==='error'){ throw new Error(sj.error||'抽出に失敗しました'); }
+      if(sj.status==='unknown'){ throw new Error('抽出ジョブが見つかりません（時間切れの可能性）'); }
+      if(waited>900){ throw new Error('抽出がとても長くかかっています。図面を分割してお試しください。'); }
+    }
     extracted=d.panels;idle();showStop(false);
     renderExtracted(d);
     $('confirm').classList.add('show');

@@ -210,3 +210,11 @@ Claude(1回目) ∩ Gemini 2.5 Pro(2回目)
 - 実装：`select_from_extracted` の盤ごと確定後（`_og` 構築直前）に `_merge_dup_rows(rows)` を1回。キー＝`(code, conf, cross, absorbed)`。数量は各行のqtyを整数合算（空は1）。表示名は幹線番号を外した「部品名＋仕様」に統一し注記「同一コードN台を合算」。
 - **安全側**：まとめ対象は **code有りの通常機器行のみ**。`load_detail`・セット行(`is_setcode`)・**コード空(△未確定)は合算しない**（別物を潰さない）。**重複が無い機器は一切不変＝回帰ゼロ**（単独行の表示・数量はそのまま）。判定違い（◎8/○2等）は分けて残す。
 - 実エンジン検証：同一3P100A MCB×7→`60133` 1行 qty=7。Excel出力も数量=7で一致。同一フレームコードに収斂する別容量（60A/100A→60133）は積算単価が同一なので合算が正。
+
+## 8. 運用: 抽出の非同期化（2026-10／タイムアウト対策）
+- 現象: 本番で大きい図面の「抽出」が `Unexpected token '<', "<!DOCTYPE"... is not valid JSON` エラー。
+- 真因（ログで確定）: 抽出(Opus＋3倍解像度＋二重Vision＋`max_tokens=64000`)が重く、**gunicorn `--timeout 300` を超えてワーカーが abort**（`handle_abort→sys.exit(1)`→Worker exiting）。さらに手前の**Cloudflareは約100秒で先に524(HTML)を返す**→フロントのJSON解釈が失敗。選定の改修とは無関係。
+- 対策（精度は一切不変＝モデル/解像度/二重Visionそのまま）: **抽出を非同期化**。`/api/extract` は `secrets.token_hex` の `job_id` を即返し、**daemonスレッドで `_do_extract` を実行**。結果は**ファイルジョブ置き場**（`estimate_jobs/`・gunicorn複数ワーカー対策、`_LAST_RESULT`と同方式）に保存。フロントは `/api/extract/status/<jid>` を3秒間隔でポーリングし done/error/unknown で分岐（経過秒を表示、停止ボタンで中断）。
+  - これで**各HTTPは短時間**＝Cloudflare 100秒/gunicorn 300秒の壁に掛からない。重い図面は数分かかっても進捗表示で待てる。
+  - sync workerでもdaemonスレッドは独立実行（POSTは即returnするのでワーカーは健全＝arbiterに殺されない）。抽出処理自体（`extract_panels`系）は無改造＝回帰ゼロ。
+- セキュリティ: この調査中に `systemctl cat` 出力で APIキー/APP_PASSWORD/APP_SECRET がチャットに露出→**要ローテーション**（ANTHROPIC APIキーは失効＋再発行、パスワード変更）。方針1-4。

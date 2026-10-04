@@ -3696,28 +3696,21 @@ def api_confirm_stats():
                    maru_overridden=maru[-50:],
                    top_changes=change_pairs.most_common(30))
 
-# 【段階1】抽出のみ：図面→盤・機器リスト（コード選定はまだしない）
-@app.route('/api/extract', methods=['POST'])
-@login_required
-def api_extract():
-    # 複数ファイル対応: getlistで全ファイルを受け取り、各々抽出してpanelsを統合。
-    files=request.files.getlist('file')
-    if not files:
-        f=request.files.get('file')
-        files=[f] if f else []
-    if not files:
-        return jsonify(error='ファイルがありません'),400
+# 【段階1】抽出：図面→盤・機器リスト（コード選定はまだしない）
+# 抽出はOpus+高解像度+二重Visionで重く、大きい図面は100秒超になりCloudflare/gunicornの
+# タイムアウトに掛かる。精度(モデル/解像度)は落とさず、抽出を「裏で実行→進捗ポーリング」
+# の非同期方式にして、どんなに重い図面でもタイムアウトしないようにする。
+def _do_extract(payload):
+    """payload=[(fname, raw_bytes), ...] を抽出し、フロント用の結果dictを返す(同期処理の中身)。"""
     all_panels=[]; errors=[]; nfiles=0; dual={'dual':0,'claude_only':0,'gemini_only':0}; _dual_used=False
-    for f in files:
-        if not f or not f.filename: continue
-        fname=f.filename; raw=f.read(); low=fname.lower()
+    for fname, raw in payload:
+        low=str(fname).lower()
         if not low.endswith(('.pdf','.png','.jpg','.jpeg','.dxf','.zip')):
             errors.append(f'{fname}: 非対応形式(PDF/PNG/JPG/DXF/ZIP)')
             continue
         try:
             data=extract_panels(fname, raw)
             for p in data.get('panels',[]):
-                # どのファイル由来か分かるよう、盤名にファイル名を付記(任意)
                 all_panels.append(p)
             if data.get('_dual'):
                 _dual_used=True
@@ -3726,31 +3719,76 @@ def api_extract():
         except Exception as e:
             errors.append(f'{fname}: {e}')
     if not all_panels and errors:
-        return jsonify(error=' / '.join(errors)),500
+        return {'error':' / '.join(errors)}
     # 【抽出後・選定前の仕様確認ゲート】配電盤セット盤には、計器種別・VCB操作方式等の
     # 「図面に明記されず特記仕様/客先打合せで決まる」仕様の確認フォームを付ける。
-    # 社員はコード選定の前にここを確定してから選定に進む(誤った既定値での◎誤答を防ぐ)。
     for p in all_panels:
         _base=sc_classify(p.get('panel',''))
         attrs=dict(_base)
         sa=p.get('set_attrs') or {}
-        # 母線接続盤(JEM)・発電機連絡盤は盤名が一意→Visionのsettype/roleで上書きしない。
         _na=_base.get('role') in ('母線接続','発電機連絡')
         for k,v in sa.items():
             if v and k!='settype' and not (_na and k=='role'): attrs[k]=v
         if sa.get('settype') and not _na:
             attrs['settype']=sa['settype']
-        # 段積の段数ロール整合(sc_resolveと同じ): 段積で非段数ロールは未確定にしてゲートで段数を聞く。
         if attrs.get('settype') in _SC_DAN_ROLES and attrs.get('role') not in _SC_DAN_ROLES[attrs['settype']]:
             attrs['role']=None
         if attrs.get('settype'):
             p['sc_gate']=sc_confirm_form(attrs)
     nitems=sum(len(p.get('items',[])) for p in all_panels)
     nset=sum(1 for p in all_panels if p.get('sc_gate'))
-    return jsonify(panels=all_panels, count=nitems, npanels=len(all_panels),
-                   nfiles=nfiles, warnings=errors, nset=nset,
-                   dual=(dual if _dual_used else None),
-                   vision=('Claude+Gemini(二重Vision)' if _dual_used else 'Claude'))
+    return dict(panels=all_panels, count=nitems, npanels=len(all_panels),
+                nfiles=nfiles, warnings=errors, nset=nset,
+                dual=(dual if _dual_used else None),
+                vision=('Claude+Gemini(二重Vision)' if _dual_used else 'Claude'))
+
+# 抽出ジョブ置き場(gunicorn複数ワーカー対策でファイル保存=どのワーカーからも進捗を読める)。
+import threading
+_JOB_DIR=os.path.join(tempfile.gettempdir(),'estimate_jobs')
+try: os.makedirs(_JOB_DIR,exist_ok=True)
+except Exception: pass
+def _job_path(jid): return os.path.join(_JOB_DIR, re.sub(r'[^0-9a-zA-Z]','',str(jid))[:40]+'.json')
+def _job_write(jid,obj):
+    try:
+        with open(_job_path(jid),'w',encoding='utf-8') as f: json.dump(obj,f,ensure_ascii=False)
+    except Exception: pass
+def _job_read(jid):
+    try:
+        with open(_job_path(jid),encoding='utf-8') as f: return json.load(f)
+    except Exception: return None
+
+@app.route('/api/extract', methods=['POST'])
+@login_required
+def api_extract():
+    files=request.files.getlist('file')
+    if not files:
+        f=request.files.get('file')
+        files=[f] if f else []
+    # リクエスト中にファイル本体を読み込む(スレッド内ではrequestにアクセスできないため)。
+    payload=[(f.filename, f.read()) for f in files if f and f.filename]
+    if not payload:
+        return jsonify(error='ファイルがありません'),400
+    jid=secrets.token_hex(8)
+    _job_write(jid, {'status':'running'})
+    def _work(jid=jid, payload=payload):
+        try:
+            res=_do_extract(payload)
+            if isinstance(res,dict) and res.get('error'):
+                _job_write(jid, {'status':'error','error':res['error']})
+            else:
+                _job_write(jid, {'status':'done','result':res})
+        except Exception as e:
+            _job_write(jid, {'status':'error','error':str(e)})
+    threading.Thread(target=_work, daemon=True).start()
+    return jsonify(job_id=jid, status='running')
+
+@app.route('/api/extract/status/<jid>')
+@login_required
+def api_extract_status(jid):
+    j=_job_read(jid)
+    if not j:
+        return jsonify(status='unknown', error='ジョブが見つかりません(時間切れの可能性)'),404
+    return jsonify(j)
 
 # 【段階2】選定：抽出済みの盤・機器リスト→コード選定（◎○△）
 @app.route('/api/select', methods=['POST'])
