@@ -324,11 +324,15 @@ function render(d,filter){
   $('sum').innerHTML=stat('',s.total,'抽出機器')+stat('ok',s.ok,'◎ 確定')+stat('warn',s.warn,'○ ほぼ確定')+stat('chk',s.chk,'△ 要確認')+stat('',s.rate+'%','自動確定率');
   $('fbar').className='fbar show';
   const bdg={'◎':'<span class="badge b-ok">◎</span>','○':'<span class="badge b-warn">○</span>','△':'<span class="badge b-chk">△</span>'};
-  // 単線図に描かれない標準付属品・函体は自動計上されない旨を明記(人が追加)。
+  // このシステムの出力＝積算ソフトに入力する見積コードのリスト。函体/製作費/据付費は
+  // コードを積算ソフトに入力すると自動計算され人が手修正。標準付属品のみ人が追加。
   let h='<div style="margin:6px 0 12px;padding:10px 12px;background:#fff1da;border:1px solid #e6b877;border-radius:8px;font-size:12.5px;color:#7a3b00;line-height:1.7">'+
+    '<b>★ この結果＝積算ソフトに入力する「見積コードのリスト」です。</b><br>'+
+    '<b>■ 積算ソフトが自動計算します（最終は人が手修正）</b><br>'+
+    '・函体(ケース)・製作費・据付費 … 見積コードを積算ソフトに入力すると自動計算（函体は外形図寸法を基に幅増し/奥行増し等も計算）。金額は人が確認・手修正。<br>'+
     '<b>★ 人が追加してください（単線図に描かれず、自動計上されません）</b><br>'+
     '・操作/制御の付属品：表示灯(PL)・切替SW(CS)・押ボタン(PBS)・補助リレー(AUX-RY)・タイマ(T-RY)・警報用電源装置・ブザー(BZ) 等<br>'+
-    '・函体(ケース)・製作費・据付費／スペースヒータ＋サーモ(寒冷地)・換気ガラリ・防油提・接地端子盤 等<br>'+
+    '・スペースヒータ＋サーモ(寒冷地)・換気ガラリ・防油提・接地端子盤 等<br>'+
     '<span style="color:#9a6a2a">※図面に描かれていれば拾います。描かれていない標準付属品は人が追加を。特に受変電盤はご確認ください。</span></div>'+
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+
     '<button id="allbtn" onclick="toggleAll()" style="background:#305496;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">全行を一括チェック</button>'+

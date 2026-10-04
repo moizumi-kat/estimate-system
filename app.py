@@ -3674,16 +3674,21 @@ def make_excel(panels):
     ws2.append(['  違う場合は「候補コード(上位)」を参考に「プロ修正コード」へ正しいコードを記入し「コメント」に理由を。'])
     ws2.append(['  △(要確認)は図面から確定できなかった箇所です。特にご確認をお願いします。'])
     ws2.append([])
-    # 単線図に描かれない標準付属品・函体は自動計上されない旨を明記(茂泉様指示)。人が追加。
+    # このシステムの出力＝積算ソフトに入力する見積コードのリスト(茂泉様確定)。
+    # 函体・製作費・据付費はコードを積算ソフトに入力すると自動計算され人が手修正。
+    # 単線図に描かれない標準付属品のみ人が追加(自動計上されない)。
     _hp=ws2.max_row+1
+    ws2.append(['★ この表＝積算ソフトに入力する「見積コードのリスト」です。'])
+    ws2.append(['■ 積算ソフトが自動計算します（最終は人が手修正）'])
+    ws2.append(['  ・函体(ケース)・製作費・据付費 … 見積コードを積算ソフトに入力すると自動計算されます'])
+    ws2.append(['    （函体は外形図の寸法を基に幅増し/奥行増し等もソフトが計算。金額は人が確認・手修正）'])
     ws2.append(['★ 人が追加してください（単線図に描かれず、自動計上されません）'])
     ws2.append(['  ・操作/制御の付属品：表示灯(PL)・切替SW(CS)・押ボタン(PBS)・補助リレー(AUX-RY)・タイマ(T-RY)・警報用電源装置・ブザー(BZ) 等'])
-    ws2.append(['  ・函体(ケース)・製作費・据付費'])
     ws2.append(['  ・スペースヒータ＋サーモ(寒冷地仕様時)、換気ガラリ、防油提、接地端子盤 等'])
     ws2.append(['  ※ これらは図面に描かれていれば拾います。描かれていない標準付属品は人が追加してください。'])
     ws2.append(['  ※ 特に受変電盤(受電/コンデンサ/変圧器盤/非常)はセット標準付属品の計上をご確認ください。'])
     for _r in range(_hp, ws2.max_row+1):
-        ws2.cell(row=_r,column=1).font=Font(name=FONT,bold=(_r==_hp),color='9C3B00')
+        ws2.cell(row=_r,column=1).font=Font(name=FONT,bold=(_r in (_hp,_hp+1,_hp+4)),color='9C3B00')
     ws2.cell(row=_hp,column=1).fill=PatternFill('solid',start_color='FFF1DA')
     ws2.column_dimensions['A'].width=64; ws2.column_dimensions['B'].width=12
     buf=io.BytesIO(); wb.save(buf); buf.seek(0); return buf
