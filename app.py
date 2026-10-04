@@ -2658,11 +2658,23 @@ def sc_confirm_form(attrs):
         out.append({'spec':'role','options':['一段積','二段積','三段積'],'default':(attrs.get('role') if attrs.get('role') in ('一段積','二段積','三段積') else '')})
         out.append({'spec':'op','options':['電磁','電磁引出PF'],'default':(attrs.get('op') or '電磁引出PF')})
         return out
-    # 受変電の受電/饋電盤は「段積み(16系)」にもなり得る。段積みか否か・段数は単線図から確実に読めないため、
-    # 確認ゲートで人が選ぶ(茂泉様確定・◎誤答ゼロ)。settype=段積を選ぶと16系段積セット、高圧のままなら従来。
-    if st in ('高圧','段積'):
-        out.append({'spec':'settype','options':['高圧','段積'],'default':(st if st in ('高圧','段積') else '高圧')})
-        # 受電盤・発電機連絡盤(異種2段固定)は段数選択不要。饋電盤等は段数(一/二/三段積・母連)を選ぶ。
+    # 受変電の受電/饋電盤は「個別」か「セット」かを人が選ぶ(既定=個別・茂泉様確定)。
+    # セット選択時: 単独で手動/電動VCB→11系(高圧セット)、単独でも電動引出VCB→16系(段積セットの受電role)、
+    #   段積(段数指定)→16系。11/16の別は op(操作方式)と role(段数)で自動判定(select側)。
+    # ※op/vcb/計器種別は単線図に明記されず誤読が◎誤答→常に確認。表参道/城山手本=電動引出→16214。
+    if st=='高圧':
+        out.append({'spec':'受電計上','options':['個別','セット'],'default':(attrs.get('受電計上') or '個別')})
+        # 受電盤は単独固定(段数不要)。饋電盤は単独/段積(段数)を選ぶ。
+        if attrs.get('role')!='受電盤':
+            _rc=attrs.get('role') if attrs.get('role') in ('単独','一段積','二段積','三段積','母線連絡') else '単独'
+            out.append({'spec':'role','options':['単独','一段積','二段積','三段積','母線連絡'],'default':_rc})
+        out.append({'spec':'op','options':['手動','電動','電動引出'],'default':_sc_default('op',['手動','電動','電動引出'],attrs)})
+        out.append({'spec':'vcb','options':['8KA','12.5KA'],'default':_sc_default('vcb',['8KA','12.5KA'],attrs)})
+        out.append({'spec':'meter','options':['普通角','広角','マルチ'],'default':_sc_default('meter',['普通角','広角','マルチ'],attrs)})
+        return out
+    # 発電機連絡盤等(名称で段積確定): 個別/セットを選ぶ(既定=個別)。段数は盤名で固定のため不要。
+    if st=='段積':
+        out.append({'spec':'受電計上','options':['個別','セット'],'default':(attrs.get('受電計上') or '個別')})
         if attrs.get('role') not in ('受電盤','発電機連絡'):
             _rc=attrs.get('role') if attrs.get('role') in ('一段積','二段積','三段積','母線連絡') else ''
             out.append({'spec':'role','options':['一段積','二段積','三段積','母線連絡'],'default':_rc})
@@ -3000,7 +3012,23 @@ def select_from_extracted(data):
         _cond_set = _cls0.get('settype')=='コンデンサ' and _sa.get('コンデンサ計上')=='段積VCSセット'
         if _cond_set:
             _sa=dict(_sa); _sa['settype']='段積VCS'
-        _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype')=='JEM' or _low_set or _cond_set
+        # 【受電/饋電(高圧)】ゲートで「セット」を選んだ時のみ発火(既定=個別・茂泉様確定・表参道/城山手本で裏取り)。
+        #   単独で手動/電動VCB→11系(settype=高圧)、単独でも電動引出VCB→16系(settype=段積・受電/饋電role)、
+        #   段数指定(一/二/三段積・母線連絡)→16系(その段数role)。op/roleで自動判定。
+        _hv_set = _cls0.get('settype') in ('高圧','段積') and _sa.get('受電計上')=='セット'
+        if _hv_set:
+            _sa=dict(_sa)
+            if _cls0.get('settype')=='段積':
+                _sa['settype']='段積'                         # 発電機連絡(名称で段積確定)→異種2段を_subspecsで展開
+            else:
+                _r=_sa.get('role')
+                if _r in ('一段積','二段積','三段積','母線連絡','母線連絡+一段積'):
+                    _sa['settype']='段積'                     # 段積の饋電等=16系(段数role)
+                elif '引出' in (_sa.get('op') or ''):
+                    _sa['settype']='段積'; _sa['role']=_cls0.get('role')  # 単独でも電動引出=16系(受電/饋電role)
+                else:
+                    _sa['settype']='高圧'; _sa['role']=_cls0.get('role')  # 単独の手動/電動=11系
+        _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype')=='JEM' or _low_set or _cond_set or _hv_set
         # コンデンサ/段積VCSセット発火時: 単体PF(436系)はVCS/SCに内包(7-4)→個別計上しない(二重計上防止)。
         _vcs_set = _use_set and _sa.get('settype')=='段積VCS'
         # 低圧17系(セット選択時のみ): 相/容量をTR itemから補完(TR支給のkVA/相で最近傍上位)。
