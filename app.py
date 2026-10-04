@@ -3001,6 +3001,8 @@ def select_from_extracted(data):
         if _cond_set:
             _sa=dict(_sa); _sa['settype']='段積VCS'
         _use_set = _sa.get('settype') in ('段積','段積VCS') or _cls0.get('settype')=='JEM' or _low_set or _cond_set
+        # コンデンサ/段積VCSセット発火時: 単体PF(436系)はVCS/SCに内包(7-4)→個別計上しない(二重計上防止)。
+        _vcs_set = _use_set and _sa.get('settype')=='段積VCS'
         # 低圧17系(セット選択時のみ): 相/容量をTR itemから補完(TR支給のkVA/相で最近傍上位)。
         if _low_set:
             _sa=dict(_sa); _sa.setdefault('settype','低圧')
@@ -3290,6 +3292,9 @@ def select_from_extracted(data):
             # みなして抑制(二重計上防止)。43系に限定し、別容量MCB等(40/50/60系)には影響させない。
             if _set_expand and sel.get('code','')[:2]=='43' and \
                sel.get('code','')[:4] in {c[:4] for c in _set_expand if c[:2]=='43'}:
+                continue
+            # コンデンサ/段積VCSセット: 単体PF(436系)はVCS/SCに内包→個別計上しない(7-4・二重計上防止)。
+            if _vcs_set and sel.get('code','')[:3]=='436':
                 continue
             # 動力TRの11009(エネセーバLBS)発火時、内包のSC-TRIP等は名称で抑制(個別選定が△になるため)。
             if '46300' in _set_expand and re.search(r'SC-?TRIP|ｽﾄﾘｯﾌﾟ', nm, re.I):
