@@ -3637,6 +3637,18 @@ def make_excel(panels):
     ws2.append(['レビュー方法: 「選定結果」シートの各行を確認し、「確認」列で 未確認/OK/要修正 を選択。'])
     ws2.append(['  違う場合は「候補コード(上位)」を参考に「プロ修正コード」へ正しいコードを記入し「コメント」に理由を。'])
     ws2.append(['  △(要確認)は図面から確定できなかった箇所です。特にご確認をお願いします。'])
+    ws2.append([])
+    # 単線図に描かれない標準付属品・函体は自動計上されない旨を明記(茂泉様指示)。人が追加。
+    _hp=ws2.max_row+1
+    ws2.append(['★ 人が追加してください（単線図に描かれず、自動計上されません）'])
+    ws2.append(['  ・操作/制御の付属品：表示灯(PL)・切替SW(CS)・押ボタン(PBS)・補助リレー(AUX-RY)・タイマ(T-RY)・警報用電源装置・ブザー(BZ) 等'])
+    ws2.append(['  ・函体(ケース)・製作費・据付費'])
+    ws2.append(['  ・スペースヒータ＋サーモ(寒冷地仕様時)、換気ガラリ、防油提、接地端子盤 等'])
+    ws2.append(['  ※ これらは図面に描かれていれば拾います。描かれていない標準付属品は人が追加してください。'])
+    ws2.append(['  ※ 特に受変電盤(受電/コンデンサ/変圧器盤/非常)はセット標準付属品の計上をご確認ください。'])
+    for _r in range(_hp, ws2.max_row+1):
+        ws2.cell(row=_r,column=1).font=Font(name=FONT,bold=(_r==_hp),color='9C3B00')
+    ws2.cell(row=_hp,column=1).fill=PatternFill('solid',start_color='FFF1DA')
     ws2.column_dimensions['A'].width=64; ws2.column_dimensions['B'].width=12
     buf=io.BytesIO(); wb.save(buf); buf.seek(0); return buf
 
