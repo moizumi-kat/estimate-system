@@ -3053,6 +3053,17 @@ def select_from_extracted(data):
                                      note=_sc.get('note','セット属性の確認が必要'),raw=panel_nm,qty='1',
                                      is_setcode=True,set_confirm=_sc['confirm'],set_attrs=dict(_sc.get('attrs') or {}),
                                      load_detail=False,feed=''))
+        # コンデンサ/段積VCSセット発火時: SC/SR開閉制御の AUX-RY・PL を VCS1台あたり3・3で計上
+        # (茂泉様確定・城山手本=VCS2台でAUX-RY6/PL6)。単線図に描かれない制御分→○で員数は人が確認。
+        if _vcs_set and _set_row_ref is not None and _set_row_ref.get('code'):
+            _nvcs=sum(1 for _it in p.get('items',[])
+                      if re.search(r'(?<![A-Za-z])(VCS|VMC)(?![A-Za-z])', str(_it.get('name','')), re.I))
+            if _nvcs<=0:
+                _nvcs={'一段積':1,'二段積':2,'三段積':3}.get(_sa.get('role'),1)
+            for _cc,_q in (('73000',3*_nvcs),('71051',3*_nvcs)):
+                if _cc in byCode:
+                    rows.append(dict(code=_cc,name=byCode[_cc].get('name',''),conf='○',qty=str(_q),
+                        note='コンデンサ制御分(VCS%d台×3)・員数は要確認'%_nvcs,raw='',load_detail=False,feed=''))
         for it in p.get('items',[]):
             nm=it.get('name','')
             # 負荷明細行(親分岐MCBの負荷内訳)は、直前の機器行(親)に集約してリストから外す。
