@@ -332,6 +332,10 @@ VMCやSRが抜け落ちやすいので、PFとSCだけでなくVMC・SRも必ず
 - meter(計器種別): 推測しない。器具表等で明確な時のみ "広角"/"普通角"/"マルチ"、単線図だけで確信が無ければ ""(空)。
 - phase: 1φ→"1φ3W" / 3φ→"3φ3W" / スコットTR→"スコット"
 - cap: 変圧器のKVA(数値+KVA)。読めなければ ""。
+- 【TR/SC/SRが「スペース」「予備」表記でも必ず拾う】受変電盤でTR・SC・SRが実装置でなく「スペース(SP)」
+  「予備」として描かれていても、容量(KVA/KVAR)・相(1φ/3φ/スコット)が図示されていれば set_attrs の
+  cap/phase とitems(例 "TR 1φ100KVA(スペース)")に残すこと。セットコード(17系/コンデンサ16系)の選定に
+  容量・相が必要なため(表参道手本=TR/SC/SRはスペースだが17205/16026等のセットで積算)。
 - vcb: "8KA"/"12.5KA"(高圧のみ)。 op: "手動"/"電動"/"電動引出"(VCB上下に黒四角＋回転矢印記号なら電動引出)。段積VCSは "電磁"/"電磁引出PF"。
 - unclear_specs: 読み切れなかった仕様名の配列(例 ["meter","role","settype"])
 出力は次のJSONのみ（説明文・マークダウン禁止）:
@@ -1760,7 +1764,10 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
                     if amp<=a and c in byCode:
                         if _explicit_dt:
                             dtc=str(int(c)-20)  # DT=47系ST-20(47025→47005)
-                            if dtc in byCode: return R(dtc,('◎' if amp==a else '○'),'MCTT 3P-DT %dA(DT明記)%s'%(a,'' if amp==a else '(容量繰上)'))
+                            if dtc in byCode:
+                                r=R(dtc,('◎' if amp==a else '○'),'MCTT 3P-DT %dA(DT明記)%s'%(a,'' if amp==a else '(容量繰上)'))
+                                r['_mctt']={'amp':a,'st':c,'dt':dtc,'explicit_dt':True}  # DT明記もタグ付け(18100計上・昇格pool対象)
+                                return r
                         r=R(c,('◎' if amp==a else '○'),'MCTT 3P-ST %dA%s'%(a,'' if amp==a else '(容量繰上)'))
                         r['_mctt']={'amp':a,'st':c,'dt':str(int(c)-20)}
                         return r
@@ -3435,15 +3442,17 @@ def select_from_extracted(data):
                 _mx['code']=_dt; _mx['name']=byCode[_dt].get('name','')
                 _mx['conf']='○' if _up else '◎'
                 _mx['note']='MCTT 3P-DT %dA(盤内最大=主電源切替)%s'%(_mx['_mctt']['amp'],'(容量繰上)' if _up else '')
-                # コード表p13: DTの時は必ず 18-100(電源切替制御一式:COS×1,PL×2,T-Ry×2,AUX-Ry×2)を同時計上。
-                # AUX-Ryの型(標準73000/高級73001)は案件の仕様レベルで変わる(森ビル等の高仕様=高級)。
-                # 仕様レベルは確認ゲートで確定: 既定=標準(18100)、高級(18101)を候補提示し○(要確認)。
-                if '18100' in byCode:
-                    _cands=[{'code':'18100','name':byCode.get('18100',{}).get('name',''),'volt':''}]
-                    if '18101' in byCode: _cands.append({'code':'18101','name':byCode.get('18101',{}).get('name',''),'volt':''})
+            # コード表p13: 各MCTT(電源切替器)に 18-100(電源切替制御一式:COS×1,PL×2,T-Ry×2,AUX-Ry×2)を
+            #   1台ずつ同時計上(手本準拠・表参道=MCTT2台→18100×2。従来はDTの1台のみ=取りこぼし)。
+            # AUX-Ryの型(標準73000/高級73001)は案件の仕様レベルで変わる(森ビル等の高仕様=高級)。
+            # 仕様レベルは確認ゲートで確定: 既定=標準(18100)、高級(18101)を候補提示し○(要確認)。
+            if '18100' in byCode:
+                _cands=[{'code':'18100','name':byCode.get('18100',{}).get('name',''),'volt':''}]
+                if '18101' in byCode: _cands.append({'code':'18101','name':byCode.get('18101',{}).get('name',''),'volt':''})
+                for _ in _mrows:
                     rows.append(dict(code='18100',name=byCode['18100'].get('name',''),conf='○',
-                                     note='DT付随(コード表p13)。仕様レベルを確認ゲートで選択: 標準=18100/高級=18101(AUX-Ry高級)',
-                                     raw='(MCTT DT付随 18-100)',qty='1',load_detail=False,feed='',
+                                     note='MCTT付随の電源切替制御一式(コード表p13・MCTT1台に1式)。仕様レベル確認: 標準=18100/高級=18101(AUX-Ry高級)',
+                                     raw='(MCTT付随 18-100)',qty='1',load_detail=False,feed='',
                                      candidates=_cands,spec_gate=True))
         for r in rows: r.pop('_mctt',None)   # 内部タグ除去
         # コード表p41: N/5A(CT動作型)のWHMはCTを拾う。CTは高圧→44系/低圧→72系、変流比は主幹電流に合わせる(茂泉様)。
