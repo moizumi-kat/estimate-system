@@ -11,6 +11,7 @@
   terms = set((dev, term))  図面から読めた端子
 ※ 粒度(辺の本数)は人の渡りと概ね一致。精度は端子の読み取り網羅に依存する。
 """
+import re
 import collections
 import math
 from .tracer import _build_components, TOL
@@ -66,7 +67,8 @@ def trace_edges(path, tol=TOL):
                 all_terms.add((d, t))
 
     termnodes = set(term_at)
-    edges = set()
+    # --- ノード間の直結辺(端子ノード↔端子ノード) ---
+    node_edges = set()
     for start in termnodes:
         seen = {start}
         stack = [start]
@@ -76,11 +78,59 @@ def trace_edges(path, tol=TOL):
                 if v in seen:
                     continue
                 if v in termnodes and v != start:
-                    for ta in term_at[start]:
-                        for tb in term_at[v]:
-                            if ta != tb:
-                                edges.add(frozenset((ta, tb)))
+                    node_edges.add(frozenset((start, v)))
                 else:
                     seen.add(v)
                     stack.append(v)
+    # --- TBノードの端子名を生成(回路=接続先機器番号, 相=接続先端子) ---
+    tb_name = {}
+    for node in termnodes:
+        if not any(str(d).upper().startswith('TB') for d, t in term_at[node]):
+            continue
+        name = None
+        for ne in node_edges:
+            if node not in ne:
+                continue
+            other = next(iter(ne - {node}))
+            for (d, t) in term_at[other]:
+                # 実際に描かれた配線でTBに直結する主回路機器(遮断器)からのみ相を付与。
+                if not re.match(r'(MCCB|ELCB)', str(d).upper()):
+                    continue
+                ph = _phase_of(t)
+                circ = _circuit_of(d)
+                if ph and circ:
+                    name = f'{circ}{ph}'
+                    break
+            if name:
+                break
+        tb_name[node] = ('TB', name or '?')
+        if name:
+            all_terms.add(('TB', name))
+
+    def names(node):
+        return {tb_name[node]} if node in tb_name else term_at[node]
+
+    edges = set()
+    for ne in node_edges:
+        a, b = tuple(ne)
+        for ta in names(a):
+            for tb in names(b):
+                if ta != tb:
+                    edges.add(frozenset((ta, tb)))
     return edges, all_terms
+
+
+def _phase_of(term):
+    """接続先端子 → TBの相(U/V/W/E)。主回路端子1-6→相, 接地→E, 制御→None。"""
+    t = str(term or '').strip().upper()
+    t = re.sub(r'\(.*?\)', '', t)
+    if re.fullmatch(r'[1-6]', t):
+        return ['U', 'V', 'W'][(int(t) - 1) // 2]
+    if 'E' in t or t in ('ET',):
+        return 'E'
+    return None
+
+
+def _circuit_of(dev):
+    m = re.search(r'(\d+)', str(dev or ''))
+    return m.group(1) if m else ''
