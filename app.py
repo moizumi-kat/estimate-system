@@ -3003,6 +3003,7 @@ def select_from_extracted(data):
             _secs=_ol.get('sections') or []
             _gaikei={'faces':int(_ol.get('faces') or len(_secs) or 0),
                      'fans':sum(1 for s in _secs if s.get('fan')),
+                     'sections':_secs,   # 各面(name/tr_kva/fan)を配分に使う(#6)
                      'w':_ol.get('w'),'h':_ol.get('h'),'d':_ol.get('d')}
             break
     _nintei_placed=False   # 認定料の確認質問は図面で1回だけ(最初の受変電盤に載せる)
@@ -3699,18 +3700,38 @@ def select_from_extracted(data):
             if _acc in byCode and _acc not in _allcodes:
                 _hv_panel['rows'].append(dict(code=_acc,name=byCode[_acc].get('name',''),conf='○',
                     note='受変電図面の標準付属品(1図面各1・実見積書7案件で計上)',load_detail=False))
-    # 外形図がある場合、配電盤の照明(=面数)・換気扇(=外形図の換気扇数)・寒冷地ヒータ+サーモ(=面数)を一括計上。
+    # 外形図がある場合、照明(各面1)・換気扇(換気扇ありの面)・寒冷地ヒータ+サーモ(各面)を
+    # 【#6】各面を対応する配電盤へ配分して計上(従来は全て受電盤に集中=照明過少・換気扇過多の誤配分)。
+    # 面名が出力盤名と一致すればその盤、一致しなければ受電盤(フォールバック)。盤総数ではなく物理面数で計上。
     if _gaikei and _gaikei.get('faces'):
-        _grows=[]
-        _nf=_gaikei['faces']; _nv=_gaikei.get('fans',0)
-        if '71091' in byCode: _grows.append(('71091',_nf,'配電盤 盤内照明(外形図の面数=%d面に各1)'%_nf))
-        if _nv>0 and '74102' in byCode: _grows.append(('74102',_nv,'配電盤 換気扇(外形図で換気扇ありの%d面に各1)'%_nv))
-        if _cold_spec and '74106' in byCode and '74107' in byCode:
-            _grows+=[('74106',_nf,'配電盤 スペースヒーター(寒冷地・面数分)'),('74107',_nf,'配電盤 サーモスタット(寒冷地・面数分)')]
-        _tgt=_hv_panel or (out[0] if out else None)
-        if _tgt is not None:
-            for _c,_q,_nt in _grows:
-                _tgt['rows'].append(dict(code=_c,name=byCode[_c].get('name',''),conf='○',qty=str(_q),note=_nt,load_detail=False))
+        _secs=_gaikei.get('sections') or []
+        def _find_panel_by_face(nm):
+            k=_panel_base_key(nm)
+            if not k: return None
+            for _pg in out:
+                if _panel_base_key(_pg.get('panel',''))==k: return _pg
+            return None
+        _fallback=_hv_panel or (out[0] if out else None)
+        def _add(tgt,c,nt):
+            if tgt is not None and c in byCode:
+                tgt['rows'].append(dict(code=c,name=byCode[c].get('name',''),conf='○',qty='1',note=nt,load_detail=False))
+        if _secs:
+            for s in _secs:
+                _fn=s.get('name','') or ''
+                _tp=_find_panel_by_face(_fn) or _fallback
+                _add(_tp,'71091','配電盤 盤内照明(外形図の面%s・1扉1。両扉等は員数を確認)'%(('「%s」'%_fn) if _fn else ''))
+                if s.get('fan'): _add(_tp,'74102','配電盤 換気扇(外形図でこの面に換気扇あり)')
+                if _cold_spec:
+                    _add(_tp,'74106','配電盤 スペースヒーター(寒冷地)'); _add(_tp,'74107','配電盤 サーモスタット(寒冷地)')
+        else:
+            # sectionsが無いが面数だけある場合は従来どおり受電盤へまとめて計上(員数は人が配分)。
+            _nf=_gaikei['faces']; _nv=_gaikei.get('fans',0)
+            if _fallback is not None:
+                if '71091' in byCode: _fallback['rows'].append(dict(code='71091',name=byCode['71091'].get('name',''),conf='○',qty=str(_nf),note='配電盤 盤内照明(外形図の面数=%d面・配分は人が確認)'%_nf,load_detail=False))
+                if _nv>0 and '74102' in byCode: _fallback['rows'].append(dict(code='74102',name=byCode['74102'].get('name',''),conf='○',qty=str(_nv),note='配電盤 換気扇(外形図で換気扇あり%d面・配分は人が確認)'%_nv,load_detail=False))
+                if _cold_spec and '74106' in byCode and '74107' in byCode:
+                    _fallback['rows'].append(dict(code='74106',name=byCode['74106'].get('name',''),conf='○',qty=str(_nf),note='配電盤 スペースヒーター(寒冷地・面数分)',load_detail=False))
+                    _fallback['rows'].append(dict(code='74107',name=byCode['74107'].get('name',''),conf='○',qty=str(_nf),note='配電盤 サーモスタット(寒冷地・面数分)',load_detail=False))
     # 【#4 多図面の重複排除】同一物理盤(受変電側/分電側)をベースキー一致で自動統合＋近縁は重複候補を警告。
     out = _merge_cross_drawing_panels(out)
     _DRAWING_KIND.set(None)   # 後続処理へ図面種別ヒントを漏らさない
