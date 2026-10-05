@@ -13,6 +13,7 @@
 import re
 import ezdxf
 from . import tb_phase
+from . import tb_strip
 
 _IN = {'U': '1', 'V': '3', 'W': '5'}
 _OUT = {'U': '2', 'V': '4', 'W': '6'}
@@ -41,19 +42,34 @@ def generate(draw_paths):
     confidence は tb_phase の判定(確定/要確認)を引き継ぐ。"""
     pm = tb_phase.build_phase_map(draw_paths)
     brk = _breakers(draw_paths)
+    strip = tb_strip.assign(draw_paths)       # 回路→台番号
+
+    def tbsym(circ):
+        s = strip.get(circ)
+        return f'TB-{s}' if s else 'TB'
+
     wires = []
-    for circ, info in pm.items():
+    earth_pts = []     # 接地端子(TB-台:回路E)を回路順に。最後に接地箱へ数珠つなぎ。
+    for circ in sorted(pm, key=lambda c: (len(c), c)):
+        info = pm[circ]
         bsym = brk.get(circ)
         if not bsym:
             continue
         conf = info.get('confidence', '要確認')
-        for ph in info.get('phases', set()):
+        tb = tbsym(circ)
+        for ph in sorted(info.get('phases', set())):
             if ph == 'E':
-                wires.append({'from': f'{bsym}:E', 'to': f'TB:{circ}E',
-                              'circuit': circ, 'phase': 'E', 'confidence': conf})
+                earth_pts.append((f'{tb}:{circ}E', conf))
                 continue
             wires.append({'from': 'LUG:', 'to': f'{bsym}:{_IN[ph]}',
                           'circuit': circ, 'phase': ph, 'confidence': conf})
-            wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'TB:{circ}{ph}',
+            wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'{tb}:{circ}{ph}',
                           'circuit': circ, 'phase': ph, 'confidence': conf})
+    # 接地: 各回路のE端子を回路順に数珠つなぎし、末端を接地箱(BOX-ET)へ。
+    for i in range(len(earth_pts) - 1):
+        wires.append({'from': earth_pts[i][0], 'to': earth_pts[i + 1][0],
+                      'circuit': '', 'phase': 'E', 'confidence': earth_pts[i][1]})
+    if earth_pts:
+        wires.append({'from': earth_pts[-1][0], 'to': 'BOX-ET:',
+                      'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
     return wires
