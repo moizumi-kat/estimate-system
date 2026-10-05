@@ -209,7 +209,7 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
         except Exception:
             pass
     _assign_tb_block(wires_out, dev_lays)
-    _assign_maincircuit_tb(wires_out)
+    _assign_maincircuit_tb(wires_out, kind=kind)
     # L_OUTSIDE(端子台先)の回路番号なし参照記号から生じる「情報ゼロの重複配線」のみ除外。
     # = 号線が空 かつ 両端とも 番号・端子 が全て空(識別情報が一切ない)。
     # ※CPU/伝送ユニット等の端子間配線(端子名 シロ/伝送+ 等を持つ)は実配線なので残す(回帰防止)。
@@ -500,8 +500,17 @@ def device_correspondence(files, seiban='', out_dir=None):
     return out
 
 
+# 盤種別ごとの 色→相 対応(手本検証):
+#   制御盤(三相動力) = R/S/T → U/V/W。緑=接地E。
+#   分電盤(単相3線)  = R/N/T（赤=R, 白=中性N, 黒=T）。緑=接地E。
 _PHASE_SUFFIX = {'緑': 'E', '赤': 'U', '白': 'V', '青': 'W'}
+_PHASE_SUFFIX_BUNDEN = {'緑': 'E', '赤': 'R', '白': 'N', '黒': 'T', '青': 'T'}
 _TB_NEAR_MAX = 600.0        # 接続先機器と端子台ストリップの近接判定(mm)。これ超なら付番しない(誤答回避)
+
+
+def _phase_map(kind):
+    """盤種別 → 色→相 対応。分電盤は R/N/T、他(制御盤)は U/V/W。"""
+    return _PHASE_SUFFIX_BUNDEN if kind == '分電盤' else _PHASE_SUFFIX
 
 
 def _tb_blocks(lays):
@@ -583,18 +592,20 @@ def _assign_tb_block(wires, lays):
                 a['no'] = circ
 
 
-def _assign_maincircuit_tb(wires):
+def _assign_maincircuit_tb(wires, kind='制御盤'):
     """主回路(アース/電源)の TB 端子番号を手本ルールで自動付番する(茂泉様)。
 
     手本のハーネスシート: 主回路の TB 端子 = <回路番号><相>。
-      アース(緑/号線E)→ <回路>E、電源 赤→U/白→V/青→W(R/S/T相)。制御線は空欄のまま。
+      制御盤(三相): 赤→U/白→V/青→W, アース(緑/号線E)→ E。
+      分電盤(単3): 赤→R/白→N/黒→T, アース→ E。 ← 盤種別で色→相を切替。
     回路番号は「相手端点(非TB側)の番号」を用いる(例 TB↔MCCB-102 → 102<相>)。
-    端子が既に埋まっている TB は変更しない(図面優先)。
+    端子が既に埋まっている TB は変更しない(図面優先)。制御線は空欄のまま。
     """
     from .geometry import norm as _n
+    pmap = _phase_map(kind)
     for w in wires:
         color = w.get('color', '')
-        suf = _PHASE_SUFFIX.get(color)
+        suf = pmap.get(color)
         if not suf and str(w.get('gousen', '')).upper().startswith('E'):
             suf = 'E'                       # アース号線(色未設定)
         if not suf:
