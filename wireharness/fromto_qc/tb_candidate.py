@@ -10,24 +10,32 @@
   status: 'ok'(3Pの確定相) / 'guess'(2Pの相選択) / 'earth'(接地)。strip は候補(未確定)。
 """
 from . import pole_count as _pc
+from . import cable_cores as _cc
 
 
 def build_candidates(draw_paths, learned_2p=None, add_earth=True):
-    """図面群 → 回路ごとの TB相端子候補。pole_count から生成。"""
+    """図面群 → 回路ごとの TB相端子候補。相数の根拠は次の優先順(◎誤答ゼロ):
+      1. 負荷ケーブル芯数(cable_cores)… 実際の相数そのもの → status 'fixed'(確定, 100%根拠)
+      2. ブレーカ極数(pole_count)     … 極数≠実相数の場合あり → status 'review'(要確認)
+    確定(fixed)だけを自動確定扱いにし、review は人の確認に回す(誤って断定しない)。
+    """
     pm = _pc.build_pole_map(draw_paths)
+    cm = _cc.build_core_map(draw_paths)
     out = []
-    for circ in sorted(pm, key=lambda c: (len(c), c)):
-        poles = pm[circ]
-        phases = _pc.phases_for(circ, pm, learned_2p=learned_2p)
+    for circ in sorted(set(pm) | set(cm), key=lambda c: (len(c), c)):
+        if circ in cm:
+            phases = _cc.phases_from_cores(cm[circ])
+            basis, st = 'cable', 'fixed'
+        else:
+            phases = _pc.phases_for(circ, pm, learned_2p=learned_2p)
+            basis, st = 'pole', 'review'
         if not phases:
             continue
-        terms = []
-        for ph in phases:
-            terms.append({'t': f'{circ}{ph}', 'phase': ph,
-                          'status': 'guess' if poles == 2 else 'ok'})
+        terms = [{'t': f'{circ}{ph}', 'phase': ph, 'status': st} for ph in phases]
         if add_earth:
-            terms.append({'t': f'{circ}E', 'phase': 'E', 'status': 'earth'})
-        out.append({'circuit': circ, 'poles': poles, 'terminals': terms, 'strip': ''})
+            terms.append({'t': f'{circ}E', 'phase': 'E', 'status': st})
+        out.append({'circuit': circ, 'poles': pm.get(circ), 'cores': cm.get(circ),
+                    'basis': basis, 'status': st, 'terminals': terms, 'strip': ''})
     return out
 
 
