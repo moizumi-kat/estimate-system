@@ -1040,6 +1040,16 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
     seq, skel, dct = _classify_seiban_files(files)
     routed = route_and_length(seq, skel_paths=skel, seiban=seiban, dct_paths=dct,
                               topology=topology, physical=physical)
+    # 内部配置図のロケーター対応表(実機器→仮名称A,B,C…)があれば From-To をその呼称へ置換。
+    # 製造現場のハーネスシートに合わせる。対応表が無ければ不変(回帰ゼロ)。
+    try:
+        from . import locator_map as _lmap
+        _lm = _lmap.build_map(dct)
+        if _lm.get('by_actual'):
+            _lmap.apply_to_routed(routed, _lm)
+            routed.setdefault('summary', {})['ロケーター置換'] = len(_lm['by_actual'])
+    except Exception:
+        pass
     dec = duct_decision(seq, skel_paths=skel, seiban=seiban, dct_paths=dct)
     ec = electrical_check(seq, skel_paths=skel, seiban=seiban)
     fb = design_feedback(seq, skel_paths=skel, seiban=seiban, out_dir=out_dir)

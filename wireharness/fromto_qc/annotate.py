@@ -49,6 +49,16 @@ def _sym(dev, no):
     return f'{dev}-{no}' if no else str(dev)
 
 
+def _geom_dn(ep):
+    """図面上の位置照合に使う (device, no)。
+    ロケーター置換済みの端点は 'actual'(実機器=図面の記号)で引く。無ければ表示値。"""
+    a = ep.get('actual')
+    if a:
+        d, _, n = str(a).rpartition('-')
+        return (d, n) if d else (str(a), '')
+    return ep.get('device', ''), ep.get('no', '')
+
+
 def _sheet_index(path):
     """シートの位置辞書: {(機器-番号, 端子):(x,y)} と {機器-番号:(x,y)}。"""
     by_dt, by_d = {}, {}
@@ -138,11 +148,13 @@ def build_coverage_html(routed, seq_paths, skel_paths, seiban=''):
             xmin, ymax = r['xmin'], r['ymax']
             mr = max(4.0, round(max(r['w'], r['h']) / 300.0, 1))
             # この線(From-To)が属する成分キー → その成分の実配線線分をハイライト対象にする
-            cg = (_endpoint_g(ep2g, frm.get('device', ''), frm.get('no', ''), frm.get('terminal', '')) or
-                  _endpoint_g(ep2g, to.get('device', ''), to.get('no', ''), to.get('terminal', '')))
+            fdev, fno = _geom_dn(frm)
+            tdev, tno = _geom_dn(to)
+            cg = (_endpoint_g(ep2g, fdev, fno, frm.get('terminal', '')) or
+                  _endpoint_g(ep2g, tdev, tno, to.get('terminal', '')))
             segs = gseg.get(cg, []) if cg else []
-            fp = _endpoint_xy(dt, d, frm.get('device', ''), frm.get('no', ''), frm.get('terminal', ''))
-            tp = _endpoint_xy(dt, d, to.get('device', ''), to.get('no', ''), to.get('terminal', ''))
+            fp = _endpoint_xy(dt, d, fdev, fno, frm.get('terminal', ''))
+            tp = _endpoint_xy(dt, d, tdev, tno, to.get('terminal', ''))
             if not segs and not (fp or tp):
                 continue
             placed = True
