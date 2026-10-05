@@ -298,6 +298,14 @@ VMCやSRが抜け落ちやすいので、PFとSCだけでなくVMC・SRも必ず
 2) 適用表の各負荷(行)を items に出す: "symbol"=主回路記号(A〜L)、"kw"=容量(数値)、
    "breaker"=分岐遮断器の別(●=MCCB は "●"、○=ELB は "○"、表記どおり)。負荷名は "name"。
 動力盤でない(記号が無い)場合は "symbol":"" とする。「予備」行は name:"予備" とする。
+3) 【主回路が数字/C-コードで参照される図面(動力盤リスト形式)】「結線方式」欄の「主回路」が記号A〜Lでなく
+   数字(例 6)やC-コード(例 C-14)で回路図集を指す場合も同様に扱う: 回路図集(回路パターン図)でその番号の
+   回路型を読み、**モーター制御回路なら起動方式を name か symbol に必ず入れる**:
+   直入=「L-S」(直入れ・MGS1個)、スターデルタ=「スターデルタ」または「STD」(MGS複数+ST-RY)、
+   インバータ=「INV」。例: name:"排煙機 スターデルタ 15kW" / symbol:"STD"。これが無いと分岐回路コード(22-29系)
+   でなく個別遮断器になり取りこぼす(表参道6M-1の排煙機15kW STD→25042、給水L-S 2.2kW→25000が正)。
+   起動方式が読めない(電源送り/コンセント等の非モーター)は従来どおり個別遮断器(symbol省略)。
+   遮断器種別は ●=MCCB / ○=ELB を breaker に、漏電アラーム付/警報付は "ax":true を付ける(ELB・AX=25系, MCCB=22系)。
 
 【分電盤(電灯/照明分電盤)の分岐回路表（重要・取りこぼし厳禁）】
 分電盤は「回路番号／分岐開閉器(列: 1P・2P・ELB・1G・1H 等に○印)／R-RY／負荷名称・用途／容量VA／備考」の表で構成される。
@@ -824,9 +832,10 @@ def _bunki_find(typ,kw,dev,volt):
         if c: return c,('◎' if cd==dev else '○'),pick
     return '','△',None
 
-def _set_code(name, vb):
+def _set_code(name, vb, breaker='', ax=False):
     """制御盤の負荷名(例「2.2KW (L-S)」「INV 3.7kW」「スターデルタ 15kW」)→分岐回路コード。
-    回路種別＋kW(型ごとステップで切上)＋●○(MCCB/ELB)/AX。小数kWを正確に扱う。"""
+    回路種別＋kW(型ごとステップで切上)＋●○(MCCB/ELB)/AX。小数kWを正確に扱う。
+    ●/○(MCCB/ELB)・AXは名称優先、名称に無ければitemのbreaker/axフィールドから補完(#5)。"""
     s=str(name); U=s.upper()
     # kW: 小数を保持して抽出(normは小数点を削るため使わない)
     km=re.search(r'([\d.]+)\s*KW', U)
@@ -845,10 +854,11 @@ def _set_code(name, vb):
     if '支給' in s:  # INV支給品等
         for cand in (typ+'(支給品)', typ):
             if any(ty==cand for (_dv,ty,_k,_v) in _BUNKI_INDEX): typ=cand; break
-    # ●=MCCB基本('') / ○=ELB / 遠方操作=AX
+    # ●=MCCB基本('') / ○=ELB / 遠方操作=AX。名称優先、無ければitemのbreaker/axフィールドで補完。
+    _bk=str(breaker or ''); _bkU=_bk.upper()
     dev=''
-    if 'ELB' in U or '○' in s: dev='ELB'
-    if 'AX' in U or '遠方' in s: dev=('ELB・AX' if dev=='ELB' else 'MCB・AX')
+    if 'ELB' in U or '○' in s or '○' in _bk or 'ELB' in _bkU or 'ELCB' in _bkU or '漏電' in (_bk+s): dev='ELB'
+    if 'AX' in U or '遠方' in s or ax or '漏電アラ' in (_bk+s) or '漏電警報' in (_bk+s): dev=('ELB・AX' if dev=='ELB' else 'MCB・AX')
     code,conf,pick=_bunki_find(typ,kw,dev,volt)
     if code: return code,f'分岐回路 {typ} {pick}kW {volt}'
     return '',f'分岐回路 {typ} {kw}kW {volt}・容量外/該当なし要確認'
@@ -966,7 +976,7 @@ def _extra_meter_code(name):
         return c if c in byCode else None
     return None
 
-def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
+def refine(meta, cands, name, panel, prev_is_main=False, volt='', breaker='', ax=False):
     n=norm(name); vb=meta['vb']
     H=lambda *xs: all(norm(x) in n for x in xs)
 
@@ -1057,7 +1067,7 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt=''):
         return R('','△','MCB/ELB 容量・盤種別要確認')
     # --- 制御盤 分岐回路(L-S/スターデルタ/INV) 最優先 ---
     # 回路種別＋kW＋●○が読めれば決定的にコード確定→○(回路種別の推定余地を残し安全側)。容量外は△。
-    sc_code,sc_note=_set_code(name,vb)
+    sc_code,sc_note=_set_code(name,vb,breaker,ax)
     if sc_code: return R(sc_code,'○',sc_note)
     if sc_code=='' and sc_note: return R('','△',sc_note)
 
@@ -1712,7 +1722,7 @@ def _relay_code(name, panel=''):
     return None
 
 # 統合: 1機器を選定
-def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', group='', legend=None, breaker=''):
+def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', group='', legend=None, breaker='', ax=False):
     # 「E3P50/20」等の "E"＋極数 は ELB(漏電遮断器)の略記(動力制御盤の負荷分岐に多い)。
     # ELB略記を明示化して B)MCB と誤認しないようにする(手本: 六本木E3P50→B)ELB 51536)。
     if isinstance(name,str):
@@ -1848,7 +1858,7 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
     if not meta.get('main') and re.search(r'kvar', str(name), re.I) \
        and (re.search(r'コンデンサ', str(panel)+str(name)) or re.search(r'(^|\s)C\s?\d?\s*[φΦ]', str(name))):
         meta['main']='SC'
-    sel=refine(meta,cands,name,panel,prev_is_main,volt)
+    sel=refine(meta,cands,name,panel,prev_is_main,volt,breaker,ax)
     sel['candidates']=[{'code':c['code'],'name':c['name'],'volt':c['volt']} for c in cands[:5]]
     # SC/SR容量の丸め(切下/切上)は確認ゲート: 前後の公称値を候補に提示(既定=切下)。
     if sel.get('_round_gate'):
@@ -3365,7 +3375,7 @@ def select_from_extracted(data):
                 if not any(str(byCode.get(str(r.get('code','')),{}).get('name','')).startswith('M)') for r in rows if not r.get('load_detail')):
                     _base_nm='主幹 '+_base_nm
             sel=select_one(_base_nm, _panel_nm_for_sel, prev_is_main, it.get('volt',''), it.get('symbol',''), it.get('kw',''), it.get('group',''),
-                           legend=_eff_legend, breaker=it.get('breaker',''))
+                           legend=_eff_legend, breaker=it.get('breaker',''), ax=bool(it.get('ax')))
             # 弱電端子盤の救済: 未選定/△、または明らかに端子盤系(端子盤/保安器/接地端子/MDF)なら
             # terminal_select(極数P＋端子指標、既定=端子無)を優先。遮断器/コンセントは除外済。
             # (プロ確定: 端子盤T-x=62001端子無、保安器収納盤=62895保安器函)
