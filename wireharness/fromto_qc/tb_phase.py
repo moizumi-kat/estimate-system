@@ -50,9 +50,15 @@ def _futo_by_kw(kw, voltage):
     return fh, lo, hi
 
 
-def build_phase_map(draw_paths):
+def build_phase_map(draw_paths, load_factor=None):
     """図面群 → {回路番号: {'phases','futo','confidence','basis','frame','size'}}。
-    phases: 端子台に載る相の集合(太物なら{'E'})。confidence: '確定'/'要確認'。"""
+    phases: 端子台に載る相の集合(太物なら{'E'})。confidence: '確定'/'要確認'。
+
+    load_factor: その製番の負荷率(稼働時間/顧客仕様で決まる製番ごとの入力)。
+      '1.0'(24h操業)/'0.6'/'0.35'。指定すると、DENSEN/フレームで確定できず負荷率で
+      判定が割れていた回路(kWが読めるもの)を、その負荷率で確定させる。
+      None(既定)なら負荷率①③の両極一致でのみ確定、割れる回路は要確認で残す(保守)。
+    """
     import collections
     term = collections.defaultdict(collections.Counter)
     frames = collections.defaultdict(set)
@@ -104,6 +110,15 @@ def build_phase_map(draw_paths):
             # 社内基準(FS)でkW→電線。負荷率①と③で太物判定が一致する=稼働時間に依らず確定。
             fk, lo, hi = _futo_by_kw(kws[circ], 400 if circ in v400 else 200)
             futo, conf, basis = fk, '確定', f'kW基準一致({kws[circ]}kW:{lo}-{hi}sq)'
+        elif circ in kws and load_factor is not None:
+            # 負荷率で判定が割れる回路も、その製番の負荷率(稼働時間)が指定されれば確定。
+            volt = 400 if circ in v400 else 200
+            sq = wire_select.by_kw(kws[circ], volt, load_factor)
+            if sq is not None:
+                futo, conf = (sq > FUTO_SQ), '確定'
+                basis = f'kW×負荷率{load_factor}({kws[circ]}kW→{sq}sq)'
+            else:
+                futo, conf, basis = False, '要確認', 'サイズ不明/負荷率依存'
         else:
             # フレーム50/60でサイズ不明、かつkW基準でも負荷率で割れる → 稼働時間・顧客仕様
             # に依存し一意に決まらない。既定は内(多数)だが断定しない=要確認(人が確定、学習)。

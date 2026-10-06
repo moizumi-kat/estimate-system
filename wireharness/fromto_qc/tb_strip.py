@@ -47,11 +47,12 @@ def read_strips(draw_paths):
     return out
 
 
-def assign(draw_paths):
+def assign(draw_paths, load_factor=None):
     """回路 → 台番号 の割付。配置図のストリップ容量に合わせ回路を順に詰める。
-    容量が読めない/ストリップ不足なら、入り切らない回路は未割当(None)。"""
+    容量が読めない/ストリップ不足なら、入り切らない回路は未割当(None)。
+    load_factor: 製番ごとの負荷率(tb_phase.build_phase_map へ渡す)。"""
     strips = read_strips(draw_paths)
-    pm = tb_phase.build_phase_map(draw_paths)
+    pm = tb_phase.build_phase_map(draw_paths, load_factor=load_factor)
     # 回路ごとの端子数(=相数, E含む)。相が空(未判定)は4(3P+E)で仮置き。
     circ_n = {}
     for circ, info in pm.items():

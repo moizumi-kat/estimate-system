@@ -37,12 +37,17 @@ def _breakers(draw_paths):
     return out
 
 
-def generate(draw_paths):
+def generate(draw_paths, load_factor=None, seiban=None):
     """主回路の From-To 辺を生成。戻り: [{from,to,circuit,phase,confidence}]。
-    confidence は tb_phase の判定(確定/要確認)を引き継ぐ。"""
-    pm = tb_phase.build_phase_map(draw_paths)
+    confidence は tb_phase の判定(確定/要確認)を引き継ぐ。
+    load_factor: 製番ごとの負荷率(太物判定の確定に使う)。明示されなければ、seiban が
+      与えられたとき seiban_config から製番ごとの入力を自動参照する。"""
+    if load_factor is None and seiban:
+        from . import seiban_config
+        load_factor = seiban_config.load_factor(seiban)
+    pm = tb_phase.build_phase_map(draw_paths, load_factor=load_factor)
     brk = _breakers(draw_paths)
-    strip = tb_strip.assign(draw_paths)       # 回路→台番号
+    strip = tb_strip.assign(draw_paths, load_factor=load_factor)   # 回路→台番号
 
     def tbsym(circ):
         s = strip.get(circ)
