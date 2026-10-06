@@ -66,8 +66,15 @@ def _collect_points(path):
     return out
 
 
-def build_html(seq_paths, skel_paths, seiban='', routed=None):
-    """端子番号の付与・確認プロトタイプHTMLを生成して返す。"""
+def build_html(seq_paths, skel_paths, seiban='', routed=None,
+               phase_rows=None, decision=None):
+    """端子番号の付与・確認プロトタイプHTMLを生成して返す。
+
+    phase_rows: tb_phase.review_rows(draw) の出力(負荷率未指定で確定できない要確認回路)。
+      与えると『要確認回路の太物/内 確定』カードを描画し、製番の負荷率選択と
+      回路別の確定(内/太物)を操作できる。
+    decision: seiban_config.get(seiban)(既に記録済みの {load_factor, futo_override})。
+      初期選択に反映する。"""
     sheet_paths = list(skel_paths or []) + list(seq_paths or [])
     sheets = []        # {name, r, pts(list with id/X/Y)}
     gkey_to_id = {}    # (sym, round(wx), round(wy)) -> point id（From-To紐付け用, 世界座標）
@@ -150,6 +157,47 @@ def build_html(seq_paths, skel_paths, seiban='', routed=None):
                 f'<td>{_esc(tsym)}:<span class="ftt" {tpf}>{_esc(to.get("terminal",""))}</span></td>'
                 f'<td class="num">{_esc(w.get("length",""))}</td></tr>')
 
+    # 要確認回路の太物/内 確定カード(製番の負荷率選択＋回路別確定)
+    phase_rows = phase_rows or []
+    decision = decision or {}
+    cur_factor = decision.get('load_factor') or ''
+    cur_override = {str(k): bool(v) for k, v in (decision.get('futo_override') or {}).items()}
+    _FAC_LABEL = {'1.0': '①×1.0 (24h操業)', '0.6': '②×0.6', '0.35': '③×0.35 (低稼働)'}
+    factor_opts = '<option value="">未設定(両極一致のみ確定)</option>' + ''.join(
+        f'<option value="{f}"{" selected" if cur_factor==f else ""}>{_esc(l)}</option>'
+        for f, l in _FAC_LABEL.items())
+    futo_rows = ''
+    for r in phase_rows:
+        c = r['circuit']
+        cand = r.get('candidates') or {}
+        cand_txt = ' / '.join(
+            f'{_FAC_LABEL.get(f, f).split(" ")[0]}:{(cand.get(f) or {}).get("sq", "?")}sq'
+            for f in ('1.0', '0.6', '0.35') if f in cand) or 'kW不明'
+        ov = cur_override.get(c)
+        futo_rows += (
+            f'<tr class="fr" data-circ="{_esc(c)}" data-kw="{r.get("kw") or ""}">'
+            f'<td><b>{_esc(c)}</b><div class="sub">{r.get("kw") or "?"}kW {r.get("volt")}V</div></td>'
+            f'<td class="cn">{_esc(cand_txt)}</td>'
+            f'<td class="jd"><span class="judge">—</span></td>'
+            f'<td class="ov">'
+            f'<button class="ob" data-circ="{_esc(c)}" data-v="auto"{" aria-pressed=true" if ov is None else ""}>自動</button>'
+            f'<button class="ob in" data-circ="{_esc(c)}" data-v="in"{" aria-pressed=true" if ov is False else ""}>内</button>'
+            f'<button class="ob ft" data-circ="{_esc(c)}" data-v="futo"{" aria-pressed=true" if ov is True else ""}>太物</button>'
+            f'</td></tr>')
+    futo_card = ''
+    if phase_rows:
+        futo_card = f'''<div class="card" id="futocard"><div class="ch">太物/内 の確定（要確認 {len(phase_rows)} 回路）
+   <span style="flex:1"></span>
+   <label class="lf">製番の負荷率
+    <select id="lfsel">{factor_opts}</select></label></div>
+   <div class="note">負荷率(稼働時間・顧客仕様)は製番ごとの入力です。選ぶと各回路の太物/内が下に反映されます。
+    個別に<b>内/太物</b>を押すと人の確定(最優先)になります。確定したら「記録」で保存します。</div>
+   <div class="listbox" style="max-height:30vh"><table>
+    <thead><tr><th>回路/出力</th><th>kW→電線(候補)</th><th>判定</th><th>確定</th></tr></thead>
+    <tbody>{futo_rows}</tbody></table></div>
+   <div class="note"><button class="go" id="recbtn">記録(保存用データをコピー)</button>
+    <span id="recmsg"></span></div></div>'''
+
     total_pts = sum(len(sh['pts']) for sh in sheets)
     return f'''<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>{_esc(seiban)} 端子番号付与</title>
@@ -193,6 +241,16 @@ def build_html(seq_paths, skel_paths, seiban='', routed=None):
  .sheet{{margin-bottom:10px}} .sheet .sh{{padding:5px 8px;font-weight:700;border-bottom:1px solid #eef1f5}}
  .ftt.hot{{color:#1f4fb0;font-weight:700}}
  .note{{font-size:11px;color:#55607a;padding:4px 10px}}
+ .lf{{font-size:11px;font-weight:400;color:#334}} .lf select{{font:inherit;margin-left:4px;padding:1px 4px}}
+ #futocard .sub{{font-size:10.5px;color:#6a7686}} #futocard td.cn{{font-size:11px;color:#55607a}}
+ .judge{{font-weight:700;padding:1px 8px;border-radius:9px;font-size:11px}}
+ .judge.in{{background:#e6f4ea;color:#1a7a3a}} .judge.futo{{background:#ffe0e0;color:#b02020}}
+ .judge.und{{background:#eef1f6;color:#8a93a3}}
+ .ob{{font:inherit;font-size:10.5px;border:1px solid #ccd3de;background:#fff;border-radius:6px;padding:1px 6px;margin:1px;cursor:pointer}}
+ .ob[aria-pressed=true]{{background:#1f4fb0;color:#fff;border-color:#1f4fb0}}
+ .ob.in[aria-pressed=true]{{background:#1a7a3a;border-color:#1a7a3a}}
+ .ob.ft[aria-pressed=true]{{background:#b02020;border-color:#b02020}}
+ tr.fr td{{vertical-align:top}} #recmsg{{font-size:11px;color:#1a7a3a;margin-left:8px}}
 </style></head>
 <body>
 <header><span class="ttl">端子番号の付与・確認 {_esc(seiban)}</span>
@@ -202,6 +260,7 @@ def build_html(seq_paths, skel_paths, seiban='', routed=None):
  <button class="go" id="fill">候補を一括適用(単一候補のみ)</button></header>
 <div class="main">
  <div class="left">
+  {futo_card}
   <div class="card"><div class="ch">端子番号テーブル（図=図面の真値 / 候補=学習ルール / 未=要入力）</div>
    <div class="listbox"><table><tbody>{rows}</tbody></table></div></div>
   <div class="card"><div class="ch">④ From-To プレビュー（確定端子で生成）</div>
@@ -216,6 +275,31 @@ def build_html(seq_paths, skel_paths, seiban='', routed=None):
 <script>
 var POINTS={json.dumps(pt_js, ensure_ascii=False)};
 var TERMS={json.dumps(term_js, ensure_ascii=False)};
+var SEIBAN={json.dumps(seiban, ensure_ascii=False)};
+var PHASEROWS={json.dumps(phase_rows, ensure_ascii=False)};
+var FUTO_OV={json.dumps(cur_override, ensure_ascii=False)};   // 回路->true(太物)/false(内)
+// 候補(負荷率別の太物判定)を回路番号で引けるように
+var PCAND={{}};PHASEROWS.forEach(function(r){{PCAND[r.circuit]=r.candidates||{{}};}});
+function judgeFor(circ){{
+  if(circ in FUTO_OV) return {{futo:FUTO_OV[circ],src:'人'}};
+  var f=(document.getElementById('lfsel')||{{}}).value;
+  if(f&&PCAND[circ]&&PCAND[circ][f]&&PCAND[circ][f].sq!=null)
+    return {{futo:PCAND[circ][f].futo,src:'率'+f}};
+  return null;  // 未確定
+}}
+function renderFuto(){{
+  document.querySelectorAll('tr.fr').forEach(function(tr){{
+    var circ=tr.getAttribute('data-circ');var j=judgeFor(circ);
+    var el=tr.querySelector('.judge');
+    if(!j){{el.textContent='要確認';el.className='judge und';}}
+    else{{el.textContent=(j.futo?'太物':'内')+' ('+j.src+')';el.className='judge '+(j.futo?'futo':'in');}}
+    tr.querySelectorAll('.ob').forEach(function(b){{
+      var v=b.getAttribute('data-v');
+      var on=(v==='auto'&&!(circ in FUTO_OV))||(v==='in'&&FUTO_OV[circ]===false)||(v==='futo'&&FUTO_OV[circ]===true);
+      if(on)b.setAttribute('aria-pressed','true');else b.removeAttribute('aria-pressed');
+    }});
+  }});
+}}
 function srcClass(pid){{var v=(TERMS[pid]||'').trim();if(!v)return 'none';
   return POINTS[pid].src==='図面'?'ok':'cand';}}
 function renderPoint(pid){{
@@ -284,14 +368,60 @@ document.getElementById('fill').addEventListener('click',function(){{
     renderPoint(k);n++;}}}}
   counts();
 }});
+// --- 太物/内 確定カードの操作 ---
+var lfsel=document.getElementById('lfsel');
+if(lfsel)lfsel.addEventListener('change',renderFuto);
+document.addEventListener('click',function(e){{
+  var b=e.target;if(!b.classList||!b.classList.contains('ob'))return;
+  var circ=b.getAttribute('data-circ'),v=b.getAttribute('data-v');
+  if(v==='auto')delete FUTO_OV[circ];
+  else if(v==='in')FUTO_OV[circ]=false;
+  else if(v==='futo')FUTO_OV[circ]=true;
+  renderFuto();
+}});
+var recbtn=document.getElementById('recbtn');
+if(recbtn)recbtn.addEventListener('click',function(){{
+  var payload={{seiban:SEIBAN,load_factor:(lfsel&&lfsel.value)||null,futo_override:FUTO_OV}};
+  var txt=JSON.stringify(payload);
+  var cmd='python3 -c "import json,sys;from fromto_qc import seiban_config as s;'
+    +'d=json.loads(sys.argv[1]);s.record_decision(d[\\'seiban\\'],d[\\'load_factor\\'],d[\\'futo_override\\'])" '
+    +"'"+txt+"'";
+  var msg=document.getElementById('recmsg');
+  function done(){{msg.textContent='コピーしました。この内容が製番の確定として記録されます。';}}
+  if(navigator.clipboard&&navigator.clipboard.writeText){{navigator.clipboard.writeText(txt).then(done,function(){{msg.textContent=txt;}});}}
+  else{{msg.textContent=txt;}}
+  console.log('記録データ:',txt);console.log('保存コマンド例:',cmd);
+}});
 // 初期表示反映
 for(var k in TERMS){{renderPoint(k);}}
-counts();
+counts();renderFuto();
 </script></body></html>'''
 
 
-def write(seq_paths, skel_paths, path, seiban='', routed=None):
-    html = build_html(seq_paths, skel_paths, seiban=seiban, routed=routed)
+def write(seq_paths, skel_paths, path, seiban='', routed=None,
+          phase_rows=None, decision=None, auto_phase=True):
+    """確認HTMLを書き出す。auto_phase=True(既定)なら要確認回路と既存の確定内容を
+    図面から自動取得して『太物/内 確定』カードを描画する。"""
+    if auto_phase and phase_rows is None:
+        try:
+            from . import tb_phase, seiban_config
+            draw = list(skel_paths or []) + list(seq_paths or [])
+            phase_rows = tb_phase.review_rows(draw)
+            if decision is None and seiban:
+                decision = seiban_config.get(seiban)
+        except Exception:
+            phase_rows = phase_rows or []
+    html = build_html(seq_paths, skel_paths, seiban=seiban, routed=routed,
+                      phase_rows=phase_rows, decision=decision)
     with open(path, 'w', encoding='utf-8') as f:
         f.write(html)
+
+
+def apply_decision(seiban, load_factor=None, futo_override=None):
+    """確認UIの確定内容(製番の負荷率＋回路別の太物/内)を seiban_config に記録する。
+    HTMLの「記録」ボタンが出力した JSON を、この関数(または
+    seiban_config.record_decision)に渡して永続化する。戻り: 保存後の製番レコード。"""
+    from . import seiban_config
+    return seiban_config.record_decision(seiban, load_factor=load_factor,
+                                         futo_override=futo_override)
     return path

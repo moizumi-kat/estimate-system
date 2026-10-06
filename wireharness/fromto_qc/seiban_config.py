@@ -58,6 +58,40 @@ def set_load_factor(seiban, factor):
     return rec
 
 
+def futo_override(seiban):
+    """製番の『人が確定した太物/内』の回路別辞書 {回路番号(str): True(太物)/False(内)}。
+    確認UIでの確定操作を蓄積したもの(最優先の確定根拠)。無ければ空 dict。"""
+    ov = get(seiban).get('futo_override', {})
+    return {str(k): bool(v) for k, v in ov.items()}
+
+
+def set_futo_override(seiban, circuit, futo):
+    """製番の回路について『太物(True)/内(False)』を人の確定として記録。None でクリア。"""
+    cfg = _load()
+    rec = cfg.setdefault(str(seiban), {})
+    ov = rec.setdefault('futo_override', {})
+    if futo is None:
+        ov.pop(str(circuit), None)
+    else:
+        ov[str(circuit)] = bool(futo)
+    if not ov:
+        rec.pop('futo_override', None)
+    if not rec:
+        cfg.pop(str(seiban), None)
+    _save(cfg)
+    return rec
+
+
+def record_decision(seiban, load_factor=None, futo_override=None):
+    """確認UIの確定内容(製番の負荷率＋回路別の太物/内)をまとめて記録する。
+    futo_override は {回路: True/False}。None の値はクリア。戻り: 保存後の製番レコード。"""
+    if load_factor is not None:
+        set_load_factor(seiban, load_factor or None)
+    for circ, futo in (futo_override or {}).items():
+        set_futo_override(seiban, circ, futo)
+    return get(seiban)
+
+
 def all_seiban():
     """設定のある製番 → 設定 dict の一覧。"""
     return dict(_load())

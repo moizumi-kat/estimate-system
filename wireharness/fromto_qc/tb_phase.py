@@ -25,6 +25,7 @@ _BRK = re.compile(r'^(MCCB|ELCB|NFB|ELB)', re.I)
 _V400 = re.compile(r'(400|440)\s*V')
 FUTO_SQ = 5.5          # これ超(8sq以上)は太物
 FUTO_FRAME = 100       # これ以上のフレームは太物(確定)
+VALID_FACTORS = ('1.0', '0.6', '0.35')   # FS負荷率 ①24h操業 / ② / ③低稼働
 
 
 def _num_sq(s):
@@ -50,7 +51,7 @@ def _futo_by_kw(kw, voltage):
     return fh, lo, hi
 
 
-def build_phase_map(draw_paths, load_factor=None):
+def build_phase_map(draw_paths, load_factor=None, futo_override=None):
     """図面群 → {回路番号: {'phases','futo','confidence','basis','frame','size'}}。
     phases: 端子台に載る相の集合(太物なら{'E'})。confidence: '確定'/'要確認'。
 
@@ -58,8 +59,11 @@ def build_phase_map(draw_paths, load_factor=None):
       '1.0'(24h操業)/'0.6'/'0.35'。指定すると、DENSEN/フレームで確定できず負荷率で
       判定が割れていた回路(kWが読めるもの)を、その負荷率で確定させる。
       None(既定)なら負荷率①③の両極一致でのみ確定、割れる回路は要確認で残す(保守)。
+    futo_override: {回路番号: True(太物)/False(内)}。確認UIで人が確定したもの。
+      最優先(DENSEN/フレームより上)の確定根拠として扱う。
     """
     import collections
+    futo_override = {str(k): bool(v) for k, v in (futo_override or {}).items()}
     term = collections.defaultdict(collections.Counter)
     frames = collections.defaultdict(set)
     sizes = collections.defaultdict(set)
@@ -100,7 +104,10 @@ def build_phase_map(draw_paths, load_factor=None):
         phases = set(re.findall(r'[UVWE]', tc.most_common(1)[0][0]))
         frame = min(frames[circ]) if frames.get(circ) else None
         size = max(sizes[circ]) if sizes.get(circ) else None
-        if size is not None:
+        if circ in futo_override:
+            # 人が確認UIで確定したもの=最優先の確定。
+            futo, conf, basis = futo_override[circ], '確定', '人確定(確認UI)'
+        elif size is not None:
             # 内部電線サイズが読めれば最優先・確定(5.5sq超=太物)
             futo, conf, basis = (size > FUTO_SQ), '確定', f'電線{size}sq'
         elif frame is not None and frame >= FUTO_FRAME:
@@ -125,5 +132,27 @@ def build_phase_map(draw_paths, load_factor=None):
             futo, conf, basis = False, '要確認', 'サイズ不明/負荷率依存'
         eff = (phases & {'E'}) if futo else set(phases)
         out[circ] = {'phases': eff, 'all_phases': phases, 'futo': futo,
-                     'confidence': conf, 'basis': basis, 'frame': frame, 'size': size}
+                     'confidence': conf, 'basis': basis, 'frame': frame, 'size': size,
+                     'kw': kws.get(circ), 'volt': (400 if circ in v400 else 200)}
     return out
+
+
+def review_rows(draw_paths):
+    """確認UI用: 負荷率未指定で確定できなかった(要確認)回路の一覧を返す。
+    各要素: {circuit, kw, volt, candidates:{'1.0':{'sq','futo'},...}}。
+    負荷率を選ぶと太物/内がどう決まるかを人が見て確定できるようにするためのデータ。"""
+    pm = build_phase_map(draw_paths)
+    rows = []
+    for circ in sorted(pm, key=lambda c: (len(c), c)):
+        info = pm[circ]
+        if info['confidence'] != '要確認':
+            continue
+        kw, volt = info.get('kw'), info.get('volt', 200)
+        cand = {}
+        if kw is not None:
+            for fac in VALID_FACTORS:
+                sq = wire_select.by_kw(kw, volt, fac)
+                cand[fac] = {'sq': sq, 'futo': (sq is not None and sq > FUTO_SQ)}
+        rows.append({'circuit': circ, 'kw': kw, 'volt': volt,
+                     'all_phases': sorted(info['all_phases']), 'candidates': cand})
+    return rows
