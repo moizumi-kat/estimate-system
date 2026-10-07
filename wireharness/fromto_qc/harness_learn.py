@@ -241,8 +241,13 @@ def _dev_base(s):
     return ''.join(ch for ch in head if ch.isdigit())   # 純数字記号は番号を種別キーに
 
 
-def learn_terminals(sheet_txt_paths, min_n=5, save=True):
+def learn_terminals(sheet_txt_paths, min_n=5, save=True, merge=False):
     """モデルハーネスシート(.txt)から『機器種別→端子番号の付け方(語彙)』ルールを学習する。
+
+    merge=True: 既存 learned.json の terminal_rule に『追加のみ』で統合する(端子語彙を
+      union・件数を加算、既存の機器種別・端子は decrease/削除しない)。小さな追加コーパスで
+      学習しても既存の網羅を失わない(◎誤答ゼロ=取りこぼし増やさない)。
+      merge=False(既定)は従来どおり与えたコーパスだけで terminal_rule を作り直す。
 
     茂泉様ご要望: 端子番号の付け方をモデルシートのルールとして取得する。
     各行の col5=機器種別, col7=端子 を集計し、機器種別(ベース)ごとに
@@ -272,6 +277,12 @@ def learn_terminals(sheet_txt_paths, min_n=5, save=True):
             if not base:               # col5が空/純数字=機器種別が特定できない行は除外(ノイズ)
                 continue
             tally[base][c[7]] += 1
+    if merge:
+        # 既存 terminal_rule の件数を取り込んでから新コーパス分を加算(追加のみ)
+        existing = load().get('terminal_rule', {})
+        for base, r in existing.items():
+            for t, v in r.get('terms', []):
+                tally[base][t] += v
     rule = {}
     for base, cnt in tally.items():
         n = sum(cnt.values())
@@ -279,10 +290,17 @@ def learn_terminals(sheet_txt_paths, min_n=5, save=True):
             continue
         terms = [[t, v] for t, v in cnt.most_common()]
         rule[base] = {'terms': terms, 'n': n, 'distinct': len(cnt)}
+    if merge:
+        # min_n 未満で新コーパスから落ちても、既存にあった機器種別は保持(取りこぼさない)
+        for base, r in load().get('terminal_rule', {}).items():
+            rule.setdefault(base, r)
     if save:
         k = load()
         k['terminal_rule'] = rule
-        k['terminal_rule_sources'] = len(sheet_txt_paths)
+        if merge:
+            k['terminal_rule_sources'] = int(k.get('terminal_rule_sources', 0)) + len(sheet_txt_paths)
+        else:
+            k['terminal_rule_sources'] = len(sheet_txt_paths)
         with open(LEARNED_PATH, 'w', encoding='utf-8') as f:
             json.dump(k, f, ensure_ascii=False, indent=1)
     return rule
