@@ -24,8 +24,8 @@ import ezdxf
 
 from . import fromto_truth as ft
 from . import locator_map as LM
+from . import fixed_points
 
-FIXED = {'BOX', 'LUG', 'Lug', 'SPD', 'ET', '分離器', 'アース'}
 MULTI = {'ﾏﾙﾁ', 'マルチ', '伝送', 'ﾀｲﾏ', 'タイマ', 'T/U', '中欠用', '表示用'}
 
 
@@ -61,7 +61,7 @@ def classify_sym(sym, bases, syms, loc):
         return 'locator'
     if re.fullmatch(r'[A-Z]', base):
         return 'locator'
-    if base in FIXED or any(sym.startswith(f) for f in FIXED):
+    if fixed_points.is_fixed(sym):
         return 'fixed'
     if base in ('MCCB', 'ELCB') and re.search(r'[○◎]|LG|CE|CG|LE', sym):
         return 'breaker_mark'
@@ -199,7 +199,7 @@ def endpoint_coverage(seiban_dir):
             if base.startswith('TB'):
                 cat['tb'] += 1
                 continue
-            if base in FIXED or not term:
+            if fixed_points.is_fixed(sym) or not term:
                 cat['no_terminal'] += 1              # LUG/BOX/SPD や端子欄空=端子番号不要
                 continue
             terms = idx.get(sym) or idx.get(base)
