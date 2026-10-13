@@ -34,3 +34,10 @@ def normalize_sym(device, no=''):
         d, nn = dev.rsplit('-', 1)
         return f'{d}-{strip_marks(nn)}'
     return f'{dev}-{n}' if n else dev
+
+
+def canon(sym):
+    """突合用の正準キー。マーク除去＋ハイフン除去＋大文字化。
+    'FX-1'と'FX1'、'ELCB-○LG05'と'ELCBLG05' を同一視する(表記ゆれ吸収)。
+    機器名の区切り(ハイフン)だけ違う表記を揃えるためのもので、突合の両辺に等しく適用する。"""
+    return strip_marks(sym).replace('-', '').replace(' ', '').upper()

@@ -18,6 +18,14 @@ def test_normalize_sym():
     assert dn.normalize_sym('LUG') == 'LUG'
 
 
+def test_canon():
+    # ハイフン等の表記ゆれを吸収(突合の両辺に等適用)
+    assert dn.canon('FX-1') == dn.canon('FX1') == 'FX1'
+    assert dn.canon('ELCB-○LG05') == 'ELCBLG05'
+    assert dn.canon('52-101') == dn.canon('52101') == '52101'
+    assert dn.canon('SPD-分離器1') == dn.canon('SPD分離器1')
+
+
 if __name__ == '__main__':
-    test_strip_marks(); test_normalize_sym()
+    test_strip_marks(); test_normalize_sym(); test_canon()
     print('device_norm tests: OK')

@@ -94,8 +94,8 @@ def _nsym(sym, lmap):
     s = dn.strip_marks(str(sym)).upper()
     base = s.split('-')[0]
     if re.fullmatch(r'[A-Z]', base) and base in lmap:
-        return lmap[base]
-    return s
+        s = lmap[base]
+    return dn.canon(s)                     # ハイフン等の表記ゆれを吸収(FX-1≡FX1)
 
 
 def _nterm(t):
