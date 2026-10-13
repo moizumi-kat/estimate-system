@@ -2943,6 +2943,17 @@ def _merge_cross_drawing_panels(out):
             p['dup_note']='⚠ 重複候補: 「%s」と同一物理盤の可能性(多図面で別名抽出)。同一なら1盤に統合してください。'%('／'.join(p['dup_candidates']))
     return merged
 
+def _tag_elb_pair(rows):
+    """主幹ブレーカー(M)MCB=末尾03 / M)ELB=末尾06)に 漏電(ELB)⇄非漏電(MCB) の切替ペアをタグ付け。
+    両変種がDBに実在する行のみ対象(受変電40系は06が無いので非対象)。UIで主幹の漏電要否を選ぶ。"""
+    for r in rows:
+        c=str(r.get('code','') or '')
+        if len(c)==5 and c.isdigit() and c[-2:] in ('03','06'):
+            mcb=c[:-2]+'03'; elb=c[:-2]+'06'
+            if mcb in byCode and elb in byCode:
+                r['elb_pair']={'mcb':mcb,'elb':elb,'is_elb':c[-2:]=='06'}
+    return rows
+
 def _merge_dup_rows(rows):
     """同一盤内で同一コード(同判定)の機器を1行にまとめ、数量を合算する(社員要望)。
     まとめ対象=code有り・通常機器行のみ(load_detail/セット行/コード空は対象外=別物として残す)。
@@ -3666,6 +3677,7 @@ def select_from_extracted(data):
                 rows.append(dict(code=_acc,name=byCode[_acc].get('name',''),conf=_acc_conf,qty=str(_aq),
                     note=_acc_note,load_detail=False))
         rows=_merge_dup_rows(rows)   # 同一盤内の同一コード機器を1行に集約(数量合算・社員要望)
+        _tag_elb_pair(rows)          # 主幹ブレーカーに漏電(ELB)⇄MCB切替ペアをタグ付け(UIで要否選択)
         _og=dict(panel=p.get('panel',''),rows=rows)
         _ag=accessory_gate(p.get('panel',''), [{'code':c,'qty':q} for c,q in _acc_src])
         if _ag: _og['acc_gate']=_ag
@@ -3779,6 +3791,11 @@ def make_excel(panels):
             for c in ws[ws.max_row]: c.font=Font(name=FONT,size=9,color='9A3B00'); c.border=bd; c.alignment=Alignment(vertical='center',wrap_text=True)
         for r in p['rows']:
             is_detail=r.get('load_detail')
+            # 【#① 余計な行の除外】ユーザが数量を0にした行はExcelから除外(code有りの通常行のみ・プロ要望)。
+            if not is_detail and r.get('code'):
+                _qm=re.match(r'\s*(\d+)\s*$', str(r.get('qty')) if r.get('qty') is not None else '')
+                if _qm and int(_qm.group(1))==0:
+                    continue
             # 付属品/外形図/セット行は raw/qty 等のキーが無いことがある→全て .get で安全に取得。
             _code=r.get('code') or ''; _conf=str(r.get('conf',''))
             ws.append([p.get('panel',''),r.get('raw',r.get('name','')),r.get('qty','1'),_code or '—',
@@ -4057,10 +4074,25 @@ def _load_last(sid):
 @login_required
 def api_excel():
     panels=request.get_json().get('panels',[])
+    # ユーザ編集(数量/コード/追加/除外)を反映した panels を最新結果として保存→GETダウンロードも一致させる。
+    try:
+        sid=session.get('sid')
+        if sid and panels:
+            _LAST_RESULT[sid]=panels; _save_last(sid,panels)
+    except Exception: pass
     buf=make_excel(panels)
     ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
     return send_file(buf,as_attachment=True,download_name=f'estimate_code_{ts}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@app.route('/api/codeinfo', methods=['GET'])
+@login_required
+def api_codeinfo():
+    """部品追加UI用: コードがDBに実在するか照会し、正式品名を返す(方針1-3: DB実在コードのみ)。"""
+    code=(request.args.get('code','') or '').strip()
+    d=byCode.get(code)
+    if d: return jsonify(ok=True, code=code, name=d.get('name',''))
+    return jsonify(ok=False, code=code)
 
 # 確実ダウンロード(GET): ブラウザでURLを開くだけで保存できる。iOS/PC問わず動作。
 @app.route('/api/excel/download', methods=['GET'])

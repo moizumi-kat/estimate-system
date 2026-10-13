@@ -319,6 +319,7 @@ function applyGate(){
   $('goSelect').onclick();
 }
 function render(d,filter){
+  window._filter=filter||'all';
   const s=d.summary;
   $('sum').className='summary show';
   $('sum').innerHTML=stat('',s.total,'抽出機器')+stat('ok',s.ok,'◎ 確定')+stat('warn',s.warn,'○ ほぼ確定')+stat('chk',s.chk,'△ 要確認')+stat('',s.rate+'%','自動確定率');
@@ -345,8 +346,9 @@ function render(d,filter){
   let gid=0;
   for(let pi=0;pi<d.panels.length;pi++){
     const p=d.panels[pi];
-    const rows=p.rows.filter(r=>!r.load_detail&&(filter==='all'||r.conf===filter));
-    if(!rows.length)continue;
+    const visible=[];
+    p.rows.forEach((r,ri)=>{ if(!r.load_detail&&(filter==='all'||r.conf===filter)) visible.push([r,ri]); });
+    if(!visible.length)continue;
     h+='<tr class="pnl"><td colspan="7">'+esc(p.panel)+
        (p.outline_note?'<span style="margin-left:12px;font-size:12px;color:#357;font-weight:500">📐 '+esc(p.outline_note)+'</span>':'')+
        (p.merge_note?'<div style="margin-top:3px;font-size:11.5px;color:#2a6a2a;font-weight:500">🔗 '+esc(p.merge_note)+'</div>':'')+
@@ -379,7 +381,7 @@ function render(d,filter){
       });
       ac+='</td></tr>'; h+=ac;
     }
-    for(const r of rows){
+    for(const [r,ri] of visible){
       const id=gid++;
       // プルダウン候補(コード（品名）)。確定コードを先頭に含め、重複排除。
       let opts=[]; const seen={};
@@ -391,17 +393,28 @@ function render(d,filter){
       const noCount = (r.absorbed===true)||(!r.code&&(r.conf==='—'));
       osel+='<option value="__none__"'+(noCount?' selected':'')+'>― 計上しない(空白) ―</option>';
       osel+='<option value="__manual__">― 自分で入力 ―</option>';
-      h+='<tr id="row'+id+'" data-code="'+esc(r.code||'')+'">'+
-        '<td>'+esc(r.name)+'</td>'+
-        '<td class="qty"><input type="number" min="0" value="'+esc(r.qty||'1')+'" style="width:48px;text-align:center;font-size:13px;padding:3px;border:1px solid #bbb;border-radius:5px" onchange="markChange('+gid+')"></td>'+
-        '<td class="code">'+(r.code||'—')+'</td>'+
+      // 主幹ブレーカーの漏電(ELB)要否トグル(M)MCB末尾03 ⇄ M)ELB末尾06・両変種がDB実在時のみ)
+      const elbChk = r.elb_pair ?
+        '<label style="display:block;margin-top:4px;font-size:12px;color:#1a5fb4;white-space:nowrap"><input type="checkbox"'+(r.elb_pair.is_elb?' checked':'')+' onchange="elbToggle('+pi+','+ri+',this)" style="width:16px;height:16px;vertical-align:middle;margin-right:4px">主幹を漏電ブレーカー(ELB)にする</label>' : '';
+      const zeroStyle = (String(r.qty)==='0') ? ' style="opacity:.45"' : '';
+      h+='<tr id="row'+id+'" data-pi="'+pi+'" data-ri="'+ri+'" data-code="'+esc(r.code||'')+'"'+zeroStyle+'>'+
+        '<td>'+esc(r.name)+(r._added?' <span style="color:#2a7;font-size:11px;font-weight:600">(人が追加)</span>':'')+'</td>'+
+        '<td class="qty"><input type="number" min="0" value="'+esc(r.qty||'1')+'" style="width:48px;text-align:center;font-size:13px;padding:3px;border:1px solid #bbb;border-radius:5px" onchange="markChange('+pi+','+ri+',this)"></td>'+
+        '<td class="code" id="cd'+id+'">'+(r.code||'—')+'</td>'+
         '<td>'+bdg[r.conf]+'</td>'+
-        '<td><select onchange="onSel('+id+',this)">'+osel+'</select>'+
-          '<input id="m'+id+'" class="manual" style="display:none;margin-top:4px;width:200px" placeholder="コードを入力" oninput="onChk()"></td>'+
+        '<td><select onchange="onSel('+id+','+pi+','+ri+',this)">'+osel+'</select>'+
+          '<input id="m'+id+'" class="manual" style="display:none;margin-top:4px;width:200px" placeholder="コードを入力" oninput="manualInput('+id+','+pi+','+ri+',this)">'+elbChk+'</td>'+
         '<td class="note" id="nm'+id+'">'+esc(r.official||'')+'</td>'+
-        '<td style="text-align:center"><input type="checkbox" style="width:20px;height:20px" onchange="onChk()"></td>'+
+        '<td style="text-align:center"><input type="checkbox" class="chk" style="width:20px;height:20px" onchange="onChk()"></td>'+
       '</tr>';
     }
+    // 【#① 部品追加】この盤に足りない部品をコード指定で追加(DB実在チェック)。
+    h+='<tr class="addrow"><td colspan="7" style="background:#f1faf1;padding:6px 10px;font-size:12px;color:#276">'+
+       '＋この盤に部品を追加：コード<input id="ac'+pi+'" placeholder="例: 73000" style="width:100px;margin:0 6px;padding:3px;border:1px solid #bbb;border-radius:4px"> '+
+       '数量<input id="aq'+pi+'" type="number" min="1" value="1" style="width:48px;margin:0 6px;padding:3px;border:1px solid #bbb;border-radius:4px"> '+
+       '<button onclick="addPart('+pi+')" style="background:#2a7;color:#fff;border:none;padding:4px 14px;border-radius:5px;font-weight:600;cursor:pointer">追加</button>'+
+       '<span id="am'+pi+'" style="margin-left:10px;color:#888"></span>'+
+       '　<span style="color:#999">（余計な部品は数量を0にするとExcelから除外されます）</span></td></tr>';
   }
   h+='</tbody></table>';
   h = renderGate(d) + h;   // セット確認ゲートを結果の先頭に差し込む
@@ -445,27 +458,68 @@ function applyAccessories(){
   });
   $('goSelect').click();
 }
-function onSel(id,sel){
-  const m=document.getElementById('m'+id);
-  const nm=document.getElementById('nm'+id);
+function currentFilter(){return window._filter||'all';}
+function _rowObj(pi,ri){ try{return lastData.panels[pi].rows[ri];}catch(e){return null;} }
+// 数量編集→lastDataへ書き戻し(Excel出力に反映)。0は除外予定なので薄く表示。
+function markChange(pi,ri,el){
+  const row=_rowObj(pi,ri); if(row)row.qty=el.value;
+  const tr=el.closest('tr'); if(tr)tr.style.opacity=(parseInt(el.value||'1',10)===0?'0.45':'1');
+}
+// コード確定→lastDataへ書き戻し(コード・品名)。
+function _writeCode(pi,ri,code,name){
+  const row=_rowObj(pi,ri); if(!row)return;
+  row.code=code||''; if(name!==undefined)row.official=name;
+}
+function onSel(id,pi,ri,sel){
+  const m=document.getElementById('m'+id), nm=document.getElementById('nm'+id), cd=document.getElementById('cd'+id);
   if(sel.value==='__manual__'){m.style.display='block';m.focus();nm.textContent='';}
-  else if(sel.value==='__none__'){m.style.display='none';nm.textContent='(計上しない)';}
+  else if(sel.value==='__none__'){m.style.display='none';nm.textContent='(計上しない)';if(cd)cd.textContent='—';_writeCode(pi,ri,'','');}
   else{m.style.display='none';
-    // 選んだコードの品名(option文字列の（）内)を品名欄に表示
-    const lbl=sel.options[sel.selectedIndex].text;
-    const mt=lbl.match(/（(.*)）/); nm.textContent=mt?mt[1]:'';
+    const lbl=sel.options[sel.selectedIndex].text; const mt=lbl.match(/（(.*)）/); const name=mt?mt[1]:'';
+    nm.textContent=name; if(cd)cd.textContent=sel.value; _writeCode(pi,ri,sel.value,name);
   }
   onChk();
 }
+// 「自分で入力」のコード→DB照会で品名表示＋書き戻し。
+function manualInput(id,pi,ri,el){
+  const code=(el.value||'').trim(), cd=document.getElementById('cd'+id), nm=document.getElementById('nm'+id);
+  if(cd)cd.textContent=code||'—'; _writeCode(pi,ri,code);
+  if(!code){if(nm)nm.textContent='';onChk();return;}
+  fetch('/api/codeinfo?code='+encodeURIComponent(code)).then(r=>r.json()).then(j=>{
+    if(j.ok){if(nm)nm.textContent=j.name;_writeCode(pi,ri,code,j.name);}
+    else{if(nm)nm.innerHTML='<span style="color:#c0504d">DBに無いコード</span>';}
+  }).catch(()=>{});
+  onChk();
+}
+// 主幹ブレーカーの漏電(ELB)要否トグル: コードを M)MCB(03)⇄M)ELB(06) で切替。
+function elbToggle(pi,ri,el){
+  const row=_rowObj(pi,ri); if(!row||!row.elb_pair)return;
+  row.elb_pair.is_elb=el.checked;
+  row.code=el.checked?row.elb_pair.elb:row.elb_pair.mcb;
+  row.official='';   // 品名は再描画でDB名に更新
+  render(lastData,currentFilter());
+}
+// この盤に部品を追加(DB実在チェック→品名取得→行追加)。
+function addPart(pi){
+  const ce=document.getElementById('ac'+pi), qe=document.getElementById('aq'+pi), msg=document.getElementById('am'+pi);
+  const code=(ce.value||'').trim(), qty=parseInt(qe.value||'1',10)||1;
+  if(!code){msg.textContent='コードを入力してください';return;}
+  msg.textContent='確認中…';
+  fetch('/api/codeinfo?code='+encodeURIComponent(code)).then(r=>r.json()).then(j=>{
+    if(!j.ok){msg.innerHTML='<span style="color:#c0504d">DBに無いコードです</span>';return;}
+    lastData.panels[pi].rows.push({code:code,name:j.name,official:j.name,qty:String(qty),conf:'○',note:'人が追加',_added:true});
+    render(lastData,currentFilter());
+  }).catch(e=>{msg.textContent='エラー: '+e;});
+}
 function toggleAll(){
-  const boxes=[...document.querySelectorAll('#out tbody input[type=checkbox]')];
+  const boxes=[...document.querySelectorAll('#out tbody input.chk')];
   const allOn=boxes.every(b=>b.checked);
   boxes.forEach(b=>b.checked=!allOn);
   document.getElementById('allbtn').textContent=allOn?'全行を一括チェック':'全行を一括解除';
   onChk();
 }
 function onChk(){
-  const done=[...document.querySelectorAll('#out tbody input[type=checkbox]:checked')].length;
+  const done=[...document.querySelectorAll('#out tbody input.chk:checked')].length;
   document.getElementById('done').textContent=done;
   const btn=document.getElementById('cbtn');
   if(done===window._rtotal&&done>0){btn.style.background='#2e7d32';btn.style.cursor='pointer';btn.disabled=false;}
