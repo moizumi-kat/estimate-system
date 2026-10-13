@@ -857,7 +857,7 @@ def _set_code(name, vb, breaker='', ax=False):
     # ●=MCCB基本('') / ○=ELB / 遠方操作=AX。名称優先、無ければitemのbreaker/axフィールドで補完。
     _bk=str(breaker or ''); _bkU=_bk.upper()
     dev=''
-    if 'ELB' in U or '○' in s or '○' in _bk or 'ELB' in _bkU or 'ELCB' in _bkU or '漏電' in (_bk+s): dev='ELB'
+    if 'ELB' in U or 'ELR' in U or '○' in s or '○' in _bk or 'ELB' in _bkU or 'ELCB' in _bkU or 'ELR' in _bkU or '漏電' in (_bk+s): dev='ELB'
     if 'AX' in U or '遠方' in s or ax or '漏電アラ' in (_bk+s) or '漏電警報' in (_bk+s): dev=('ELB・AX' if dev=='ELB' else 'MCB・AX')
     code,conf,pick=_bunki_find(typ,kw,dev,volt)
     if code: return code,f'分岐回路 {typ} {pick}kW {volt}'
@@ -1029,6 +1029,12 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt='', breaker='', ax
                 _r=R(_mc[0],'○','盤頭の主幹(型式非定型)→M)端子/遮断器候補・型/容量は確認ゲート(既定=%s)'%byCode.get(_mc[0],{}).get('name','')[:16])
                 _r['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in _mc]
                 return _r
+    # --- 制御盤 分岐回路(L-S/スターデルタ/INV): 起動方式が読めればMCB/ELB個別選定より優先(#5)。---
+    # 名称に起動方式(L-S/スターデルタ/INV)+kWがあればモーター分岐回路=22-29系。meta=MCCB/ELB判定でも
+    # 分岐回路を優先(表参道6M-1排煙機「MCCB+ELR」が個別50133でなく分岐24042になるように)。●○/漏電→dev変種。
+    sc_code,sc_note=_set_code(name,vb,breaker,ax)
+    if sc_code: return R(sc_code,'○',sc_note)
+    if sc_code=='' and sc_note: return R('','△',sc_note)
     if meta['main'] in ('M)MCB','M)ELB','B)MCB','B)ELB','MCB','ELB'):
         # 分電盤の最終分岐(負荷VA表記+MCB/ELB明示・遮断器枠なし)はコンパクト分岐を優先判定。
         # ※_mcb_codeより先に判定(「280VA」等のVA数値をAF枠と誤解して誤コードを出すのを防ぐ)。
@@ -1065,11 +1071,6 @@ def refine(meta, cands, name, panel, prev_is_main=False, volt='', breaker='', ax
             _r['candidates']=[{'code':c,'name':byCode.get(c,{}).get('name',''),'volt':''} for c in _mc]
             return _r
         return R('','△','MCB/ELB 容量・盤種別要確認')
-    # --- 制御盤 分岐回路(L-S/スターデルタ/INV) 最優先 ---
-    # 回路種別＋kW＋●○が読めれば決定的にコード確定→○(回路種別の推定余地を残し安全側)。容量外は△。
-    sc_code,sc_note=_set_code(name,vb,breaker,ax)
-    if sc_code: return R(sc_code,'○',sc_note)
-    if sc_code=='' and sc_note: return R('','△',sc_note)
 
     # --- 高圧/低圧CT 変流比判定 ---
     if meta['main']=='CT' and meta['ratio']:
@@ -1390,7 +1391,9 @@ _PRO_MAP=[
  # THサーマルリレー(電動機過負荷)→TH-RY 73300(実見積書 六本木/城山で一致)。個別部品方式の制御盤前提。
  (r'(TH[-\s]?RY|THｻｰﾏﾙ|TH\s*ｻｰﾏﾙ|TH\s*サーマル|ｻｰﾏﾙﾘﾚ|サーマルリレー|熱動継電器)', '73300','THサーマルリレー'),
  # ELR漏電警報器(集合形・回路数不明は5回路を既定で要確認)。
- (r'(?<![A-Za-z])ELR(?![A-Za-z])|漏電警報器',                    '46410','ELR漏電警報器(集合形5回路・回路数要確認)'),
+ # 独立した集合形ELR(漏電警報器)のみ。「MCCB+ELR」等のブレーカー併記(+ELR)はモーター分岐の遮断器仕様
+ # なので除外(前に+/＋があるELRは対象外)→分岐回路(22-29系)選定へ委ねる(#5・表参道6M-1排煙機)。
+ (r'(?<![A-Za-z＋+])ELR(?![A-Za-z])|漏電警報器',                  '46410','ELR漏電警報器(集合形5回路・回路数要確認)'),
  (r'(?<![A-Za-z])TC(?![A-Za-z]).{0,6}トリップコイル|トリップコイル|ﾄﾘｯﾌﾟｺｲﾙ', '43390','TC=LBSトリップコイル'),
  # 盤付属品(負荷でなく盤内の標準小物)。名称が一意=負荷の換気扇(FE/FS 3φkW)等と衝突しないもののみ。
  # サーモスタット=盤内温度調節/警報用電源装置=警報回路電源。実見積書で全案件に計上され、従来は△行き止まりだった。
