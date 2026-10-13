@@ -25,6 +25,7 @@ import ezdxf
 from . import fromto_truth as ft
 from . import locator_map as LM
 from . import fixed_points
+from . import device_norm
 
 MULTI = {'ﾏﾙﾁ', 'マルチ', '伝送', 'ﾀｲﾏ', 'タイマ', 'T/U', '中欠用', '表示用'}
 
@@ -45,13 +46,14 @@ def _seq_devices(paths):
             if dev:
                 bases.add(dev)
                 syms.add(f'{dev}-{no}' if no else dev)
+                syms.add(device_norm.normalize_sym(dev, no))   # 正規化キーも登録
     return bases, syms
 
 
 def classify_sym(sym, bases, syms, loc):
     """機器記号 → 差分種類。loc: {ロケーター文字: 実機器}。"""
     base = sym.split('-')[0]
-    if sym in syms or base in bases:
+    if sym in syms or device_norm.normalize_sym(sym) in syms or base in bases:
         return 'in_dxf'
     act = loc.get(base) or loc.get(sym)
     if act:
