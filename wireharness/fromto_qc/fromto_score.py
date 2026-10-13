@@ -26,15 +26,35 @@ from . import edge_trace
 from . import main_circuit
 from . import fixed_wiring
 from . import locator_map as LM
+from . import locator_assign as LA
 from . import device_norm as dn
 
 
 def locator_resolution(seiban_dir):
-    """{ロケーター文字(大文字): 設計実機器sym(大文字)}。凡例＋欠落は④ピン照合。"""
+    """{ロケーター表記(大文字): 設計実機器sym(大文字)}。
+    主軸は locator_assign(内部配置図D001の実機器＋位置から我々が決定的に付番)。
+    ④が使う表記(基前置 '2-A' / 素letter 'A')の双方を引けるよう登録する。
+    D001に実機器名が無い等で付番できない場合は、従来(凡例＋ピン照合)にフォールバック。"""
+    layout = (glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF')) +
+              glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.dxf')) +
+              glob.glob(os.path.join(seiban_dir, '図面データ_*G0*.DXF')) +
+              glob.glob(os.path.join(seiban_dir, '図面データ_*G0*.dxf')))
+    m = {}
+    a = LA.assign(layout)
+    bare = collections.Counter()
+    for loc, actual in a['by_locator'].items():
+        m[loc.upper()] = actual.upper()
+        bare[loc.split('-')[-1].upper()] += 1
+    for loc, actual in a['by_locator'].items():           # 素letterも(一意な時のみ)
+        lt = loc.split('-')[-1].upper()
+        if bare[lt] == 1:
+            m.setdefault(lt, actual.upper())
+    if m:
+        return m
+    # --- フォールバック: 凡例＋④ピン照合 ---
     dcts = glob.glob(os.path.join(seiban_dir, '機器相番号_*.dxf'))
     seq = (glob.glob(os.path.join(seiban_dir, '図面データ_*F*.DXF')) +
            glob.glob(os.path.join(seiban_dir, '図面データ_*F*.dxf')))
-    m = {}
     for p in dcts:
         for loc, act in LM.extract_pairs(p):
             _, lt = LM._split_locator(loc)
@@ -59,9 +79,9 @@ def locator_resolution(seiban_dir):
             for ins in doc.modelspace().query('INSERT'):
                 if not ins.attribs:
                     continue
-                a = {k.dxf.tag: (k.dxf.text or '').strip() for k in ins.attribs}
-                sym = f"{a.get('DEVICE','')}{a.get('DEVICE1','')}".upper()
-                for tt in (a.get('TERMINAL1', ''), a.get('TERMINAL2', '')):
+                a2 = {k.dxf.tag: (k.dxf.text or '').strip() for k in ins.attribs}
+                sym = f"{a2.get('DEVICE','')}{a2.get('DEVICE1','')}".upper()
+                for tt in (a2.get('TERMINAL1', ''), a2.get('TERMINAL2', '')):
                     for tok in re.findall(r'\d+', tt):
                         cand[sym].add(tok)
         for lt, (sym, _conf) in LM.resolve_by_terminals(letter_pins, cand).items():
