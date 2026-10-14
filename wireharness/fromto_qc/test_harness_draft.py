@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""harness_draft の統合・区分・重複排除ロジックの固定テスト(DXF非依存)。"""
+"""harness_draft の確度ランク(相互裏取り)・重複排除の固定テスト(DXF非依存)。"""
 from . import harness_draft as hd
 
 
@@ -11,31 +11,10 @@ def _patch(mc, fw, et):
     hd._seq = lambda d: ['y']
 
 
-def test_tiers_and_dedup():
+def test_corroboration_is_high():
     orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,
             hd.edge_trace.trace_edges, hd._layout, hd._seq)
-    _patch(
-        mc=[{'from': 'LUG:', 'to': 'MCCB-105:1', 'phase': 'U', 'confidence': '確定'},
-            {'from': 'MCCB-105:2', 'to': 'TB-1:105U', 'phase': 'U', 'confidence': '確定'}],
-        fw=[{'from': 'TB-1:1R', 'to': 'SPD-分離器1:1 上', 'phase': 'R'}],
-        et={frozenset((('51-101', '97'), ('51-101', '95')))},
-    )
-    try:
-        d = hd.build('seiban')
-        assert d['summary']['高信頼'] == 1, d['summary']     # LUG→遮断器のみ高信頼
-        assert d['summary']['候補'] == 1                      # SPD
-        assert d['summary']['要確認'] == 2                    # TB相＋制御トレース
-        tiers = {w['tier'] for w in d['wires']}
-        assert tiers == {'高信頼', '候補', '要確認'}
-    finally:
-        (hd.main_circuit.generate, hd.fixed_wiring.generate,
-         hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
-
-
-def test_dedup_prefers_higher_tier():
-    orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,
-            hd.edge_trace.trace_edges, hd._layout, hd._seq)
-    # 同じ配線が main(高信頼) と edge_trace(要確認) に出たら高信頼を残す
+    # 同じ配線を main と edge_trace が出す → 相互裏取り=確度:高
     _patch(
         mc=[{'from': 'LUG:', 'to': 'MCCB-105:1'}],
         fw=[],
@@ -44,12 +23,32 @@ def test_dedup_prefers_higher_tier():
     try:
         d = hd.build('s')
         assert len(d['wires']) == 1
-        assert d['wires'][0]['tier'] == '高信頼'
+        w = d['wires'][0]
+        assert w['tier'] == hd.TIER_HI, w
+        assert set(w['sources']) == {'main_circuit', 'edge_trace'}
+    finally:
+        (hd.main_circuit.generate, hd.fixed_wiring.generate,
+         hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
+
+
+def test_single_source_tiers():
+    orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,
+            hd.edge_trace.trace_edges, hd._layout, hd._seq)
+    _patch(
+        mc=[{'from': 'LUG:', 'to': 'MCCB-105:1'}],          # 中(ルール単独)
+        fw=[{'from': 'TB-1:1R', 'to': 'SPD-分離器1:1 上'}],  # 中
+        et={frozenset((('51-101', '97'), ('51-101', '95')))},  # 精査(トレース単独)
+    )
+    try:
+        d = hd.build('s')
+        assert d['summary'][hd.TIER_MID] == 2, d['summary']
+        assert d['summary'][hd.TIER_LOW] == 1, d['summary']
+        assert d['summary'][hd.TIER_HI] == 0
     finally:
         (hd.main_circuit.generate, hd.fixed_wiring.generate,
          hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
 
 
 if __name__ == '__main__':
-    test_tiers_and_dedup(); test_dedup_prefers_higher_tier()
+    test_corroboration_is_high(); test_single_source_tiers()
     print('harness_draft tests: OK')

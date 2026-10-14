@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-"""統合ハーネスFrom-Toドラフト生成(半自動モデル: 確実部分＋要確認)。
+"""統合 細物ハーネス From-To ドラフト生成(半自動モデル)。
 
-◎誤答ゼロ方針: 幾何だけでは全数の完全自動は難しいため、確実に生成できる部分を『高信頼』で、
-残りを『要確認』で出す。最終判断は人(確認UI)。人の作業は『白紙から作成』→『ドラフトの確認』に
-縮む。各配線に出所(source)と信頼区分(tier)を付す。
+対象は細物(≤5.5sq=2人目・3人目の工程)。太物(≥8sq=1人目)は別工程(⑤⑥)で対象外。
+幾何だけでは全数の完全自動は難しいため、生成した配線を『確度』でランク付けして出し、
+最終判断は人(確認UI)で行う=◎誤答ゼロは人の確認ゲートで担保。確度は正誤の保証ではなく、
+確認の優先順位(確度:高から確認すれば労力最小)。
 
-信頼区分(10製番の④で適合率を実測し設定):
-  高信頼 … LUG→遮断器(主回路入力, 適合率89%・TB台番号に依存しない)
-  候補  … SPD・分離器の定型分岐(制御盤で高一致・製番により未配線もあるため人が採否)
-  要確認 … TB台番号/相・接地(物理台番号の体系差で突合が不安定)、制御トレース(端子名が不確実)
-各配線 dict: {from,to,source,tier,phase?,confidence?}。build() で統合・重複排除して返す。
+確度(10製番の④で適合率を実測し設定):
+  確度:高   … 複数の独立手法が同一配線を生成(相互裏取り)。最も確からしい。
+  確度:中   … 単一のルール生成(主回路 LUG→遮断器→TB相, SPD分離器の定型分岐)。
+              製番構造(多盤・母線)で外れることがあるため人が採否。
+  確度:精査 … 実配線トレース単独(端子名が不確実)・TB台番号/接地(物理体系差)。重点確認。
+各配線 dict: {from,to,sources(list),tier,phase?}。build() で統合・重複排除して返す。
 """
 import glob
 import os
@@ -18,6 +20,10 @@ from . import main_circuit
 from . import fixed_wiring
 from . import edge_trace
 from . import device_norm as dn
+
+TIER_HI = '確度:高'
+TIER_MID = '確度:中'
+TIER_LOW = '確度:精査'
 
 
 def _layout(seiban_dir):
@@ -34,37 +40,43 @@ def _seq(seiban_dir):
             glob.glob(os.path.join(seiban_dir, '図面データ_*F*.dxf')))
 
 
-def _tier_main(w):
-    """main_circuit の1配線 → 信頼区分。LUG→遮断器は高信頼、TB相/接地は要確認。"""
+_RANK = {TIER_HI: 0, TIER_MID: 1, TIER_LOW: 2}
+
+
+def _main_tier(w):
+    """main_circuit 1配線の単独確度。LUG→遮断器=中(TB台番号非依存)、TB相/接地=精査(体系差)。"""
     fr, to = w.get('from', ''), w.get('to', '')
     if fr.startswith('LUG') or to.startswith('LUG'):
-        return '高信頼'
-    return '要確認'          # TB相・接地はTB台番号の体系差で不安定
+        return TIER_MID
+    return TIER_LOW
+
+
+def _key(fr, to):
+    return frozenset((dn.canon(fr.split(':', 1)[0]) + '|' + (fr.split(':', 1) + [''])[1],
+                      dn.canon(to.split(':', 1)[0]) + '|' + (to.split(':', 1) + [''])[1]))
 
 
 def build(seiban_dir):
-    """製番フォルダ → 統合ドラフト。戻り: {'wires':[...], 'summary':{区分:件数}}。
-    各 wire: {'from','to','source','tier','phase'?,'confidence'?}。重複は高信頼を優先して排除。"""
+    """製番フォルダ → 統合ドラフト。戻り: {'wires':[...], 'summary':{確度:件数}}。
+    各 wire: {'from','to','sources'(list),'tier','phase'?}。
+    確度: 複数ソース一致=高。単独は内容別(LUG→遮断器/SPD=中, TB相/接地/トレース=精査)。"""
     layout = _layout(seiban_dir)
     seq = _seq(seiban_dir)
-    out = {}        # canon((from,to)) -> wire(高信頼優先)
+    acc = {}        # key -> {'from','to','sources':set,'tiers':set,'phase'}
 
-    def add(fr, to, source, tier, **extra):
-        key = frozenset((dn.canon(fr.split(':', 1)[0]) + '|' + (fr.split(':', 1) + [''])[1],
-                         dn.canon(to.split(':', 1)[0]) + '|' + (to.split(':', 1) + [''])[1]))
-        rank = {'高信頼': 0, '候補': 1, '要確認': 2}
-        w = {'from': fr, 'to': to, 'source': source, 'tier': tier, **extra}
-        if key not in out or rank[tier] < rank[out[key]['tier']]:
-            out[key] = w
+    def add(fr, to, source, base_tier, **extra):
+        k = _key(fr, to)
+        if k not in acc:
+            acc[k] = {'from': fr, 'to': to, 'sources': set(), 'tiers': set(), **extra}
+        acc[k]['sources'].add(source)
+        acc[k]['tiers'].add(base_tier)
+        for kk, vv in extra.items():
+            acc[k].setdefault(kk, vv)
 
-    # 主回路(LUG→遮断器=高信頼 / TB相・接地=要確認)
     for w in main_circuit.generate(layout):
-        add(w['from'], w['to'], 'main_circuit', _tier_main(w),
-            phase=w.get('phase'), confidence=w.get('confidence'))
-    # SPD分離器の定型分岐(候補: 制御盤で高一致・採否は人)
+        add(w['from'], w['to'], 'main_circuit', _main_tier(w), phase=w.get('phase'))
     for w in fixed_wiring.generate(layout):
-        add(w['from'], w['to'], 'fixed_wiring', '候補', phase=w.get('phase'))
-    # 制御トレース(要確認: 端子名が不確実。端子名'?'は出さない)
+        add(w['from'], w['to'], 'fixed_wiring', TIER_MID, phase=w.get('phase'))
     for p in seq:
         try:
             edges, _ = edge_trace.trace_edges(p)
@@ -72,19 +84,28 @@ def build(seiban_dir):
             continue
         for e in edges:
             (da, ta), (db, tb) = tuple(e)
-            if ta == '?' or tb == '?':
+            if ta == '?' or tb == '?':         # 端子名不明は出さない
                 continue
-            add(f'{da}:{ta}', f'{db}:{tb}', 'edge_trace', '要確認')
+            add(f'{da}:{ta}', f'{db}:{tb}', 'edge_trace', TIER_LOW)
 
-    wires = list(out.values())
-    summary = {'高信頼': 0, '候補': 0, '要確認': 0}
-    for w in wires:
-        summary[w['tier']] += 1
+    wires = []
+    summary = {TIER_HI: 0, TIER_MID: 0, TIER_LOW: 0}
+    for v in acc.values():
+        srcs = sorted(v['sources'])
+        if len(srcs) >= 2:
+            tier = TIER_HI                              # 複数手法が一致=相互裏取り
+        else:
+            tier = min(v['tiers'], key=lambda t: _RANK[t])   # 単独は最良の内容別確度
+        w = {'from': v['from'], 'to': v['to'], 'sources': srcs, 'tier': tier}
+        if v.get('phase'):
+            w['phase'] = v['phase']
+        wires.append(w)
+        summary[tier] += 1
     return {'wires': wires, 'summary': summary}
 
 
 def to_rows(draft):
-    """ドラフト → 表示用の行(区分順)。[(tier, source, from, to)]。"""
-    order = {'高信頼': 0, '候補': 1, '要確認': 2}
-    rows = sorted(draft['wires'], key=lambda w: (order[w['tier']], w['source']))
-    return [(w['tier'], w['source'], w['from'], w['to']) for w in rows]
+    """ドラフト → 表示用の行(確度順)。[(tier, sources, from, to)]。"""
+    order = {TIER_HI: 0, TIER_MID: 1, TIER_LOW: 2}
+    rows = sorted(draft['wires'], key=lambda w: (order[w['tier']], ','.join(w['sources'])))
+    return [(w['tier'], ','.join(w['sources']), w['from'], w['to']) for w in rows]
