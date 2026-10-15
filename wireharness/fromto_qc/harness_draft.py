@@ -109,3 +109,64 @@ def to_rows(draft):
     order = {TIER_HI: 0, TIER_MID: 1, TIER_LOW: 2}
     rows = sorted(draft['wires'], key=lambda w: (order[w['tier']], ','.join(w['sources'])))
     return [(w['tier'], ','.join(w['sources']), w['from'], w['to']) for w in rows]
+
+
+def to_csv(draft, path):
+    """ドラフト → CSV(確度順)。列: 確度,ソース,From,To。cp932(Excel)で保存。"""
+    import csv
+    with open(path, 'w', encoding='cp932', errors='replace', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['確度', 'ソース', 'From', 'To'])
+        for tier, src, fr, to in to_rows(draft):
+            w.writerow([tier, src, fr, to])
+    return path
+
+
+_TIER_STYLE = {
+    TIER_HI:  ('#1b7f3b', '#e6f4ea'),   # 緑: 複数手法一致
+    TIER_MID: ('#9a6400', '#fdf3e0'),   # 橙: 単一ルール生成
+    TIER_LOW: ('#7a2d2d', '#f6e9e9'),   # 赤茶: 要精査
+}
+
+
+def to_html(draft, path, seiban=''):
+    """ドラフト → 確度で色分けした人間レビュー用HTML(確度順)。確認UIの土台(閲覧)。
+
+    ◎誤答ゼロの運用: 確度:高から確認すれば労力最小。各行はソース(生成手法)も表示し、
+    人が採否できるよう From/To を並べる。配線本数と確度内訳を先頭に出す。"""
+    import html as _h
+    s = draft['summary']
+    total = sum(s.values())
+    head_cells = ''.join(
+        f'<span class="chip" style="color:{_TIER_STYLE[t][0]};background:{_TIER_STYLE[t][1]}">'
+        f'{t}: {s.get(t, 0)}</span>'
+        for t in (TIER_HI, TIER_MID, TIER_LOW))
+    body = []
+    for tier, src, fr, to in to_rows(draft):
+        fg, bg = _TIER_STYLE.get(tier, ('#333', '#fff'))
+        body.append(
+            f'<tr style="background:{bg}"><td style="color:{fg};font-weight:bold">{_h.escape(tier)}</td>'
+            f'<td class="src">{_h.escape(src)}</td>'
+            f'<td>{_h.escape(fr)}</td><td class="arr">→</td><td>{_h.escape(to)}</td></tr>')
+    doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>ハーネスFrom-Toドラフト {_h.escape(seiban)}</title><style>
+ body{{font-family:'Noto Sans JP','IPAGothic',sans-serif;margin:18px;color:#111;font-size:13px}}
+ h1{{font-size:17px;margin:0 0 4px}} .sub{{color:#555;margin:0 0 12px}}
+ .chip{{display:inline-block;padding:3px 10px;margin-right:8px;border-radius:12px;font-weight:bold}}
+ table{{border-collapse:collapse;width:100%;margin-top:10px}}
+ th,td{{border:1px solid #ddd;padding:4px 8px;text-align:left}}
+ th{{background:#1f3b63;color:#fff;position:sticky;top:0}}
+ td.src{{color:#555;font-size:11px}} td.arr{{text-align:center;color:#888}}
+ .note{{font-size:11px;color:#666;margin-top:10px}}</style></head><body>
+<h1>ハーネス From-To ドラフト（半自動・要確認）</h1>
+<p class="sub">製番: {_h.escape(seiban)}　／　生成 {total} 本</p>
+<div>{head_cells}</div>
+<table><thead><tr><th>確度</th><th>ソース</th><th>From</th><th></th><th>To</th></tr></thead>
+<tbody>{''.join(body)}</tbody></table>
+<p class="note">確度:高=複数手法が一致(相互裏取り)／確度:中=単一ルール生成(主回路・SPD分離器)／
+確度:精査=実配線トレース単独・TB台番号/接地。◎誤答ゼロ: 確定は人の確認で担保。
+確度:高→中→精査 の順で確認すると労力最小。</p>
+</body></html>"""
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(doc)
+    return path

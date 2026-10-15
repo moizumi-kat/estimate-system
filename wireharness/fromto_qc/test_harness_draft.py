@@ -49,6 +49,25 @@ def test_single_source_tiers():
          hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
 
 
+def test_to_csv_and_html(tmp_path=None):
+    import os
+    import tempfile
+    draft = {
+        'wires': [
+            {'from': 'LUG:', 'to': 'MCCB-105:1', 'sources': ['main_circuit'], 'tier': hd.TIER_MID},
+            {'from': 'FX1:13', 'to': 'CX101:14', 'sources': ['edge_trace'], 'tier': hd.TIER_LOW},
+        ],
+        'summary': {hd.TIER_HI: 0, hd.TIER_MID: 1, hd.TIER_LOW: 1},
+    }
+    d = tempfile.mkdtemp()
+    cp = hd.to_csv(draft, os.path.join(d, 't.csv'))
+    hp = hd.to_html(draft, os.path.join(d, 't.html'), seiban='TEST-1')
+    csv_txt = open(cp, encoding='cp932').read()
+    assert '確度' in csv_txt and 'MCCB-105:1' in csv_txt
+    html_txt = open(hp, encoding='utf-8').read()
+    assert 'TEST-1' in html_txt and hd.TIER_MID in html_txt and 'FX1:13' in html_txt
+
+
 if __name__ == '__main__':
-    test_corroboration_is_high(); test_single_source_tiers()
+    test_corroboration_is_high(); test_single_source_tiers(); test_to_csv_and_html()
     print('harness_draft tests: OK')
