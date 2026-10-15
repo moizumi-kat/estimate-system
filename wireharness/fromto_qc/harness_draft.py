@@ -23,6 +23,7 @@ from . import edge_trace
 from . import device_norm as dn
 from . import tb_strip
 from . import seiban_config
+from . import cross_learn
 
 TIER_HI = '確度:高'
 TIER_MID = '確度:中'
@@ -89,11 +90,21 @@ def build(seiban_dir, seiban=None):
         confirmed_pins = seiban_config.pin_confirm(seiban)  # {'機器:a?': 確認済ピン}
     except Exception:
         confirmed_pins = {}
+    try:
+        learned_pins = cross_learn.learned_pins()           # {(機器型,マーカー): ピン} 横展開
+    except Exception:
+        learned_pins = {}
 
     def _pin(dev, term):
-        """接点マーカー(a?/b?)を確認済ピンに置換。戻り: (端子, 確認済か)。"""
+        """接点マーカー(a?/b?)を置換。確認済(この製番)＞横展開(複数製番で一致)＞未確認。
+        戻り: (端子, 状態 'confirmed'/'learned'/None)。"""
         v = confirmed_pins.get(f'{dev}:{term}')
-        return (v, True) if v else (term, False)
+        if v:
+            return v, 'confirmed'
+        lv = learned_pins.get((cross_learn.device_type(dev), term))
+        if lv:
+            return lv, 'learned'
+        return term, None
     acc = {}        # key -> {'from','to','sources':set,'tiers':set,'phase'}
 
     def add(fr, to, source, base_tier, **extra):
@@ -119,21 +130,24 @@ def build(seiban_dir, seiban=None):
             edges, _ = edge_trace.trace_edges(p)
         except Exception:
             continue
+        _PRIO = {'confirmed': 2, 'learned': 1, None: 0}
         for e in edges:
             ends = list(tuple(e))
-            cflag = False                           # 確認済ピンを適用したか
+            status = None                           # 適用したピンの最強状態
             res = []
             for (d, t) in ends:
-                nt, c = _pin(d, t)
+                nt, st = _pin(d, t)
                 res.append((d, nt))
-                cflag = cflag or c
+                if _PRIO[st] > _PRIO[status]:
+                    status = st
             ends = res
             qi = [i for i in (0, 1) if ends[i][1] == '?']
             if not qi:                              # 両端とも端子名あり=通常の渡り
                 (da, ta), (db, tb) = ends
-                add(f'{da}:{ta}', f'{db}:{tb}',
-                    'confirmed' if cflag else 'edge_trace',
-                    TIER_HI if cflag else TIER_LOW)
+                src, tier = ({'confirmed': ('confirmed', TIER_HI),
+                              'learned': ('learned', TIER_MID)}
+                             .get(status, ('edge_trace', TIER_LOW)))
+                add(f'{da}:{ta}', f'{db}:{tb}', src, tier)
             elif len(qi) == 1:
                 q, o = qi[0], 1 - qi[0]
                 # 片端が TB で台番号のみ未定、相手端は解決済み → 可視化(台番号は2人目が割当)。
