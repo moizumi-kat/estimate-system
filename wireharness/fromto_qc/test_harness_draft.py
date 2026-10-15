@@ -102,6 +102,25 @@ def test_learning_loop_confirmed_tb():
          hd.edge_trace.trace_edges, hd._layout, hd._seq, hd.seiban_config.tb_assign) = orig
 
 
+def test_learning_loop_confirmed_pin():
+    # 確認済ピン(seiban_config.pin_confirm)があれば a?/b? を自動置換=確度:高。
+    orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,
+            hd.edge_trace.trace_edges, hd._layout, hd._seq,
+            hd.seiban_config.tb_assign, hd.seiban_config.pin_confirm)
+    _patch(mc=[], fw=[], et={frozenset((('52-101', 'a?'), ('CX-101', '14')))})
+    hd.seiban_config.tb_assign = lambda s: {}
+    hd.seiban_config.pin_confirm = lambda s: {'52-101:a?': '13'}
+    try:
+        d = hd.build('s')
+        w = [x for x in d['wires'] if '52-101:13' in (x['from'], x['to'])]
+        assert w and w[0]['tier'] == hd.TIER_HI and 'confirmed' in w[0]['sources']
+        assert not any('a?' in x['from'] + x['to'] for x in d['wires'])
+    finally:
+        (hd.main_circuit.generate, hd.fixed_wiring.generate,
+         hd.edge_trace.trace_edges, hd._layout, hd._seq,
+         hd.seiban_config.tb_assign, hd.seiban_config.pin_confirm) = orig
+
+
 def test_both_ends_unknown_dropped():
     # 両端'?'(例: 動力用多接点同士)は出さない。
     orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,

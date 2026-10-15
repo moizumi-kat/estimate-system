@@ -85,6 +85,15 @@ def build(seiban_dir, seiban=None):
         confirmed_tb = seiban_config.tb_assign(seiban)     # {回路: 確認済TB台番号}
     except Exception:
         confirmed_tb = {}
+    try:
+        confirmed_pins = seiban_config.pin_confirm(seiban)  # {'機器:a?': 確認済ピン}
+    except Exception:
+        confirmed_pins = {}
+
+    def _pin(dev, term):
+        """接点マーカー(a?/b?)を確認済ピンに置換。戻り: (端子, 確認済か)。"""
+        v = confirmed_pins.get(f'{dev}:{term}')
+        return (v, True) if v else (term, False)
     acc = {}        # key -> {'from','to','sources':set,'tiers':set,'phase'}
 
     def add(fr, to, source, base_tier, **extra):
@@ -112,10 +121,19 @@ def build(seiban_dir, seiban=None):
             continue
         for e in edges:
             ends = list(tuple(e))
+            cflag = False                           # 確認済ピンを適用したか
+            res = []
+            for (d, t) in ends:
+                nt, c = _pin(d, t)
+                res.append((d, nt))
+                cflag = cflag or c
+            ends = res
             qi = [i for i in (0, 1) if ends[i][1] == '?']
             if not qi:                              # 両端とも端子名あり=通常の渡り
                 (da, ta), (db, tb) = ends
-                add(f'{da}:{ta}', f'{db}:{tb}', 'edge_trace', TIER_LOW)
+                add(f'{da}:{ta}', f'{db}:{tb}',
+                    'confirmed' if cflag else 'edge_trace',
+                    TIER_HI if cflag else TIER_LOW)
             elif len(qi) == 1:
                 q, o = qi[0], 1 - qi[0]
                 # 片端が TB で台番号のみ未定、相手端は解決済み → 可視化(台番号は2人目が割当)。
