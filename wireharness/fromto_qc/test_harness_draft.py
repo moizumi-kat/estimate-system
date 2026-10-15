@@ -66,6 +66,27 @@ def test_tb_pending_surfaced():
          hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
 
 
+def test_circuit_of():
+    assert hd._circuit_of('52-101') == '101'
+    assert hd._circuit_of('86X-103') == '103'
+    assert hd._circuit_of('GL-102') == '102'
+    assert hd._circuit_of('MCCB-1') is None
+    assert hd._circuit_of('FX-1') is None
+
+
+def test_tb_pending_circuit_grouping():
+    # TB台番号は回路でグルーピング(事例規則)。機器端に回路があれば 'TB:回路NNN'。
+    orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,
+            hd.edge_trace.trace_edges, hd._layout, hd._seq)
+    _patch(mc=[], fw=[], et={frozenset((('52-101', '73'), ('TB', '?')))})
+    try:
+        d = hd.build('s')
+        assert any(w['to'] == 'TB:回路101' for w in d['wires'])
+    finally:
+        (hd.main_circuit.generate, hd.fixed_wiring.generate,
+         hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
+
+
 def test_both_ends_unknown_dropped():
     # 両端'?'(例: 動力用多接点同士)は出さない。
     orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,

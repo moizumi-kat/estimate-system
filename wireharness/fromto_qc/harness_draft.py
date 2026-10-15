@@ -15,6 +15,7 @@
 """
 import glob
 import os
+import re
 
 from . import main_circuit
 from . import fixed_wiring
@@ -41,6 +42,15 @@ def _seq(seiban_dir):
 
 
 _RANK = {TIER_HI: 0, TIER_MID: 1, TIER_LOW: 2}
+
+
+def _circuit_of(sym):
+    """機器記号から回路番号(3桁 or AL系)を取り出す。52-101→'101', 86X-103→'103', GL-102→'102'。
+    事例分析: 制御配線は回路ごとに同じTB台へ載る(回路順に連番の台)。台番号の絶対値は製番依存で
+    確定できないが、回路でのグルーピングは確実=レビューを回路単位にまとめられる。"""
+    s = str(sym or '')
+    m = re.search(r'(AL\d+|\d{3})(?!.*\d)', s)      # 末尾寄りの3桁 or AL番号
+    return m.group(1) if m else None
 
 
 def _main_tier(w):
@@ -93,7 +103,11 @@ def build(seiban_dir):
                 # 片端が TB で台番号のみ未定、相手端は解決済み → 可視化(台番号は2人目が割当)。
                 # ◎誤答ゼロ: TB台番号は図面に無いため確定せず『要確認』として出す。
                 if str(ends[q][0]).upper().startswith('TB'):
-                    add(f'{ends[o][0]}:{ends[o][1]}', 'TB:台番号要確認',
+                    # 回路でグルーピング(事例分析の規則)。回路が分かれば『TB:回路NNN』、
+                    # 不明なら『TB:台番号要確認』。台番号の絶対値は製番依存のため確定しない。
+                    circ = _circuit_of(ends[o][0])
+                    tb_to = f'TB:回路{circ}' if circ else 'TB:台番号要確認'
+                    add(f'{ends[o][0]}:{ends[o][1]}', tb_to,
                         'edge_trace', TIER_LOW, tb_pending=True)
                 # 非TBの'?'(動力用多接点など)は確定できないので出さない
 
