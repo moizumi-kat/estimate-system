@@ -49,6 +49,35 @@ def test_single_source_tiers():
          hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
 
 
+def test_tb_pending_surfaced():
+    # 片端TBが'?'・相手端は解決済み → 'TB:台番号要確認'で可視化(確度:精査)。
+    orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,
+            hd.edge_trace.trace_edges, hd._layout, hd._seq)
+    _patch(mc=[], fw=[],
+           et={frozenset((('FX1', '13'), ('TB', '?')))})
+    try:
+        d = hd.build('s')
+        tos = {w['to'] for w in d['wires']}
+        froms = {w['from'] for w in d['wires']}
+        assert 'TB:台番号要確認' in tos and 'FX1:13' in froms
+        assert all(w['tier'] == hd.TIER_LOW for w in d['wires'])
+    finally:
+        (hd.main_circuit.generate, hd.fixed_wiring.generate,
+         hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
+
+
+def test_both_ends_unknown_dropped():
+    # 両端'?'(例: 動力用多接点同士)は出さない。
+    orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,
+            hd.edge_trace.trace_edges, hd._layout, hd._seq)
+    _patch(mc=[], fw=[], et={frozenset((('52-101', '?'), ('TB', '?')))})
+    try:
+        assert hd.build('s')['wires'] == []
+    finally:
+        (hd.main_circuit.generate, hd.fixed_wiring.generate,
+         hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
+
+
 def test_to_csv_and_html(tmp_path=None):
     import os
     import tempfile

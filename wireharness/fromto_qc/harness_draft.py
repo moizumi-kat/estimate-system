@@ -83,10 +83,19 @@ def build(seiban_dir):
         except Exception:
             continue
         for e in edges:
-            (da, ta), (db, tb) = tuple(e)
-            if ta == '?' or tb == '?':         # 端子名不明は出さない
-                continue
-            add(f'{da}:{ta}', f'{db}:{tb}', 'edge_trace', TIER_LOW)
+            ends = list(tuple(e))
+            qi = [i for i in (0, 1) if ends[i][1] == '?']
+            if not qi:                              # 両端とも端子名あり=通常の渡り
+                (da, ta), (db, tb) = ends
+                add(f'{da}:{ta}', f'{db}:{tb}', 'edge_trace', TIER_LOW)
+            elif len(qi) == 1:
+                q, o = qi[0], 1 - qi[0]
+                # 片端が TB で台番号のみ未定、相手端は解決済み → 可視化(台番号は2人目が割当)。
+                # ◎誤答ゼロ: TB台番号は図面に無いため確定せず『要確認』として出す。
+                if str(ends[q][0]).upper().startswith('TB'):
+                    add(f'{ends[o][0]}:{ends[o][1]}', 'TB:台番号要確認',
+                        'edge_trace', TIER_LOW, tb_pending=True)
+                # 非TBの'?'(動力用多接点など)は確定できないので出さない
 
     wires = []
     summary = {TIER_HI: 0, TIER_MID: 0, TIER_LOW: 0}
