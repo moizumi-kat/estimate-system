@@ -22,6 +22,7 @@ from . import fixed_wiring
 from . import edge_trace
 from . import device_norm as dn
 from . import tb_strip
+from . import seiban_config
 
 TIER_HI = '確度:高'
 TIER_MID = '確度:中'
@@ -72,12 +73,18 @@ def _key(fr, to):
                       dn.canon(to.split(':', 1)[0]) + '|' + (to.split(':', 1) + [''])[1]))
 
 
-def build(seiban_dir):
+def build(seiban_dir, seiban=None):
     """製番フォルダ → 統合ドラフト。戻り: {'wires':[...], 'summary':{確度:件数}}。
     各 wire: {'from','to','sources'(list),'tier','phase'?}。
-    確度: 複数ソース一致=高。単独は内容別(LUG→遮断器/SPD=中, TB相/接地/トレース=精査)。"""
+    確度: 人の確認済 or 複数ソース一致=高。単独は内容別(LUG→遮断器/SPD=中, TB相/接地/トレース=精査)。
+    seiban: 確認済設定(seiban_config)を引くキー。未指定ならフォルダ名を使う(学習ループ)。"""
     layout = _layout(seiban_dir)
     seq = _seq(seiban_dir)
+    seiban = seiban or os.path.basename(seiban_dir.rstrip('/'))
+    try:
+        confirmed_tb = seiban_config.tb_assign(seiban)     # {回路: 確認済TB台番号}
+    except Exception:
+        confirmed_tb = {}
     acc = {}        # key -> {'from','to','sources':set,'tiers':set,'phase'}
 
     def add(fr, to, source, base_tier, **extra):
@@ -119,11 +126,17 @@ def build(seiban_dir):
                     # 絶対台番号は tb_strip 予測に律速され未確定のため、誤答ゼロを優先し数字は
                     # From-To に入れない。参考として主回路台予測を tb_hint に保持(表示は任意)。
                     circ = _circuit_of(ends[o][0])
-                    tb_to = f'TB:回路{circ}' if circ else 'TB:台番号要確認'
-                    hint = strip_map.get(circ) if circ else None
-                    add(f'{ends[o][0]}:{ends[o][1]}', tb_to,
-                        'edge_trace', TIER_LOW, tb_pending=True,
-                        tb_hint=(f'主回路台≈{hint}' if hint else None))
+                    conf_blk = confirmed_tb.get(circ) if circ else None
+                    if conf_blk:
+                        # 学習ループ: 人が確認済の台番号を自動反映(確度:高)。
+                        add(f'{ends[o][0]}:{ends[o][1]}', f'TB-{conf_blk}:回路{circ}',
+                            'confirmed', TIER_HI, tb_pending=True)
+                    else:
+                        tb_to = f'TB:回路{circ}' if circ else 'TB:台番号要確認'
+                        hint = strip_map.get(circ) if circ else None
+                        add(f'{ends[o][0]}:{ends[o][1]}', tb_to,
+                            'edge_trace', TIER_LOW, tb_pending=True,
+                            tb_hint=(f'主回路台≈{hint}' if hint else None))
                 # 非TBの'?'(動力用多接点など)は確定できないので出さない
 
     wires = []

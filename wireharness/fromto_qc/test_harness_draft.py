@@ -87,6 +87,21 @@ def test_tb_pending_circuit_grouping():
          hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
 
 
+def test_learning_loop_confirmed_tb():
+    # 確認済の台番号(seiban_config.tb_assign)があれば自動反映=確度:高。
+    orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,
+            hd.edge_trace.trace_edges, hd._layout, hd._seq, hd.seiban_config.tb_assign)
+    _patch(mc=[], fw=[], et={frozenset((('52-101', '73'), ('TB', '?')))})
+    hd.seiban_config.tb_assign = lambda s: {'101': '12'}
+    try:
+        d = hd.build('s')
+        w = [x for x in d['wires'] if x['to'] == 'TB-12:回路101']
+        assert w and w[0]['tier'] == hd.TIER_HI and 'confirmed' in w[0]['sources']
+    finally:
+        (hd.main_circuit.generate, hd.fixed_wiring.generate,
+         hd.edge_trace.trace_edges, hd._layout, hd._seq, hd.seiban_config.tb_assign) = orig
+
+
 def test_both_ends_unknown_dropped():
     # 両端'?'(例: 動力用多接点同士)は出さない。
     orig = (hd.main_circuit.generate, hd.fixed_wiring.generate,
