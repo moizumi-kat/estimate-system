@@ -114,6 +114,30 @@ def test_both_ends_unknown_dropped():
          hd.edge_trace.trace_edges, hd._layout, hd._seq) = orig
 
 
+def test_open_confirmations():
+    draft = {'wires': [
+        {'from': 'FX1:13', 'to': 'TB:回路101', 'sources': ['edge_trace'], 'tier': hd.TIER_LOW,
+         'tb_hint': '主回路台≈12'},
+        {'from': '52-101:a?', 'to': 'TB:回路101', 'sources': ['edge_trace'], 'tier': hd.TIER_LOW},
+    ], 'summary': {}}
+    oc = hd.open_confirmations(draft)
+    assert oc['tb'] == {'101': '12'}
+    assert ('52-101', 'a?') in oc['pins']
+
+
+def test_apply_confirmations_text(monkeypatch=None):
+    saved = {}
+    orig = hd.seiban_config.record_decision
+    hd.seiban_config.record_decision = lambda s, **k: saved.update({s: k})
+    try:
+        n = hd.apply_confirmations_text('S1', '[TB] 回路210=26, 回路211=27\n[PIN] 52-101:a?=13')
+        assert n == {'tb': 2, 'pins': 1}
+        assert saved['S1']['tb_assign'] == {'210': '26', '211': '27'}
+        assert saved['S1']['pin_confirm'] == {'52-101:a?': '13'}
+    finally:
+        hd.seiban_config.record_decision = orig
+
+
 def test_to_csv_and_html(tmp_path=None):
     import os
     import tempfile

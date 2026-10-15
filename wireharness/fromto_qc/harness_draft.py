@@ -223,6 +223,87 @@ def to_html(draft, path, seiban=''):
     return path
 
 
+def open_confirmations(draft):
+    """ドラフト → まだ人の確認が要る項目。戻り: {'tb':{回路:主回路台hint}, 'pins':[(機器,種別)...]}。
+    tb=『TB:回路NNN』で台番号未確定の回路。pins=『機器:a?/b?』で番号未確定の接点。"""
+    tb, pins = {}, set()
+    for w in draft['wires']:
+        m = re.match(r'TB:回路(.+)$', w.get('to', ''))
+        if m:
+            tb.setdefault(m.group(1), (w.get('tb_hint') or '').replace('主回路台≈', '') or None)
+        for f in (w.get('from', ''), w.get('to', '')):
+            m2 = re.match(r'(.+):(a\?|b\?|aL\?|bL\?|c\?)$', f)
+            if m2:
+                pins.add((m2.group(1), m2.group(2)))
+    return {'tb': tb, 'pins': sorted(pins)}
+
+
+_MARK_JA = {'a?': 'a接点(入)', 'b?': 'b接点(切)', 'aL?': 'a接点(警報)',
+            'bL?': 'b接点(警報)', 'c?': 'c接点(切替)'}
+
+
+def worksheet_html(seiban_dir, path, seiban=None):
+    """製番 → 確認ワークシートHTML。確認が要る項目だけを記入欄つきで出す(回路→台番号/接点→ピン)。
+    末尾に『貼り付け用テンプレート』を付け、記入してチャットで返せば apply_confirmations_text で保存できる。"""
+    import html as _h
+    seiban = seiban or os.path.basename(seiban_dir.rstrip('/'))
+    oc = open_confirmations(build(seiban_dir, seiban))
+    tb_rows = ''.join(
+        f'<tr><td>回路 {_h.escape(c)}</td><td>TB-<input style="width:4em"></td>'
+        f'<td class="hint">{("参考: 主回路台≈"+h) if h else ""}</td></tr>'
+        for c, h in sorted(oc['tb'].items()))
+    pin_rows = ''.join(
+        f'<tr><td>{_h.escape(dev)}</td><td>{_MARK_JA.get(mk, mk)}</td>'
+        f'<td>ピン <input style="width:4em"></td></tr>'
+        for dev, mk in oc['pins'])
+    tpl = ('# 記入して返信してください（分かる範囲で）\n'
+           '[TB] ' + ', '.join(f'回路{c}=' for c in sorted(oc['tb'])) + '\n'
+           '[PIN] ' + ', '.join(f'{d}:{m}=' for d, m in oc['pins']))
+    doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>確認ワークシート {_h.escape(seiban)}</title><style>
+ body{{font-family:'Noto Sans JP','IPAGothic',sans-serif;margin:18px;color:#111;font-size:13px}}
+ h1{{font-size:17px}} h2{{font-size:14px;background:#1f3b63;color:#fff;padding:4px 8px;border-radius:4px}}
+ table{{border-collapse:collapse;margin:8px 0}} th,td{{border:1px solid #ddd;padding:4px 10px}}
+ td.hint{{color:#777;font-size:11px}} .tpl{{background:#f2f5fa;border:1px solid #ccd;padding:8px;
+ white-space:pre-wrap;font-family:monospace;font-size:12px}} .note{{color:#555;font-size:12px}}</style></head><body>
+<h1>確認ワークシート — {_h.escape(seiban)}</h1>
+<p class="note">分かる範囲で結構です。記入後、下の「貼り付け用テンプレート」を埋めて返信いただければ保存し、
+次回から自動で埋まります（学習ループ）。</p>
+<h2>① 制御TBの台番号（回路ごとに1つ決めれば、その回路の全配線に反映）</h2>
+<table><thead><tr><th>回路</th><th>台番号</th><th></th></tr></thead><tbody>{tb_rows or '<tr><td colspan=3>なし</td></tr>'}</tbody></table>
+<h2>② 接点の端子番号（a?/b? の実番号）</h2>
+<table><thead><tr><th>機器</th><th>接点</th><th>端子番号</th></tr></thead><tbody>{pin_rows or '<tr><td colspan=3>なし</td></tr>'}</tbody></table>
+<h2>貼り付け用テンプレート（これを埋めて返信）</h2>
+<div class="tpl">{_h.escape(tpl)}</div>
+</body></html>"""
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(doc)
+    return path
+
+
+def apply_confirmations_text(seiban, text):
+    """ワークシートの『貼り付け用テンプレート』記入文字列を解釈して保存する。
+    形式: '[TB] 回路210=26, 回路211=27' / '[PIN] 52-101:a?=13'。空欄は無視。戻り: 適用件数。"""
+    tb, pins = {}, {}
+    for line in str(text or '').splitlines():
+        body = line.split(']', 1)[1] if ']' in line else line
+        is_tb = '[TB]' in line
+        is_pin = '[PIN]' in line
+        for item in body.split(','):
+            if '=' not in item:
+                continue
+            k, v = item.split('=', 1)
+            k, v = k.strip(), v.strip()
+            if not v:
+                continue
+            if is_tb:
+                tb[re.sub(r'^回路', '', k)] = v
+            elif is_pin:
+                pins[k] = v
+    seiban_config.record_decision(seiban, tb_assign=tb or None, pin_confirm=pins or None)
+    return {'tb': len(tb), 'pins': len(pins)}
+
+
 def write_drafts(seiban_dirs, out_dir):
     """複数製番 → 各製番のHTML/CSV＋一覧 index.html を out_dir に出力。戻り: index のパス。
     半自動レビューの実運用: index から各製番を開き、確度順に採否する。"""
