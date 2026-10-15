@@ -40,7 +40,22 @@ def test_suggest():
     assert cl.suggest('86X-301', 'b?', min_seiban=2, configs=configs) is None
 
 
+def test_style_separation():
+    # 流儀A: 52:a?=13 (2製番), 流儀B: 52:a?=53 (2製番)。流儀ごとに別々に学習(矛盾しない)。
+    configs = {
+        'A1': {'style': '甲', 'pin_confirm': {'52-101:a?': '13'}},
+        'A2': {'style': '甲', 'pin_confirm': {'52-201:a?': '13'}},
+        'B1': {'style': '乙', 'pin_confirm': {'52-101:a?': '53'}},
+        'B2': {'style': '乙', 'pin_confirm': {'52-201:a?': '53'}},
+    }
+    # 流儀無し(全体)では矛盾→学習しない
+    assert ('52', 'a?') not in cl.learned_pins(min_seiban=2, configs=configs)
+    # 流儀ごとなら各々学習できる
+    assert cl.learned_pins(min_seiban=2, configs=configs, style='甲').get(('52', 'a?')) == '13'
+    assert cl.learned_pins(min_seiban=2, configs=configs, style='乙').get(('52', 'a?')) == '53'
+
+
 if __name__ == '__main__':
     test_device_type(); test_learned_pins_consistency()
-    test_learned_pins_conflict_blocked(); test_suggest()
+    test_learned_pins_conflict_blocked(); test_suggest(); test_style_separation()
     print('cross_learn tests: OK')

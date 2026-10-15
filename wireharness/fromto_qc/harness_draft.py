@@ -91,7 +91,11 @@ def build(seiban_dir, seiban=None):
     except Exception:
         confirmed_pins = {}
     try:
-        learned_pins = cross_learn.learned_pins()           # {(機器型,マーカー): ピン} 横展開
+        style = seiban_config.get_style(seiban)             # 流儀(作業者)。あれば同流儀だけで学習
+    except Exception:
+        style = None
+    try:
+        learned_pins = cross_learn.learned_pins(style=style)  # {(機器型,マーカー): ピン} 横展開
     except Exception:
         learned_pins = {}
 

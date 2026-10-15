@@ -131,8 +131,29 @@ def set_pin_confirm(seiban, key, pin):
     return rec
 
 
+def get_style(seiban):
+    """製番の流儀(作業者/スタイル)タグ。未設定なら None。
+    各役割(1人目/2人目/3人目)に複数の作業者がいて、やり方が異なる場合に、学習を流儀ごとに
+    分けるためのキー。同じ流儀の製番だけから横展開学習する(cross_learn)。"""
+    return get(seiban).get('style')
+
+
+def set_style(seiban, style):
+    """製番の流儀タグを設定・保存する。None でクリア。"""
+    cfg = _load()
+    rec = cfg.setdefault(str(seiban), {})
+    if style is None:
+        rec.pop('style', None)
+    else:
+        rec['style'] = str(style)
+    if not rec:
+        cfg.pop(str(seiban), None)
+    _save(cfg)
+    return rec
+
+
 def record_decision(seiban, load_factor=None, futo_override=None,
-                    tb_assign=None, pin_confirm=None):
+                    tb_assign=None, pin_confirm=None, style=None):
     """確認UIの確定内容(負荷率＋太物/内＋TB台割当＋ピン)をまとめて記録する。
     futo_override/tb_assign/pin_confirm はいずれも辞書。None の値はクリア。戻り: 保存後の製番レコード。"""
     if load_factor is not None:
@@ -143,6 +164,8 @@ def record_decision(seiban, load_factor=None, futo_override=None,
         set_tb_assign(seiban, circ, blk)
     for key, pin in (pin_confirm or {}).items():
         set_pin_confirm(seiban, key, pin)
+    if style is not None:
+        set_style(seiban, style or None)
     return get(seiban)
 
 

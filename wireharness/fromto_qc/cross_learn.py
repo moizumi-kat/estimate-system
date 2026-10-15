@@ -23,10 +23,13 @@ def device_type(dev):
     return re.sub(r'-?\d+$', '', str(dev or '')).strip() or str(dev or '')
 
 
-def _iter_pin_confirms(configs=None):
-    """各製番の pin_confirm を (製番, 機器型, マーカー, ピン) で列挙。"""
+def _iter_pin_confirms(configs=None, style=None):
+    """各製番の pin_confirm を (製番, 機器型, マーカー, ピン) で列挙。
+    style 指定時は、その流儀タグ(seiban_config.style)の製番だけを対象にする。"""
     cfg = configs if configs is not None else seiban_config.all_seiban()
     for seiban, rec in cfg.items():
+        if style is not None and rec.get('style') != style:
+            continue
         for key, pin in (rec.get('pin_confirm', {}) or {}).items():
             if ':' not in key:
                 continue
@@ -34,19 +37,21 @@ def _iter_pin_confirms(configs=None):
             yield seiban, device_type(dev), mk, str(pin)
 
 
-def aggregate(configs=None):
-    """(機器型, マーカー) → {ピン: 確認した製番の集合}。横展開学習の素データ。"""
+def aggregate(configs=None, style=None):
+    """(機器型, マーカー) → {ピン: 確認した製番の集合}。横展開学習の素データ。
+    style 指定で、その流儀内だけを集計(流儀をまたぐ矛盾を分離)。"""
     agg = collections.defaultdict(lambda: collections.defaultdict(set))
-    for seiban, dtype, mk, pin in _iter_pin_confirms(configs):
+    for seiban, dtype, mk, pin in _iter_pin_confirms(configs, style):
         agg[(dtype, mk)][pin].add(seiban)
     return agg
 
 
-def learned_pins(min_seiban=MIN_SEIBAN, configs=None):
+def learned_pins(min_seiban=MIN_SEIBAN, configs=None, style=None):
     """横展開できるピン規則 {(機器型, マーカー): ピン}。
-    値が1つに定まり(矛盾なし)、その値を確認した製番が min_seiban 以上のものだけ。"""
+    値が1つに定まり(矛盾なし)、その値を確認した製番が min_seiban 以上のものだけ。
+    style 指定時は同じ流儀の製番だけから学習する(作業者ごとにやり方が違う場合に分離)。"""
     out = {}
-    for key, pins in aggregate(configs).items():
+    for key, pins in aggregate(configs, style).items():
         if len(pins) != 1:              # ピン値が割れている=矛盾→学習しない
             continue
         pin, seibans = next(iter(pins.items()))
@@ -55,6 +60,6 @@ def learned_pins(min_seiban=MIN_SEIBAN, configs=None):
     return out
 
 
-def suggest(dev, marker, min_seiban=MIN_SEIBAN, configs=None):
-    """機器記号・マーカー → 横展開候補ピン or None。"""
-    return learned_pins(min_seiban, configs).get((device_type(dev), marker))
+def suggest(dev, marker, min_seiban=MIN_SEIBAN, configs=None, style=None):
+    """機器記号・マーカー → 横展開候補ピン or None。style で流儀を絞れる。"""
+    return learned_pins(min_seiban, configs, style).get((device_type(dev), marker))
