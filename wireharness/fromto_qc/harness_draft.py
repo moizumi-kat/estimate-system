@@ -21,6 +21,7 @@ from . import main_circuit
 from . import fixed_wiring
 from . import edge_trace
 from . import device_norm as dn
+from . import tb_strip
 
 TIER_HI = '確度:高'
 TIER_MID = '確度:中'
@@ -83,6 +84,11 @@ def build(seiban_dir):
         for kk, vv in extra.items():
             acc[k].setdefault(kk, vv)
 
+    try:
+        strip_map = tb_strip.assign(layout)      # 回路 → 主回路TB台(=制御TBと同じ台)
+    except Exception:
+        strip_map = {}
+
     for w in main_circuit.generate(layout):
         add(w['from'], w['to'], 'main_circuit', _main_tier(w), phase=w.get('phase'))
     for w in fixed_wiring.generate(layout):
@@ -103,12 +109,16 @@ def build(seiban_dir):
                 # 片端が TB で台番号のみ未定、相手端は解決済み → 可視化(台番号は2人目が割当)。
                 # ◎誤答ゼロ: TB台番号は図面に無いため確定せず『要確認』として出す。
                 if str(ends[q][0]).upper().startswith('TB'):
-                    # 回路でグルーピング(事例分析の規則)。回路が分かれば『TB:回路NNN』、
-                    # 不明なら『TB:台番号要確認』。台番号の絶対値は製番依存のため確定しない。
+                    # 発見ルール(④検証済): 制御TB = その回路の主回路TB台(同じ台)。
+                    # 回路でグルーピングし『TB:回路NNN』で出す(回路単位で割当できる)。
+                    # 絶対台番号は tb_strip 予測に律速され未確定のため、誤答ゼロを優先し数字は
+                    # From-To に入れない。参考として主回路台予測を tb_hint に保持(表示は任意)。
                     circ = _circuit_of(ends[o][0])
                     tb_to = f'TB:回路{circ}' if circ else 'TB:台番号要確認'
+                    hint = strip_map.get(circ) if circ else None
                     add(f'{ends[o][0]}:{ends[o][1]}', tb_to,
-                        'edge_trace', TIER_LOW, tb_pending=True)
+                        'edge_trace', TIER_LOW, tb_pending=True,
+                        tb_hint=(f'主回路台≈{hint}' if hint else None))
                 # 非TBの'?'(動力用多接点など)は確定できないので出さない
 
     wires = []
