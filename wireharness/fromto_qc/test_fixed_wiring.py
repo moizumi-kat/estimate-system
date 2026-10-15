@@ -50,8 +50,47 @@ def test_distribution_panel_pattern():
         fw.detect_separators, fw.detect_earth_sink = os
 
 
+def test_class1_excluded():
+    # クラスⅠ(14sq=太物)は細物生成しない。全てⅠなら接地箱配線も出ない(現場回答2026-10-15)。
+    os_ = (fw.detect_separators, fw.detect_earth_sink)
+    fw.detect_separators = lambda paths: {'1': {'sym': 'SPD-分離器1', 'class': 'Ⅰ', 'integrated': False}}
+    fw.detect_earth_sink = lambda paths: ('SPD', ('R', 'S', 'T'))
+    try:
+        assert fw.generate(['x']) == []
+    finally:
+        fw.detect_separators, fw.detect_earth_sink = os_
+
+
+def test_class2_integrated_noted():
+    # クラスⅡ一体型は生成するが、配線しない例があるため basis に明示(要確認)。
+    os_ = (fw.detect_separators, fw.detect_earth_sink)
+    fw.detect_separators = lambda paths: {'1': {'sym': 'SPD-分離器1', 'class': 'Ⅱ', 'integrated': True}}
+    fw.detect_earth_sink = lambda paths: ('SPD', ('R', 'S', 'T'))
+    try:
+        w = fw.generate(['x'])
+        assert w and any('一体型' in e['basis'] for e in w)
+        assert all(e['confidence'] == '要確認' for e in w)
+    finally:
+        fw.detect_separators, fw.detect_earth_sink = os_
+
+
+def test_legacy_str_format():
+    # 旧形式(番号→記号文字列)でも動く(後方互換)。
+    os_ = (fw.detect_separators, fw.detect_earth_sink)
+    fw.detect_separators = lambda paths: {'1': 'SPD-分離器1'}
+    fw.detect_earth_sink = lambda paths: ('SPD', ('R', 'S', 'T'))
+    try:
+        w = fw.generate(['x'])
+        assert ('TB-1:1R', 'SPD-分離器1:1 上') in {(e['from'], e['to']) for e in w}
+    finally:
+        fw.detect_separators, fw.detect_earth_sink = os_
+
+
 if __name__ == '__main__':
     test_no_separator_generates_nothing()
     test_control_panel_pattern()
     test_distribution_panel_pattern()
+    test_class1_excluded()
+    test_class2_integrated_noted()
+    test_legacy_str_format()
     print('fixed_wiring tests: OK')
