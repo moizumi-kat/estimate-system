@@ -38,8 +38,13 @@ def _layout(seiban_dir):
 
 
 def _seq(seiban_dir):
-    return (glob.glob(os.path.join(seiban_dir, '図面データ_*F*.DXF')) +
-            glob.glob(os.path.join(seiban_dir, '図面データ_*F*.dxf')))
+    # 制御盤はF系(シーケンス)、分電盤はH系(結線図)に制御(警報回路等)が載る。両方を対象にする。
+    pats = ('図面データ_*F*.DXF', '図面データ_*F*.dxf',
+            '図面データ_*H*.DXF', '図面データ_*H*.dxf')
+    out = []
+    for pat in pats:
+        out += glob.glob(os.path.join(seiban_dir, pat))
+    return out
 
 
 _RANK = {TIER_HI: 0, TIER_MID: 1, TIER_LOW: 2}
