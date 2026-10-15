@@ -70,7 +70,11 @@ def test_resolve_points():
         pts = cr.resolve_points(['x'])
         assert pts[('86X-101', 100.0, 200.0)] == '13'       # 上
         assert pts[('86X-101', 100.0, 100.0)] == '14'       # 下
-        assert all(k[0] != '52-101' for k in pts)           # 動力用は解決しない
+        assert all(k[0] != '52-101' for k in pts)           # 動力用は確定しない
+        # markers=True では動力用も種別マーカー(a?)で可視化(ピンは当てない)
+        ptm = cr.resolve_points(['x'], markers=True)
+        assert ptm[('52-101', 0.0, 0.0)] == 'a?'
+        assert ptm[('86X-101', 100.0, 200.0)] == '13'       # 確定分はそのまま
     finally:
         cr.scan = orig
 

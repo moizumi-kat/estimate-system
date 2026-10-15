@@ -24,7 +24,7 @@ def _resolve_map(path):
     確実な補助リレー単一接点のみ(contact_resolve)。合致しなければ '?' のまま=回帰ゼロ。"""
     out = {}
     try:
-        for (dev, x, y), pin in contact_resolve.resolve_points([path]).items():
+        for (dev, x, y), pin in contact_resolve.resolve_points([path], markers=True).items():
             out[(dn.canon(dev), round(x), round(y))] = pin
     except Exception:
         pass

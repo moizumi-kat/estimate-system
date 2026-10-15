@@ -144,26 +144,35 @@ def resolve(draw_paths):
     return out
 
 
-def resolve_points(draw_paths):
-    """確実な接点候補を『端点座標単位』で返す。戻り: {(device, x, y): pin}。
-    edge_trace の '?' 端点を (device, 近傍座標) で引いて実番号に置換するための地図。
-    確度:精査(補助リレー単一接点)のみ。端点が2点なら上(大きいy)→第1ピン, 下→第2ピンに割当。"""
+# 接点種別 → 要確認マーカー(多接点でピンが一意に決まらない時に使う)
+_TYPE_MARK = {'a': 'a?', 'b': 'b?', 'a_alarm': 'aL?', 'b_alarm': 'bL?', 'c': 'c?'}
+
+
+def resolve_points(draw_paths, markers=False):
+    """接点候補を『端点座標単位』で返す。戻り: {(device, x, y): pin}。
+    edge_trace の '?' 端点を (device, 近傍座標) で引いて置換するための地図。
+    ・確定(確度:精査): 補助リレーでその種別の接点が1つ → 標準ピン(上=第1, 下=第2)。
+    ・markers=True: 上記以外(動力用・多接点)も『接点種別マーカー(a?/b? 等)』で可視化する。
+      マーカーは実番号でなく『この機器のa接点/b接点(ピンは人が確認)』の意味。◎誤答ゼロ。"""
     pt_pin = {}
     for sym, info in scan(draw_paths).items():
         by_type = collections.Counter(u['type'] for u in info['unlabeled'])
         for u in info['unlabeled']:
             ct = u['type']
-            if not (is_aux_relay(u.get('base', sym)) and by_type[ct] == 1):
-                continue
-            pins = _std_pins(ct, 1)
-            if not pins:
-                continue
             eps = _tb_endpoints(u)
             if len(eps) != 2:
                 continue
             top, bot = sorted(eps, key=lambda p: -p[1])    # 上(大y)が先
-            pt_pin[(sym, top[0], top[1])] = pins[0]
-            pt_pin[(sym, bot[0], bot[1])] = pins[1]
+            confident = is_aux_relay(u.get('base', sym)) and by_type[ct] == 1
+            pins = _std_pins(ct, 1) if confident else None
+            if pins:
+                pt_pin[(sym, top[0], top[1])] = pins[0]
+                pt_pin[(sym, bot[0], bot[1])] = pins[1]
+            elif markers:
+                mk = _TYPE_MARK.get(ct)
+                if mk:
+                    pt_pin.setdefault((sym, top[0], top[1]), mk)
+                    pt_pin.setdefault((sym, bot[0], bot[1]), mk)
     return pt_pin
 
 
