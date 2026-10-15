@@ -15,10 +15,36 @@ import re
 import collections
 import math
 from .tracer import _build_components, TOL
+from . import contact_resolve
+from . import device_norm as dn
+
+
+def _resolve_map(path):
+    """接点シンボルの '?' を実番号に置換する地図 {(canon機器, round(x), round(y)): pin}。
+    確実な補助リレー単一接点のみ(contact_resolve)。合致しなければ '?' のまま=回帰ゼロ。"""
+    out = {}
+    try:
+        for (dev, x, y), pin in contact_resolve.resolve_points([path]).items():
+            out[(dn.canon(dev), round(x), round(y))] = pin
+    except Exception:
+        pass
+    return out
+
+
+def _lookup(resmap, dev, x, y):
+    """(機器, 座標) → 解決ピン or None。丸め誤差に備え±1の近傍も見る。"""
+    cd = dn.canon(dev)
+    for dx in (0, 1, -1):
+        for dy in (0, 1, -1):
+            p = resmap.get((cd, round(x) + dx, round(y) + dy))
+            if p is not None:
+                return p
+    return None
 
 
 def trace_edges(path, tol=TOL):
     c = _build_components(path)
+    resmap = _resolve_map(path)
     segs, comp_terms = c['segs'], c['comp_terms']
     pts = []
     for (p1, p2) in segs:
@@ -61,6 +87,10 @@ def trace_edges(path, tol=TOL):
     all_terms = set()
     for terms in comp_terms.values():
         for (d, t, x, y) in terms:
+            if t == '?':                      # 接点シンボルの未番号端子→確実な候補があれば置換
+                rp = _lookup(resmap, d, x, y)
+                if rp is not None:
+                    t = rp
             nd = nearest_node((x, y), tol * 3)
             if nd is not None:
                 term_at[nd].add((d, t))

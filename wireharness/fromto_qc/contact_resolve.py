@@ -91,8 +91,27 @@ def scan(draw_paths):
             elif ct:                      # 番号なしの接点シンボル
                 devs[sym]['unlabeled'].append(
                     {'type': ct, 'base': d.get('DEVICE', ''),
-                     'x': ins.dxf.insert.x, 'y': ins.dxf.insert.y})
+                     'x': ins.dxf.insert.x, 'y': ins.dxf.insert.y,
+                     'tb': d.get('TB', ''), 'deg': ins.dxf.rotation or 0})
     return devs
+
+
+def _rot(dx, dy, deg):
+    import math
+    r = math.radians(deg or 0)
+    c, s = math.cos(r), math.sin(r)
+    return (dx * c - dy * s, dx * s + dy * c)
+
+
+def _tb_endpoints(u):
+    """接点シンボル1個 → 端子点の座標リスト[(x,y)...]（TBオフセット＋回転）。"""
+    nums = [float(n) for n in re.findall(r'-?\d+\.?\d*', u.get('tb', ''))]
+    pts = list(zip(nums[0::2], nums[1::2]))
+    out = []
+    for dx, dy in pts:
+        rx, ry = _rot(dx, dy, u.get('deg', 0))
+        out.append((round(u['x'] + rx, 1), round(u['y'] + ry, 1)))
+    return out
 
 
 def resolve(draw_paths):
@@ -123,6 +142,29 @@ def resolve(draw_paths):
                             'confidence': '要確認', 'x': u['x'], 'y': u['y'],
                             'basis': f'{reason}→ピン未確定(要確認)'})
     return out
+
+
+def resolve_points(draw_paths):
+    """確実な接点候補を『端点座標単位』で返す。戻り: {(device, x, y): pin}。
+    edge_trace の '?' 端点を (device, 近傍座標) で引いて実番号に置換するための地図。
+    確度:精査(補助リレー単一接点)のみ。端点が2点なら上(大きいy)→第1ピン, 下→第2ピンに割当。"""
+    pt_pin = {}
+    for sym, info in scan(draw_paths).items():
+        by_type = collections.Counter(u['type'] for u in info['unlabeled'])
+        for u in info['unlabeled']:
+            ct = u['type']
+            if not (is_aux_relay(u.get('base', sym)) and by_type[ct] == 1):
+                continue
+            pins = _std_pins(ct, 1)
+            if not pins:
+                continue
+            eps = _tb_endpoints(u)
+            if len(eps) != 2:
+                continue
+            top, bot = sorted(eps, key=lambda p: -p[1])    # 上(大y)が先
+            pt_pin[(sym, top[0], top[1])] = pins[0]
+            pt_pin[(sym, bot[0], bot[1])] = pins[1]
+    return pt_pin
 
 
 def summary(draw_paths):

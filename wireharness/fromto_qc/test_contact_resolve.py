@@ -55,7 +55,27 @@ def test_resolve_relay_single_vs_power(monkeypatch=None):
         cr.scan = orig
 
 
+def test_resolve_points():
+    # 補助リレー単一a接点: TB 2点(上下)に 13/14 を割当(上=13, 下=14)。
+    orig = cr.scan
+    cr.scan = lambda paths: {
+        '86X-101': {'unlabeled': [{'type': 'a', 'base': '86X', 'x': 100.0, 'y': 200.0,
+                                   'tb': '0,0,0,-100', 'deg': 0}],
+                    'labeled_pins': set()},
+        '52-101': {'unlabeled': [{'type': 'a', 'base': '52', 'x': 0.0, 'y': 0.0,
+                                  'tb': '0,0,0,-100', 'deg': 0}],
+                   'labeled_pins': set()},
+    }
+    try:
+        pts = cr.resolve_points(['x'])
+        assert pts[('86X-101', 100.0, 200.0)] == '13'       # 上
+        assert pts[('86X-101', 100.0, 100.0)] == '14'       # 下
+        assert all(k[0] != '52-101' for k in pts)           # 動力用は解決しない
+    finally:
+        cr.scan = orig
+
+
 if __name__ == '__main__':
     test_contact_type(); test_is_aux_relay(); test_std_pins()
-    test_resolve_relay_single_vs_power()
+    test_resolve_relay_single_vs_power(); test_resolve_points()
     print('contact_resolve tests: OK')
