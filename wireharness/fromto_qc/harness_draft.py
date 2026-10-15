@@ -129,14 +129,15 @@ def build(seiban_dir, seiban=None):
         add(w['from'], w['to'], 'main_circuit', _main_tier(w), phase=w.get('phase'))
     for w in fixed_wiring.generate(layout):
         add(w['from'], w['to'], 'fixed_wiring', TIER_MID, phase=w.get('phase'))
+    _PRIO = {'confirmed': 2, 'learned': 1, None: 0}
     for p in seq:
         try:
-            edges, _ = edge_trace.trace_edges(p)
+            _edges, _, pos_edges = edge_trace.trace_edges(p, with_pos=True)
         except Exception:
             continue
-        _PRIO = {'confirmed': 2, 'learned': 1, None: 0}
-        for e in edges:
-            ends = list(tuple(e))
+        for (da0, ta0, xa, ya), (db0, tb0, xb, yb) in pos_edges:
+            ends = [(da0, ta0), (db0, tb0)]
+            pos = [(xa, ya), (xb, yb)]              # 物理位置(同一シート内)。名前=流儀の下の正本。
             status = None                           # 適用したピンの最強状態
             res = []
             for (d, t) in ends:
@@ -151,7 +152,8 @@ def build(seiban_dir, seiban=None):
                 src, tier = ({'confirmed': ('confirmed', TIER_HI),
                               'learned': ('learned', TIER_MID)}
                              .get(status, ('edge_trace', TIER_LOW)))
-                add(f'{da}:{ta}', f'{db}:{tb}', src, tier)
+                add(f'{da}:{ta}', f'{db}:{tb}', src, tier,
+                    from_pos=pos[0], to_pos=pos[1])
             elif len(qi) == 1:
                 q, o = qi[0], 1 - qi[0]
                 # 片端が TB で台番号のみ未定、相手端は解決済み → 可視化(台番号は2人目が割当)。
@@ -166,13 +168,15 @@ def build(seiban_dir, seiban=None):
                     if conf_blk:
                         # 学習ループ: 人が確認済の台番号を自動反映(確度:高)。
                         add(f'{ends[o][0]}:{ends[o][1]}', f'TB-{conf_blk}:回路{circ}',
-                            'confirmed', TIER_HI, tb_pending=True)
+                            'confirmed', TIER_HI, tb_pending=True,
+                            from_pos=pos[o], to_pos=pos[q])
                     else:
                         tb_to = f'TB:回路{circ}' if circ else 'TB:台番号要確認'
                         hint = strip_map.get(circ) if circ else None
                         add(f'{ends[o][0]}:{ends[o][1]}', tb_to,
                             'edge_trace', TIER_LOW, tb_pending=True,
-                            tb_hint=(f'主回路台≈{hint}' if hint else None))
+                            tb_hint=(f'主回路台≈{hint}' if hint else None),
+                            from_pos=pos[o], to_pos=pos[q])
                 # 非TBの'?'(動力用多接点など)は確定できないので出さない
 
     wires = []
@@ -186,6 +190,9 @@ def build(seiban_dir, seiban=None):
         w = {'from': v['from'], 'to': v['to'], 'sources': srcs, 'tier': tier}
         if v.get('phase'):
             w['phase'] = v['phase']
+        if v.get('from_pos') and v.get('to_pos'):     # 物理位置(同一シート内)を正本として併記
+            w['from_pos'] = v['from_pos']
+            w['to_pos'] = v['to_pos']
         wires.append(w)
         summary[tier] += 1
     return {'wires': wires, 'summary': summary}

@@ -3,10 +3,21 @@
 from . import harness_draft as hd
 
 
+def _pos_edges(et):
+    """テスト用: edges集合 → pos_edges(ダミー座標付)。build は pos_edges を使う。"""
+    pe = []
+    for e in et:
+        (da, ta), (db, tb) = list(e)
+        pe.append(((da, ta, 0.0, 0.0), (db, tb, 10.0, 10.0)))
+    return pe
+
+
 def _patch(mc, fw, et):
     hd.main_circuit.generate = lambda paths: mc
     hd.fixed_wiring.generate = lambda paths: fw
-    hd.edge_trace.trace_edges = lambda p: (et, set())
+    pe = _pos_edges(et)
+    hd.edge_trace.trace_edges = lambda p, with_pos=False: (
+        (et, set(), pe) if with_pos else (et, set()))
     hd._layout = lambda d: ['x']
     hd._seq = lambda d: ['y']
 

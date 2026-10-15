@@ -42,7 +42,10 @@ def _lookup(resmap, dev, x, y):
     return None
 
 
-def trace_edges(path, tol=TOL):
+def trace_edges(path, tol=TOL, with_pos=False):
+    """シーケンス図 → 渡り辺。with_pos=True で (edges, terms, pos_edges) を返す。
+    pos_edges=[((機器,端子,x,y),(機器,端子,x,y))] は同一シート内の物理座標を併記したもの
+    (物理位置を正本にするための出力。名前=流儀が違っても位置が合えば同一の配線)。"""
     c = _build_components(path)
     resmap = _resolve_map(path)
     segs, comp_terms = c['segs'], c['comp_terms']
@@ -84,6 +87,7 @@ def trace_edges(path, tol=TOL):
         return f(best) if best is not None else None
 
     term_at = collections.defaultdict(set)
+    node_pos = {}                              # ノード → 代表座標(同一シート内の物理位置)
     all_terms = set()
     for terms in comp_terms.values():
         for (d, t, x, y) in terms:
@@ -94,6 +98,7 @@ def trace_edges(path, tol=TOL):
             nd = nearest_node((x, y), tol * 3)
             if nd is not None:
                 term_at[nd].add((d, t))
+                node_pos[nd] = (round(x, 1), round(y, 1))
                 all_terms.add((d, t))
 
     termnodes = set(term_at)
@@ -141,12 +146,20 @@ def trace_edges(path, tol=TOL):
         return {tb_name[node]} if node in tb_name else term_at[node]
 
     edges = set()
+    pos_edges = []
     for ne in node_edges:
         a, b = tuple(ne)
+        pa, pb = node_pos.get(a), node_pos.get(b)
         for ta in names(a):
             for tb in names(b):
                 if ta != tb:
                     edges.add(frozenset((ta, tb)))
+                    if pa and pb:
+                        # 物理位置を正本に: 端子名(流儀)とともに同一シート内の座標を併記。
+                        pos_edges.append(((ta[0], ta[1], pa[0], pa[1]),
+                                          (tb[0], tb[1], pb[0], pb[1])))
+    if with_pos:
+        return edges, all_terms, pos_edges
     return edges, all_terms
 
 
