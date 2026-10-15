@@ -68,6 +68,26 @@ def test_to_csv_and_html(tmp_path=None):
     assert 'TEST-1' in html_txt and hd.TIER_MID in html_txt and 'FX1:13' in html_txt
 
 
+def test_write_drafts_index():
+    import os
+    import tempfile
+    orig = hd.build
+    hd.build = lambda d: {
+        'wires': [{'from': 'LUG:', 'to': 'MCCB-1:1', 'sources': ['main_circuit'], 'tier': hd.TIER_MID}],
+        'summary': {hd.TIER_HI: 0, hd.TIER_MID: 1, hd.TIER_LOW: 0},
+    }
+    try:
+        d = tempfile.mkdtemp()
+        ip = hd.write_drafts([os.path.join(d, '製番A'), os.path.join(d, '製番B')],
+                             os.path.join(d, 'out'))
+        idx = open(ip, encoding='utf-8').read()
+        assert '製番A' in idx and '製番B' in idx
+        assert os.path.exists(os.path.join(d, 'out', '製番A.html'))
+    finally:
+        hd.build = orig
+
+
 if __name__ == '__main__':
-    test_corroboration_is_high(); test_single_source_tiers(); test_to_csv_and_html()
+    test_corroboration_is_high(); test_single_source_tiers()
+    test_to_csv_and_html(); test_write_drafts_index()
     print('harness_draft tests: OK')

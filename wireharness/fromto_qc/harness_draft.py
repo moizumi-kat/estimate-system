@@ -170,3 +170,50 @@ def to_html(draft, path, seiban=''):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(doc)
     return path
+
+
+def write_drafts(seiban_dirs, out_dir):
+    """複数製番 → 各製番のHTML/CSV＋一覧 index.html を out_dir に出力。戻り: index のパス。
+    半自動レビューの実運用: index から各製番を開き、確度順に採否する。"""
+    import html as _h
+    import os
+    os.makedirs(out_dir, exist_ok=True)
+    rows = []
+    for d in seiban_dirs:
+        name = os.path.basename(d.rstrip('/'))
+        try:
+            dr = build(d)
+        except Exception:
+            continue
+        base = name.replace('/', '_').replace('（', '(').replace('）', ')')
+        to_html(dr, os.path.join(out_dir, base + '.html'), seiban=name)
+        to_csv(dr, os.path.join(out_dir, base + '.csv'))
+        rows.append((name, base, dr['summary']))
+    tot = {TIER_HI: 0, TIER_MID: 0, TIER_LOW: 0}
+    trs = []
+    for name, base, s in rows:
+        for k in tot:
+            tot[k] += s.get(k, 0)
+        n = sum(s.values())
+        trs.append(
+            f'<tr><td><a href="{_h.escape(base)}.html">{_h.escape(name)}</a></td>'
+            f'<td class="n">{s.get(TIER_HI, 0)}</td><td class="n">{s.get(TIER_MID, 0)}</td>'
+            f'<td class="n">{s.get(TIER_LOW, 0)}</td><td class="n">{n}</td>'
+            f'<td><a href="{_h.escape(base)}.csv">CSV</a></td></tr>')
+    grand = sum(tot.values())
+    doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>ハーネスFrom-Toドラフト 一覧</title><style>
+ body{{font-family:'Noto Sans JP','IPAGothic',sans-serif;margin:18px;color:#111;font-size:13px}}
+ h1{{font-size:18px}} table{{border-collapse:collapse;margin-top:10px}}
+ th,td{{border:1px solid #ddd;padding:5px 12px}} th{{background:#1f3b63;color:#fff}}
+ td.n{{text-align:right}} a{{color:#1f3b63}}</style></head><body>
+<h1>ハーネス From-To ドラフト一覧（半自動・要確認）</h1>
+<p>{len(rows)} 製番 / 生成 {grand} 本（確度:中 {tot[TIER_MID]} ・ 精査 {tot[TIER_LOW]} ・ 高 {tot[TIER_HI]}）</p>
+<table><thead><tr><th>製番</th><th>確度:高</th><th>確度:中</th><th>確度:精査</th><th>計</th><th></th></tr></thead>
+<tbody>{''.join(trs)}</tbody></table>
+<p style="font-size:11px;color:#666">各製番を開き、確度:高→中→精査の順に採否してください。確定は人の確認で担保（◎誤答ゼロ）。</p>
+</body></html>"""
+    ip = os.path.join(out_dir, 'index.html')
+    with open(ip, 'w', encoding='utf-8') as f:
+        f.write(doc)
+    return ip
