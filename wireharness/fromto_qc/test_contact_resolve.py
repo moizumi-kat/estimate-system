@@ -67,19 +67,35 @@ def test_resolve_points():
                    'labeled_pins': set()},
     }
     try:
-        pts = cr.resolve_points(['x'])
+        # 在庫なし(inv={})のフォールバック: 補助リレー単一=標準ピン, 動力用=未確定
+        pts = cr.resolve_points(['x'], inv={})
         assert pts[('86X-101', 100.0, 200.0)] == '13'       # 上
         assert pts[('86X-101', 100.0, 100.0)] == '14'       # 下
-        assert all(k[0] != '52-101' for k in pts)           # 動力用は確定しない
-        # markers=True では動力用も種別マーカー(a?)で可視化(ピンは当てない)
-        ptm = cr.resolve_points(['x'], markers=True)
-        assert ptm[('52-101', 0.0, 0.0)] == 'a?'
-        assert ptm[('86X-101', 100.0, 200.0)] == '13'       # 確定分はそのまま
+        assert all(k[0] != '52-101' for k in pts)           # 在庫無しでは動力用は確定しない
+        ptm = cr.resolve_points(['x'], markers=True, inv={})
+        assert ptm[('52-101', 0.0, 0.0)] == 'a?'            # 在庫無し→マーカー
+        assert ptm[('86X-101', 100.0, 200.0)] == '13'
+    finally:
+        cr.scan = orig
+
+
+def test_resolve_points_inventory():
+    # 在庫があれば動力用52も小さい順で実番号を割付(電気的に等価)。
+    orig = cr.scan
+    cr.scan = lambda paths: {'52-101': {'unlabeled': [
+        {'type': 'a', 'base': '52', 'x': 0.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0},
+        {'type': 'a', 'base': '52', 'x': 0.0, 'y': 500.0, 'tb': '0,0,0,-100', 'deg': 0}],
+        'labeled_pins': set()}}
+    inv = {'52': {'NO': [('13', '14'), ('53', '54')], 'NC': []}}
+    try:
+        pts = cr.resolve_points(['x'], inv=inv)
+        got = sorted(set(pts.values()))
+        assert got == ['13', '14', '53', '54'], got      # 2接点に小さい順で割付
     finally:
         cr.scan = orig
 
 
 if __name__ == '__main__':
     test_contact_type(); test_is_aux_relay(); test_std_pins()
-    test_resolve_relay_single_vs_power(); test_resolve_points()
+    test_resolve_relay_single_vs_power(); test_resolve_points(); test_resolve_points_inventory()
     print('contact_resolve tests: OK')

@@ -20,6 +20,7 @@ import re
 import ezdxf
 
 from . import contact_pins
+from . import cross_learn
 
 
 def is_aux_relay(device_base):
@@ -148,31 +149,52 @@ def resolve(draw_paths):
 _TYPE_MARK = {'a': 'a?', 'b': 'b?', 'a_alarm': 'aL?', 'b_alarm': 'bL?', 'c': 'c?'}
 
 
-def resolve_points(draw_paths, markers=False):
+def _kind_of(ct):
+    if ct in ('a', 'a_alarm'):
+        return 'NO'
+    if ct in ('b', 'b_alarm'):
+        return 'NC'
+    return None
+
+
+def resolve_points(draw_paths, markers=False, inv=None):
     """接点候補を『端点座標単位』で返す。戻り: {(device, x, y): pin}。
     edge_trace の '?' 端点を (device, 近傍座標) で引いて置換するための地図。
-    ・確定(確度:精査): 補助リレーでその種別の接点が1つ → 標準ピン(上=第1, 下=第2)。
-    ・markers=True: 上記以外(動力用・多接点)も『接点種別マーカー(a?/b? 等)』で可視化する。
-      マーカーは実番号でなく『この機器のa接点/b接点(ピンは人が確認)』の意味。◎誤答ゼロ。"""
+    割付規則(現場確認・ユーザー整理): 同種接点は電気的に等価なので『空き端子を小さい順に割付』。
+    ・補助リレー単一接点 → 標準ピン(13-14/11-12)。
+    ・多接点(52等) → 機器型の接点在庫(contact_inventory, ④学習)を小さい順に割付=実番号候補。
+    ・在庫が無い型は markers=True なら 接点種別マーカー(a?/b?)。◎誤答ゼロ(等価なので割付自由)。"""
+    from . import contact_inventory
+    inv = inv if inv is not None else contact_inventory.load()
     pt_pin = {}
     for sym, info in scan(draw_paths).items():
-        by_type = collections.Counter(u['type'] for u in info['unlabeled'])
+        groups = collections.defaultdict(list)
         for u in info['unlabeled']:
-            ct = u['type']
-            eps = _tb_endpoints(u)
-            if len(eps) != 2:
-                continue
-            top, bot = sorted(eps, key=lambda p: -p[1])    # 上(大y)が先
-            confident = is_aux_relay(u.get('base', sym)) and by_type[ct] == 1
-            pins = _std_pins(ct, 1) if confident else None
-            if pins:
-                pt_pin[(sym, top[0], top[1])] = pins[0]
-                pt_pin[(sym, bot[0], bot[1])] = pins[1]
-            elif markers:
-                mk = _TYPE_MARK.get(ct)
-                if mk:
-                    pt_pin.setdefault((sym, top[0], top[1]), mk)
-                    pt_pin.setdefault((sym, bot[0], bot[1]), mk)
+            groups[u['type']].append(u)
+        for ct, us in groups.items():
+            us_sorted = sorted(us, key=lambda z: (-z['y'], z['x']))   # 読み順(割付順)
+            kind = _kind_of(ct)
+            inv_pairs = [tuple(p) for p in inv.get(cross_learn.device_type(sym), {}).get(kind, [])]
+            single_relay = is_aux_relay(us[0].get('base', sym)) and len(us) == 1
+            for i, u in enumerate(us_sorted):
+                eps = _tb_endpoints(u)
+                if len(eps) != 2:
+                    continue
+                top, bot = sorted(eps, key=lambda p: -p[1])     # 上(大y)が先
+                if single_relay:
+                    pins = _std_pins(ct, 1)
+                elif i < len(inv_pairs):
+                    pins = inv_pairs[i]                         # 在庫から小さい順(等価)
+                else:
+                    pins = None
+                if pins:
+                    pt_pin[(sym, top[0], top[1])] = pins[0]
+                    pt_pin[(sym, bot[0], bot[1])] = pins[1]
+                elif markers:
+                    mk = _TYPE_MARK.get(ct)
+                    if mk:
+                        pt_pin.setdefault((sym, top[0], top[1]), mk)
+                        pt_pin.setdefault((sym, bot[0], bot[1]), mk)
     return pt_pin
 
 
