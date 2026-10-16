@@ -157,6 +157,14 @@ def _kind_of(ct):
     return None
 
 
+# 遮断器(MCCB/ELCB)の警報接点の標準端子: ALc=共通, ALa=a接点側, ALb=b接点側(④で確認)。
+_ALARM_PINS = {'a_alarm': ('ALc', 'ALa'), 'b_alarm': ('ALc', 'ALb')}
+
+
+def _is_breaker(sym):
+    return cross_learn.device_type(sym).upper().startswith(('MCCB', 'ELCB'))
+
+
 def resolve_points(draw_paths, markers=False, inv=None):
     """接点候補を『端点座標単位』で返す。戻り: {(device, x, y): pin}。
     edge_trace の '?' 端点を (device, 近傍座標) で引いて置換するための地図。
@@ -185,6 +193,8 @@ def resolve_points(draw_paths, markers=False, inv=None):
                     pins = _std_pins(ct, 1)
                 elif i < len(inv_pairs):
                     pins = inv_pairs[i]                         # 在庫から小さい順(等価)
+                elif ct in _ALARM_PINS and _is_breaker(sym):
+                    pins = _ALARM_PINS[ct]                      # 遮断器の警報接点(ALc/ALa/ALb)
                 else:
                     pins = None
                 if pins:

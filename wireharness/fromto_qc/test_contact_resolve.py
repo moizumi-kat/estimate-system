@@ -95,7 +95,30 @@ def test_resolve_points_inventory():
         cr.scan = orig
 
 
+def test_resolve_breaker_alarm():
+    # 遮断器(MCCB/ELCB)の警報接点は ALc/ALa(a接点)・ALc/ALb(b接点) を割り付ける。
+    orig = cr.scan
+    cr.scan = lambda paths: {
+        'ELCB-101': {'unlabeled': [
+            {'type': 'a_alarm', 'base': 'ELCB', 'x': 0.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0},
+            {'type': 'b_alarm', 'base': 'ELCB', 'x': 50.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0}],
+            'labeled_pins': set()},
+        'FX-1': {'unlabeled': [
+            {'type': 'a', 'base': 'FX', 'x': 0.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0},
+            {'type': 'a', 'base': 'FX', 'x': 50.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0}],
+            'labeled_pins': set()},
+    }
+    try:
+        pts = cr.resolve_points(['x'], inv={})
+        el = sorted(set(v for (d, x, y), v in pts.items() if d == 'ELCB-101'))
+        assert el == ['ALa', 'ALb', 'ALc'], el          # 警報端子
+        assert all(k[0] != 'FX-1' for k in pts)         # 遮断器でない多接点は割付けない(在庫無し)
+    finally:
+        cr.scan = orig
+
+
 if __name__ == '__main__':
     test_contact_type(); test_is_aux_relay(); test_std_pins()
     test_resolve_relay_single_vs_power(); test_resolve_points(); test_resolve_points_inventory()
+    test_resolve_breaker_alarm()
     print('contact_resolve tests: OK')
