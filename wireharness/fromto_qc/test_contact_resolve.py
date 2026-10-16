@@ -67,14 +67,13 @@ def test_resolve_points():
                    'labeled_pins': set()},
     }
     try:
-        # 在庫なし(inv={})のフォールバック: 補助リレー単一=標準ピン, 動力用=未確定
+        # 在庫なし(inv={})でも、標準a接点は機能正しいピンを小さい順に割付(13/14)。
         pts = cr.resolve_points(['x'], inv={})
         assert pts[('86X-101', 100.0, 200.0)] == '13'       # 上
         assert pts[('86X-101', 100.0, 100.0)] == '14'       # 下
-        assert all(k[0] != '52-101' for k in pts)           # 在庫無しでは動力用は確定しない
-        ptm = cr.resolve_points(['x'], markers=True, inv={})
-        assert ptm[('52-101', 0.0, 0.0)] == 'a?'            # 在庫無し→マーカー
-        assert ptm[('86X-101', 100.0, 200.0)] == '13'
+        # 52も在庫無しなら標準nth接点で補完(機能等価)。上=13, 下=14。
+        assert pts[('52-101', 0.0, 0.0)] == '13'
+        assert pts[('52-101', 0.0, -100.0)] == '14'
     finally:
         cr.scan = orig
 

@@ -157,6 +157,30 @@ def _kind_of(ct):
     return None
 
 
+def _pin_pool(inv_pairs, kind, n):
+    """機器＋接点種別に対し、n個分のピン対を『小さい順・重複なし』で用意する。
+    方針(ユーザー整理: 同種接点は電気的に等価＝空き端子を小さい順に割付、正解は機能で判定):
+      1) 学習在庫(contact_inventory, ④由来の実番号)を順に使う(実番号の忠実性を優先)。
+      2) 足りない分は標準nth接点規約(NO 13-14,23-24… / NC 11-12,21-22…)で補完。
+         既に在庫で使った対は飛ばし、重複を出さない。
+    kind が NO/NC でない(c接点=切替等)は補完しない → 空(マーカー=要確認のまま、◎誤答ゼロ)。"""
+    pool = [tuple(p) for p in inv_pairs]
+    if kind in ('NO', 'NC') and len(pool) < n:
+        seen = set(pool)
+        k = 1
+        while len(pool) < n:
+            p = contact_pins.nth_aux(kind, k)
+            if not p:
+                break
+            if p not in seen:
+                pool.append(p)
+                seen.add(p)
+            k += 1
+            if k > n + len(seen) + 8:          # 安全弁(無限ループ防止)
+                break
+    return pool[:n]
+
+
 # 遮断器(MCCB/ELCB)の警報接点の標準端子: ALc=共通, ALa=a接点側, ALb=b接点側(④で確認)。
 _ALARM_PINS = {'a_alarm': ('ALc', 'ALa'), 'b_alarm': ('ALc', 'ALb')}
 
@@ -169,12 +193,13 @@ def resolve_points(draw_paths, markers=False, inv=None):
     """接点候補を『端点座標単位』で返す。戻り: {(device, x, y): pin}。
     edge_trace の '?' 端点を (device, 近傍座標) で引いて置換するための地図。
     割付規則(現場確認・ユーザー整理): 同種接点は電気的に等価なので『空き端子を小さい順に割付』。
-    ・学習在庫のある機器型(52等) → 機器型の接点在庫(contact_inventory, ④学習)を小さい順に割付。
-    ・補助リレー(末尾X=86X/FX/CX…) → 標準nth接点規約で割付(NO 13-14,23-24… / NC 11-12,21-22…)。
-      単一接点はその第1接点(13-14/11-12)。複数接点も読み順に第1,2,3…接点を割り付ける。
-    ・遮断器(MCCB/ELCB)の警報接点 → ALc/ALa/ALb。
-    ・いずれにも当たらない型は markers=True なら 接点種別マーカー(a?/b?)。◎誤答ゼロ(機能等価なので割付自由、
-      正解判定は実番号でなく同じ機能の端子かで見る)。"""
+    標準a/b接点(図面の_LS_A/_LS_B=NO/NC)は機器型を問わず割り付ける(_pin_pool):
+    ・学習在庫(contact_inventory, ④由来の実番号)を優先し、足りない分は標準nth接点規約
+      (NO 13-14,23-24… / NC 11-12,21-22…)で重複なく補完。読み順に第1,2,3…接点を割付。
+    ・遮断器(MCCB/ELCB)の警報接点 → ALc/ALa/ALb(警報端子)。
+    ・c接点(切替/位置接点=_LS_C)は NO/NC 一律でないため割り付けない → markers=True なら c? マーカー
+      (要確認)。◎誤答ゼロ(標準a/bは機能等価なので割付自由、正解判定は実番号でなく同じ機能の端子かで見る。
+      曖昧なc接点は△=要確認のまま)。"""
     from . import contact_inventory
     inv = inv if inv is not None else contact_inventory.load()
     pt_pin = {}
@@ -186,20 +211,19 @@ def resolve_points(draw_paths, markers=False, inv=None):
             us_sorted = sorted(us, key=lambda z: (-z['y'], z['x']))   # 読み順(割付順)
             kind = _kind_of(ct)
             inv_pairs = [tuple(p) for p in inv.get(cross_learn.device_type(sym), {}).get(kind, [])]
-            relay = is_aux_relay(us[0].get('base', sym))
+            pool = _pin_pool(inv_pairs, kind, len(us_sorted))   # 実在庫優先＋標準nth補完(小さい順)
+            breaker_alarm = ct in _ALARM_PINS and _is_breaker(sym)
             for i, u in enumerate(us_sorted):
                 eps = _tb_endpoints(u)
                 if len(eps) != 2:
                     continue
                 top, bot = sorted(eps, key=lambda p: -p[1])     # 上(大y)が先
-                if i < len(inv_pairs):
-                    pins = inv_pairs[i]                         # 学習在庫から小さい順(等価)
-                elif relay:
-                    pins = _std_pins(ct, i + 1)                # 補助リレー=標準nth接点(NO 13-14,23-24… / NC 11-12,21-22…)
-                elif ct in _ALARM_PINS and _is_breaker(sym):
+                if breaker_alarm:
                     pins = _ALARM_PINS[ct]                      # 遮断器の警報接点(ALc/ALa/ALb)
+                elif i < len(pool):
+                    pins = pool[i]                             # 標準a/b接点=機能正しいピンを小さい順に
                 else:
-                    pins = None
+                    pins = None                                # c接点(切替)等=未割付(マーカー=要確認)
                 if pins:
                     pt_pin[(sym, top[0], top[1])] = pins[0]
                     pt_pin[(sym, bot[0], bot[1])] = pins[1]
