@@ -103,16 +103,30 @@ def test_resolve_breaker_alarm():
             {'type': 'a_alarm', 'base': 'ELCB', 'x': 0.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0},
             {'type': 'b_alarm', 'base': 'ELCB', 'x': 50.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0}],
             'labeled_pins': set()},
-        'FX-1': {'unlabeled': [
-            {'type': 'a', 'base': 'FX', 'x': 0.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0},
-            {'type': 'a', 'base': 'FX', 'x': 50.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0}],
-            'labeled_pins': set()},
     }
     try:
         pts = cr.resolve_points(['x'], inv={})
         el = sorted(set(v for (d, x, y), v in pts.items() if d == 'ELCB-101'))
         assert el == ['ALa', 'ALb', 'ALc'], el          # 警報端子
-        assert all(k[0] != 'FX-1' for k in pts)         # 遮断器でない多接点は割付けない(在庫無し)
+    finally:
+        cr.scan = orig
+
+
+def test_resolve_multi_aux_relay():
+    # 補助リレー(末尾X)の複数a接点は、在庫が無くても標準nth接点で割付(13-14, 23-24)。
+    orig = cr.scan
+    cr.scan = lambda paths: {
+        '86X-101': {'unlabeled': [
+            {'type': 'a', 'base': '86X', 'x': 0.0, 'y': 500.0, 'tb': '0,0,0,-100', 'deg': 0},
+            {'type': 'a', 'base': '86X', 'x': 0.0, 'y': 100.0, 'tb': '0,0,0,-100', 'deg': 0},
+            {'type': 'b', 'base': '86X', 'x': 50.0, 'y': 500.0, 'tb': '0,0,0,-100', 'deg': 0}],
+            'labeled_pins': set()},
+    }
+    try:
+        pts = cr.resolve_points(['x'], inv={})
+        got = sorted(set(v for (d, x, y), v in pts.items() if d == '86X-101'))
+        # a接点2つ=13,14,23,24(読み順:上y=500が第1→13-14、下y=100が第2→23-24)、b接点1つ=11,12
+        assert got == ['11', '12', '13', '14', '23', '24'], got
     finally:
         cr.scan = orig
 
@@ -120,5 +134,5 @@ def test_resolve_breaker_alarm():
 if __name__ == '__main__':
     test_contact_type(); test_is_aux_relay(); test_std_pins()
     test_resolve_relay_single_vs_power(); test_resolve_points(); test_resolve_points_inventory()
-    test_resolve_breaker_alarm()
+    test_resolve_breaker_alarm(); test_resolve_multi_aux_relay()
     print('contact_resolve tests: OK')

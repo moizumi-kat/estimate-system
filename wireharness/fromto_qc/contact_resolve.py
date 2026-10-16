@@ -169,9 +169,12 @@ def resolve_points(draw_paths, markers=False, inv=None):
     """接点候補を『端点座標単位』で返す。戻り: {(device, x, y): pin}。
     edge_trace の '?' 端点を (device, 近傍座標) で引いて置換するための地図。
     割付規則(現場確認・ユーザー整理): 同種接点は電気的に等価なので『空き端子を小さい順に割付』。
-    ・補助リレー単一接点 → 標準ピン(13-14/11-12)。
-    ・多接点(52等) → 機器型の接点在庫(contact_inventory, ④学習)を小さい順に割付=実番号候補。
-    ・在庫が無い型は markers=True なら 接点種別マーカー(a?/b?)。◎誤答ゼロ(等価なので割付自由)。"""
+    ・学習在庫のある機器型(52等) → 機器型の接点在庫(contact_inventory, ④学習)を小さい順に割付。
+    ・補助リレー(末尾X=86X/FX/CX…) → 標準nth接点規約で割付(NO 13-14,23-24… / NC 11-12,21-22…)。
+      単一接点はその第1接点(13-14/11-12)。複数接点も読み順に第1,2,3…接点を割り付ける。
+    ・遮断器(MCCB/ELCB)の警報接点 → ALc/ALa/ALb。
+    ・いずれにも当たらない型は markers=True なら 接点種別マーカー(a?/b?)。◎誤答ゼロ(機能等価なので割付自由、
+      正解判定は実番号でなく同じ機能の端子かで見る)。"""
     from . import contact_inventory
     inv = inv if inv is not None else contact_inventory.load()
     pt_pin = {}
@@ -183,16 +186,16 @@ def resolve_points(draw_paths, markers=False, inv=None):
             us_sorted = sorted(us, key=lambda z: (-z['y'], z['x']))   # 読み順(割付順)
             kind = _kind_of(ct)
             inv_pairs = [tuple(p) for p in inv.get(cross_learn.device_type(sym), {}).get(kind, [])]
-            single_relay = is_aux_relay(us[0].get('base', sym)) and len(us) == 1
+            relay = is_aux_relay(us[0].get('base', sym))
             for i, u in enumerate(us_sorted):
                 eps = _tb_endpoints(u)
                 if len(eps) != 2:
                     continue
                 top, bot = sorted(eps, key=lambda p: -p[1])     # 上(大y)が先
-                if single_relay:
-                    pins = _std_pins(ct, 1)
-                elif i < len(inv_pairs):
-                    pins = inv_pairs[i]                         # 在庫から小さい順(等価)
+                if i < len(inv_pairs):
+                    pins = inv_pairs[i]                         # 学習在庫から小さい順(等価)
+                elif relay:
+                    pins = _std_pins(ct, i + 1)                # 補助リレー=標準nth接点(NO 13-14,23-24… / NC 11-12,21-22…)
                 elif ct in _ALARM_PINS and _is_breaker(sym):
                     pins = _ALARM_PINS[ct]                      # 遮断器の警報接点(ALc/ALa/ALb)
                 else:
