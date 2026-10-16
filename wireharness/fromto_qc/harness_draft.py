@@ -19,6 +19,7 @@ import re
 
 from . import main_circuit
 from . import fixed_wiring
+from . import instrument_wiring
 from . import edge_trace
 from . import device_norm as dn
 from . import tb_strip
@@ -129,6 +130,8 @@ def build(seiban_dir, seiban=None):
         add(w['from'], w['to'], 'main_circuit', _main_tier(w), phase=w.get('phase'))
     for w in fixed_wiring.generate(layout):
         add(w['from'], w['to'], 'fixed_wiring', TIER_MID, phase=w.get('phase'))
+    for w in instrument_wiring.generate(layout):      # 計器配線(CT→AM定型・現場確認済)
+        add(w['from'], w['to'], 'instrument_wiring', TIER_MID)
     _PRIO = {'confirmed': 2, 'learned': 1, None: 0}
     for p in seq:
         try:
