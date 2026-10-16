@@ -16,5 +16,15 @@ def test_pairs_for():
     assert ci.pairs_for('99-1', 'NO', inv) == []   # 未知型
 
 
+def test_is_device_type():
+    # 実機器(数字コード/補助リレー/多文字型)は学習対象。
+    for s in ('52', '51', '42', '6', '86X', 'FX', 'CX', 'ALX', 'MCCB', 'ELCB', 'OL', '52R'):
+        assert ci._is_device_type(s), s
+    # ロケーター仮名称(素の英字1字・基1桁+英字1字)は除外。'X'(素)も除外。
+    for s in ('A', 'X', 'Z', '1A', '1-A', '1O', '9B', ''):
+        assert not ci._is_device_type(s), s
+
+
 if __name__ == '__main__':
-    test_pairs(); test_pairs_for(); print('contact_inventory tests: OK')
+    test_pairs(); test_pairs_for(); test_is_device_type()
+    print('contact_inventory tests: OK')

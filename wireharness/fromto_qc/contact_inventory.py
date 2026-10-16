@@ -21,6 +21,20 @@ from .harness_learn import _state_path
 INVENTORY_PATH = _state_path('contact_inventory.json')
 
 
+def _is_device_type(dt):
+    """接点在庫を学習してよい『機器型』か。ロケーター仮名称を除外する。
+    ④の『機器』列には内部配置図で実機器へ解決される仮名称(素のA〜Z、基1桁+英字1字=1A/1-A)が
+    入ることがあり、これを機器型と誤学習すると実機器のピン在庫を汚染し、別機器(例 FX)へ誤帰属する。
+    除外するのは英字1字で終わるロケーター形のみ。数字コード(52/51/42…)、補助リレー(86X/FX/CX/ALX=
+    2文字以上)、多文字型(MCCB 等)はすべて機器型として残す。"""
+    d = str(dt or '').strip().upper()
+    if not d:
+        return False
+    if re.fullmatch(r'\d?-?[A-Z]', d):        # ロケーター: 'A'…'Z' / '1A' / '1-A'(基1桁+英字1字)
+        return False
+    return True
+
+
 def _pairs(nums):
     """ソート済みピン列 → (奇,偶)ペア列。[13,14,53,54]→[('13','14'),('53','54')]。"""
     s = sorted(set(int(n) for n in nums))
@@ -48,6 +62,8 @@ def learn(seiban_dirs):
             for e in w['ends']:
                 sym = ft.endpoint_sym(e)
                 dt = cross_learn.device_type(sym)
+                if not _is_device_type(dt):          # ロケーター記号は在庫学習しない
+                    continue
                 t = (e['term'] or '').strip()
                 if not re.fullmatch(r'\d\d', t):
                     continue
