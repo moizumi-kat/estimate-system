@@ -160,3 +160,29 @@ def score_root(root):
     """複数製番の採点一覧。"""
     return [score_seiban(d) for d in sorted(glob.glob(os.path.join(root, '*/')))
             if ft.load_seiban(d)['wires']]
+
+
+# ---- 機能ベース採点(同種接点は等価とみなす) ----
+from . import contact_pins as _cp
+
+
+def _func_edge(edge):
+    """正規化エッジ(frozenset((sym,term)…)) → 機能エッジ。a接点/b接点は NO/NC に畳む。
+    同じ機能の端子なら実番号が違っても一致とみなす(ユーザー整理: 同種接点は電気的に等価)。"""
+    def ft_(sym, t):
+        f = _cp.function(t, sym)
+        return f if f in ('NO', 'NC') else t
+    return frozenset((s, ft_(s, t)) for (s, t) in edge)
+
+
+def score_functional(seiban_dir):
+    """機能ベースの採点。実番号でなく『同じ機能の端子か』で一致を見る。
+    戻り: {truth,gen,hit,recall,precision}。"""
+    lmap = locator_resolution(seiban_dir)
+    t = {_func_edge(e) for e in truth_edges(seiban_dir, lmap)}
+    g = {_func_edge(e) for e in generate_edges(seiban_dir, lmap)}
+    hit = len(t & g)
+    return {'seiban': os.path.basename(seiban_dir.rstrip('/')),
+            'truth': len(t), 'gen': len(g), 'hit': hit,
+            'recall': hit / len(t) if t else 0.0,
+            'precision': hit / len(g) if g else 0.0}
