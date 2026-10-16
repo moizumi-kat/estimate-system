@@ -174,11 +174,17 @@ def build(seiban_dir, seiban=None):
                             'confirmed', TIER_HI, tb_pending=True,
                             from_pos=pos[o], to_pos=pos[q])
                     else:
-                        tb_to = f'TB:回路{circ}' if circ else 'TB:台番号要確認'
-                        hint = strip_map.get(circ) if circ else None
+                        # 確定ルール(制御TB=その回路の主回路TB台)で、主回路台(tb_strip)から
+                        # 台番号を予測して出す。番号自体は tb_strip 精度に依るため『予測・要確認』。
+                        blk = strip_map.get(circ) if circ else None
+                        if blk:
+                            tb_to = f'TB-{blk}:回路{circ}(予測)'
+                        elif circ:
+                            tb_to = f'TB:回路{circ}'
+                        else:
+                            tb_to = 'TB:台番号要確認'
                         add(f'{ends[o][0]}:{ends[o][1]}', tb_to,
                             'edge_trace', TIER_LOW, tb_pending=True,
-                            tb_hint=(f'主回路台≈{hint}' if hint else None),
                             from_pos=pos[o], to_pos=pos[q])
                 # 非TBの'?'(動力用多接点など)は確定できないので出さない
 
@@ -274,9 +280,12 @@ def open_confirmations(draft):
     tb=『TB:回路NNN』で台番号未確定の回路。pins=『機器:a?/b?』で番号未確定の接点。"""
     tb, pins = {}, set()
     for w in draft['wires']:
-        m = re.match(r'TB:回路(.+)$', w.get('to', ''))
-        if m:
-            tb.setdefault(m.group(1), (w.get('tb_hint') or '').replace('主回路台≈', '') or None)
+        to = w.get('to', '')
+        # 台番号が未確定/予測のもの('TB:回路NNN' か 'TB-<台>:回路NNN(予測)')が確認対象。
+        # 確認済('TB-<台>:回路NNN' で予測でない)は確度:高なので対象外。
+        m = re.match(r'TB(?:-(\d+))?:回路([^(]+)', to)
+        if m and ('(予測)' in to or to.startswith('TB:回路')):
+            tb.setdefault(m.group(2).strip(), m.group(1))   # 予測台番号(あれば)をヒントに
         for f in (w.get('from', ''), w.get('to', '')):
             m2 = re.match(r'(.+):(a\?|b\?|aL\?|bL\?|c\?)$', f)
             if m2:
