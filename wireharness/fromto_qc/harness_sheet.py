@@ -21,8 +21,10 @@ from . import route as _route
 from .geometry import norm
 
 
-# 制御配線の標準電線(社内定石)。図面で個別指定が無い号線に適用(要確認)。
-DEFAULT_WIRE = ('HIV', '1.25')
+# 制御配線の標準電線。図面で個別指定が無い号線に適用(要確認)。
+# 製作仕様書(spec_rules)が正本: 制御回路=IV(エコ時EM-IE)・1.25sq以上(旧既定の HIV は主回路の種別で誤り)。
+from . import spec_rules as _sr2
+DEFAULT_WIRE = (_sr2.wire_type('control'), _sr2.CONTROL_MIN_SIZE)   # = ('IV', '1.25')
 
 
 def _wire_specs(paths):
