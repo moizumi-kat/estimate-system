@@ -186,3 +186,39 @@ def score_functional(seiban_dir):
             'truth': len(t), 'gen': len(g), 'hit': hit,
             'recall': hit / len(t) if t else 0.0,
             'precision': hit / len(g) if g else 0.0}
+
+
+def _circ_num(sym):
+    """機器記号 → 回路番号(3桁)。例 '52-102'→'102', 'TB-13'→''(TBは台番号で回路でない)。"""
+    m = re.search(r'(\d{3})', dn.strip_marks(str(sym or '')))
+    return m.group(1) if m else ''
+
+
+def _conn_edge(edge):
+    """機能エッジ + 端子台の回路正規化。
+    端子台(TB)の名前は『台番号』(TB-13 等)で、これは人が内部配置図で割り当てる工程(回路図から
+    導けない)。ツールの責務は『回路単位でどの端子台へ繋ぐか』までなので、TB端点を相手機器の
+    回路番号で正規化し、台番号付与(人/確認ループ)と切り離して結線生成の実力を測る。"""
+    e = [(s, t) for (s, t) in _func_edge(edge)]
+    circs = [_circ_num(s) for (s, t) in e]
+    out = []
+    for i, (s, t) in enumerate(e):
+        if str(s).upper().startswith('TB'):
+            other = (circs[1 - i] if len(e) == 2 else '') or _circ_num(s)
+            out.append(('TB', other))
+        else:
+            out.append((s, t))
+    return frozenset(out)
+
+
+def score_connectivity(seiban_dir):
+    """連結採点(3人目の実力)。機能等価＋端子台の回路正規化で、台番号付与を切り離して測る。
+    『どの端子とどの端子(どの回路の端子台)を繋ぐか』の生成網羅を表す。戻り: 同上。"""
+    lmap = locator_resolution(seiban_dir)
+    t = {_conn_edge(e) for e in truth_edges(seiban_dir, lmap)}
+    g = {_conn_edge(e) for e in generate_edges(seiban_dir, lmap)}
+    hit = len(t & g)
+    return {'seiban': os.path.basename(seiban_dir.rstrip('/')),
+            'truth': len(t), 'gen': len(g), 'hit': hit,
+            'recall': hit / len(t) if t else 0.0,
+            'precision': hit / len(g) if g else 0.0}
