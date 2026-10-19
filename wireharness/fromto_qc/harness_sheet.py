@@ -54,11 +54,15 @@ def _wire_specs(paths):
     return out
 
 
-_COLOR = {'R': '赤', 'S': '白', 'T': '青', 'N': '黒'}
+# 相→被覆色(製作仕様書P001 相色別, 低圧三相3線式が既定)。相色別は spec_rules を正本にする。
+# 中性相(N)は三相4線式/単相3線式で『白』(旧コードの N=黒 は誤りだった。手配図面5-21199で確認)。
+from . import spec_rules as _sr
+_COLOR = {p: _sr.phase_color(p) for p in ('R', 'S', 'T')}
+_COLOR['N'] = '白'
 
 
 def _color_of(gousen, terminal=''):
-    """相/号線末尾から電線色を推定。R/S/T→赤/白/青、末尾E/アース→緑。不明は空。"""
+    """相/号線末尾から電線色を推定。R/S/T→赤/白/青、N→白、末尾E/アース→緑。不明は空。"""
     g = str(gousen or '')
     if g.endswith('E') or 'アース' in g or g.upper().startswith('E'):
         return '緑'
