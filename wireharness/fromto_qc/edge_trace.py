@@ -168,15 +168,34 @@ def trace_edges(path, tol=TOL, with_pos=False, control_only=False):
         pa, pb = node_pos.get(a), node_pos.get(b)
         for ta in names(a):
             for tb in names(b):
-                if ta != tb:
-                    edges.add(frozenset((ta, tb)))
-                    if pa and pb:
-                        # 物理位置を正本に: 端子名(流儀)とともに同一シート内の座標を併記。
-                        pos_edges.append(((ta[0], ta[1], pa[0], pa[1]),
-                                          (tb[0], tb[1], pb[0], pb[1])))
+                if ta == tb:
+                    continue
+                # 面(盤)跨ぎの機器直結は存在しない(④で機器-機器 同面324:面跨ぎ1 で確認)。
+                # 面を跨ぐ接続は必ず中継TB経由(製造側が渡り専用TB/ファーステンを追加)。よって
+                # 機器どうしで面が異なる直結は偽辺として出さない(TB絡みは残す)。◎誤答ゼロ=精度改善。
+                if not _is_tb(ta[0]) and not _is_tb(tb[0]):
+                    fa, fb = _face(ta[0]), _face(tb[0])
+                    if fa and fb and fa != fb:
+                        continue
+                edges.add(frozenset((ta, tb)))
+                if pa and pb:
+                    # 物理位置を正本に: 端子名(流儀)とともに同一シート内の座標を併記。
+                    pos_edges.append(((ta[0], ta[1], pa[0], pa[1]),
+                                      (tb[0], tb[1], pb[0], pb[1])))
     if with_pos:
         return edges, all_terms, pos_edges
     return edges, all_terms
+
+
+def _is_tb(sym):
+    return str(sym or '').upper().startswith('TB')
+
+
+def _face(sym):
+    """機器記号 → 面(盤)番号。回路番号(3桁)の先頭桁が面を表す(TB台番号の先頭桁＝面とも一致。
+    ④の実データで確認)。回路番号が読めなければ ''。"""
+    m = re.search(r'(\d{3})', dn.strip_marks(str(sym or '')))
+    return m.group(1)[0] if m else ''
 
 
 def _rail_order(nodes, node_pos):

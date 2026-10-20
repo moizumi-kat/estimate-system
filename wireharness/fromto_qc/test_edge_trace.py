@@ -24,6 +24,16 @@ def test_rail_order_chain_edges():
     assert len(edges) == 3        # k-1本(完全グラフなら6本)
 
 
+def test_face():
+    # 面(盤)=回路番号(3桁)の先頭桁。
+    assert et._face('52-102') == '1'
+    assert et._face('52-205') == '2'
+    assert et._face('6-601') == '6'
+    assert et._face('MCCB') == ''        # 回路番号(3桁)なし
+    assert et._face('TB-13') == ''       # TB台番号は2桁で対象外(面跨ぎ抑制ではTBは別扱い)
+
+
 if __name__ == '__main__':
     test_rail_order_horizontal(); test_rail_order_vertical(); test_rail_order_chain_edges()
+    test_face()
     print('edge_trace tests: OK')
