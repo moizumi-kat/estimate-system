@@ -171,11 +171,20 @@ def trace_edges(path, tol=TOL, with_pos=False, control_only=False):
                 if ta == tb:
                     continue
                 # 面(盤)跨ぎの機器直結は存在しない(④で機器-機器 同面324:面跨ぎ1 で確認)。
-                # 面を跨ぐ接続は必ず中継TB経由(製造側が渡り専用TB/ファーステンを追加)。よって
-                # 機器どうしで面が異なる直結は偽辺として出さない(TB絡みは残す)。◎誤答ゼロ=精度改善。
+                # 面を跨ぐ接続は製造側が渡り専用TB/ファーステンを挿入する(現場回答)。よって
+                # 機器どうしで面が異なる直結は、捨てずに『仮の中継TB』を挟んで A→仮TB→B に分割する
+                # (台番号は要確認＝人/確認ループ)。◎誤答ゼロ: 中継の存在は検証済み、番号は未確定。
                 if not _is_tb(ta[0]) and not _is_tb(tb[0]):
                     fa, fb = _face(ta[0]), _face(tb[0])
                     if fa and fb and fa != fb:
+                        prov = ('TB', f'仮{min(fa, fb)}{max(fa, fb)}')   # 面ペアの仮中継TB
+                        edges.add(frozenset((ta, prov)))
+                        edges.add(frozenset((prov, tb)))
+                        if pa and pb:
+                            pos_edges.append(((ta[0], ta[1], pa[0], pa[1]),
+                                              (prov[0], prov[1], pa[0], pa[1])))
+                            pos_edges.append(((prov[0], prov[1], pb[0], pb[1]),
+                                              (tb[0], tb[1], pb[0], pb[1])))
                         continue
                 edges.add(frozenset((ta, tb)))
                 if pa and pb:
