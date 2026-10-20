@@ -233,13 +233,18 @@ def _bus_members(m, segs, find, comp_dev, tol=TOL, comp_terms=None):
     return dict(out)
 
 
-def _build_components(path, tol=TOL):
+def _build_components(path, tol=TOL, control_only=False):
     """規約どおり成分(union-find)を作り、成分→機器/端子(座標付き)を返す共通処理。
     戻り: dict(m, segs, find, comp_dev, comp_terms)
       comp_dev[c]   = set(機器記号)
       comp_terms[c] = set((機器, 端子名, x, y))  端子粒度＋座標
+    control_only=True: 主回路導体(L_MAIN=太物)を配線層から除外し、制御(細物)の結線だけを辿る。
+      スケルトン(E)を細物フィルタで辿る用途(太物のネットを混ぜて精度を落とさないため)。
     """
     m = DrawingModel(path)
+    if control_only and 'L_MAIN' in m.wire_layers:
+        m.wire_layers = m.wire_layers - {'L_MAIN'}
+        m.segments = m._wire_segments()
     segs = [(p1, p2) for (p1, p2) in m.segments]
     dots = [(e.dxf.insert.x, e.dxf.insert.y) for e in m.msp
             if e.dxftype() == 'INSERT' and e.dxf.name == CROSS_DOT]

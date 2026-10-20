@@ -42,11 +42,12 @@ def _lookup(resmap, dev, x, y):
     return None
 
 
-def trace_edges(path, tol=TOL, with_pos=False):
+def trace_edges(path, tol=TOL, with_pos=False, control_only=False):
     """シーケンス図 → 渡り辺。with_pos=True で (edges, terms, pos_edges) を返す。
     pos_edges=[((機器,端子,x,y),(機器,端子,x,y))] は同一シート内の物理座標を併記したもの
-    (物理位置を正本にするための出力。名前=流儀が違っても位置が合えば同一の配線)。"""
-    c = _build_components(path)
+    (物理位置を正本にするための出力。名前=流儀が違っても位置が合えば同一の配線)。
+    control_only=True: 主回路(L_MAIN=太物)を除外し制御(細物)結線のみ辿る(スケルトン統合用)。"""
+    c = _build_components(path, control_only=control_only)
     resmap = _resolve_map(path)
     segs, comp_terms = c['segs'], c['comp_terms']
     pts = []
