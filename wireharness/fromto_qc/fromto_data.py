@@ -11,9 +11,12 @@ harness_draft.build() の統合結線(トレース＋主回路＋計器＋面モ
 正規化し、1行1配線の FromToData にする。各行: from/to(機器,番号,端子) ＋ 確度 ＋ ソース。
 """
 import csv
+import os
 import re
 
 from . import harness_draft
+from . import seiban_config
+from . import wire_learn
 
 
 def _split_ep(ep):
@@ -62,7 +65,38 @@ def build_fromto(seiban_dir, seiban=None):
     for w in wires:
         rows.append({'from': end(w['from']), 'to': end(w['to']),
                      '確度': w['tier'], 'sources': w.get('sources', [])})
-    return {'rows': rows, 'tb_legend': legend, 'summary': draft['summary']}
+
+    # --- 確認ループ: 人が補完した配線を 確度:高(人確認) として反映 ---
+    sb = seiban or os.path.basename(str(seiban_dir).rstrip('/'))
+    have = {_rowkey(r) for r in rows}
+    for w in seiban_config.added_wires(sb):
+        r = {'from': dict(w['from']), 'to': dict(w['to']),
+             '確度': harness_draft.TIER_HI, 'sources': ['確認補完']}
+        if _rowkey(r) not in have:
+            rows.append(r); have.add(_rowkey(r))
+    # --- 横展開: 同じ流儀の他製番で確認済の配線パターンを候補(確度:中)として補完 ---
+    style = seiban_config.get_style(sb)
+    for w in wire_learn.suggest(sb, style=style):
+        r = {'from': dict(w['from']), 'to': dict(w['to']),
+             '確度': harness_draft.TIER_MID, 'sources': ['横展開']}
+        if _rowkey(r) not in have:
+            rows.append(r); have.add(_rowkey(r))
+
+    return {'rows': rows, 'tb_legend': legend, 'summary': _summary(rows)}
+
+
+def _rowkey(r):
+    f, t = r['from'], r['to']
+    a = (f['機器'], f['番号'], f['端子'])
+    b = (t['機器'], t['番号'], t['端子'])
+    return frozenset((a, b))
+
+
+def _summary(rows):
+    s = {harness_draft.TIER_HI: 0, harness_draft.TIER_MID: 0, harness_draft.TIER_LOW: 0}
+    for r in rows:
+        s[r['確度']] = s.get(r['確度'], 0) + 1
+    return s
 
 # 注) 制御のTB渡り(例 'TB-52: — TB-52:')は端子情報が無く、本数も台ごとに異なる製造側の
 #     デイジーチェーンで、④ですら端子空欄で記録される不透明なデータ。トレースから正しい本数・
@@ -70,22 +104,34 @@ def build_fromto(seiban_dir, seiban=None):
 #     TB渡りは main_circuit が端子名付きで生成済み。制御のTB渡りは人の確認/確認ループに委ねる。
 
 
-_HEADER = ['From場所', 'From機器', 'From番号', 'From端子',
+_HEADER = ['確認', 'From場所', 'From機器', 'From番号', 'From端子',
            'To場所', 'To機器', 'To番号', 'To端子', '確度', 'ソース']
 
 
 def to_csv(result, path):
-    """FromToData を CSV に書き出す(線長なし)。末尾に仮TB→ヒントの対応表を付す。"""
+    """FromToData をレビュー用 CSV に書き出す(線長なし)。先頭に『確認』列(人が OK/修正/削除/追加を記入)、
+    末尾に仮TB→実台番号の対応表を付す。確認結果は record_confirmations で取り込める。"""
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.writer(f)
         w.writerow(_HEADER)
         for r in result['rows']:
             fr, to = r['from'], r['to']
-            w.writerow(['', fr['機器'], fr['番号'], fr['端子'],
+            w.writerow(['', '', fr['機器'], fr['番号'], fr['端子'],
                         '', to['機器'], to['番号'], to['端子'],
                         r['確度'], '/'.join(r['sources'])])
         w.writerow([])
-        w.writerow(['仮TB対応表(ユーザが実台番号を割当)', '仮番号', 'ヒント(回路/面/主回路台)'])
+        w.writerow(['仮TB対応表: 仮番号→実台番号(ユーザ記入)', '仮番号', 'ヒント(回路/面/主回路台)', '実台番号'])
         for prov_no, hint in sorted(result['tb_legend'].items()):
-            w.writerow(['', prov_no, hint])
+            w.writerow(['', prov_no, hint, ''])
     return path
+
+
+def record_confirmations(seiban, added_wires=None, tb_assign=None,
+                         pin_confirm=None, style=None):
+    """確認ループの確定内容を保存する(次回 build_fromto で反映＋横展開)。
+    added_wires: 人が補完した配線 [{'from':{機器,番号,端子},'to':{...}}] → 確度:高で出力に追加。
+    tb_assign: {回路: 実台番号} / pin_confirm: {'機器:マーカー': ピン} / style: 流儀タグ。
+    戻り: 保存後の製番レコード。"""
+    return seiban_config.record_decision(
+        seiban, tb_assign=tb_assign, pin_confirm=pin_confirm,
+        style=style, added_wires=added_wires)

@@ -152,8 +152,36 @@ def set_style(seiban, style):
     return rec
 
 
+def added_wires(seiban):
+    """人が補完した配線のリスト [{'from':{機器,番号,端子},'to':{...}}]。
+    ツールが生成できない製造側の結線(制御TB渡り・device→TB 等)を人が足したもの。
+    FromToData 生成時に 確度:高(人確認)として出力に含める。無ければ空リスト。"""
+    return [dict(w) for w in get(seiban).get('added_wires', [])]
+
+
+def set_added_wires(seiban, wires):
+    """製番の補完配線リストを丸ごと設定・保存する。空/None でクリア。"""
+    cfg = _load()
+    rec = cfg.setdefault(str(seiban), {})
+    if wires:
+        rec['added_wires'] = [dict(w) for w in wires]
+    else:
+        rec.pop('added_wires', None)
+    if not rec:
+        cfg.pop(str(seiban), None)
+    _save(cfg)
+    return rec
+
+
+def add_wire(seiban, frm, to):
+    """製番に補完配線を1本追加する。frm/to は {機器,番号,端子} dict。"""
+    ws = added_wires(seiban)
+    ws.append({'from': dict(frm), 'to': dict(to)})
+    return set_added_wires(seiban, ws)
+
+
 def record_decision(seiban, load_factor=None, futo_override=None,
-                    tb_assign=None, pin_confirm=None, style=None):
+                    tb_assign=None, pin_confirm=None, style=None, added_wires=None):
     """確認UIの確定内容(負荷率＋太物/内＋TB台割当＋ピン)をまとめて記録する。
     futo_override/tb_assign/pin_confirm はいずれも辞書。None の値はクリア。戻り: 保存後の製番レコード。"""
     if load_factor is not None:
@@ -166,6 +194,8 @@ def record_decision(seiban, load_factor=None, futo_override=None,
         set_pin_confirm(seiban, key, pin)
     if style is not None:
         set_style(seiban, style or None)
+    if added_wires is not None:
+        set_added_wires(seiban, added_wires or None)
     return get(seiban)
 
 
