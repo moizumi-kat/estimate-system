@@ -64,6 +64,11 @@ def build_fromto(seiban_dir, seiban=None):
                      '確度': w['tier'], 'sources': w.get('sources', [])})
     return {'rows': rows, 'tb_legend': legend, 'summary': draft['summary']}
 
+# 注) 制御のTB渡り(例 'TB-52: — TB-52:')は端子情報が無く、本数も台ごとに異なる製造側の
+#     デイジーチェーンで、④ですら端子空欄で記録される不透明なデータ。トレースから正しい本数・
+#     位置を導けないため、候補自動生成は行わない(過剰生成=誤答になる)。接地(E)/相(U/V/W)の
+#     TB渡りは main_circuit が端子名付きで生成済み。制御のTB渡りは人の確認/確認ループに委ねる。
+
 
 _HEADER = ['From場所', 'From機器', 'From番号', 'From端子',
            'To場所', 'To機器', 'To番号', 'To端子', '確度', 'ソース']
