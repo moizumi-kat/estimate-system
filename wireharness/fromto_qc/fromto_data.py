@@ -14,6 +14,7 @@ import csv
 import os
 import re
 
+from . import connector_harness
 from . import harness_draft
 from . import seiban_config
 from . import wire_learn
@@ -82,7 +83,13 @@ def build_fromto(seiban_dir, seiban=None):
         if _rowkey(r) not in have:
             rows.append(r); have.add(_rowkey(r))
 
-    return {'rows': rows, 'tb_legend': legend, 'summary': _summary(rows)}
+    # --- コネクタ・ハーネス(分電盤) ---
+    # コネクタ↔ブレーカはトレース不能・④でもブレーカ無番号の『描かれない配線』(connector_harness
+    # 参照)。特定From-Toの断定は誤答になるため採点対象の rows には混ぜず、別建ての要結線リストで出す。
+    connectors = connector_harness.build_worklist(seiban_dir)
+
+    return {'rows': rows, 'tb_legend': legend, 'summary': _summary(rows),
+            'connectors': connectors}
 
 
 def _rowkey(r):
@@ -123,6 +130,16 @@ def to_csv(result, path):
         w.writerow(['仮TB対応表: 仮番号→実台番号(ユーザ記入)', '仮番号', 'ヒント(回路/面/主回路台)', '実台番号'])
         for prov_no, hint in sorted(result['tb_legend'].items()):
             w.writerow(['', prov_no, hint, ''])
+        # コネクタ・ハーネス(分電盤)の要結線リスト: 接地束は型確定・番号要割付、他ピンは要結線。
+        conn = result.get('connectors')
+        if conn and conn['summary']['コネクタ数']:
+            w.writerow([])
+            w.writerow(['コネクタ・ハーネス要結線(分電盤): 相手ブレーカは図面/④に番号が無く要割付',
+                        'コネクタ番号', '相', '相手(型)', '確認'])
+            for c in conn['connectors']:
+                for ph in c['相']:
+                    mate = 'ブレーカ:ET' if ph == 'E' else 'ブレーカ:相(R-RY渡り, 要確認)'
+                    w.writerow(['', c['番号'], ph, mate, ''])
     return path
 
 
