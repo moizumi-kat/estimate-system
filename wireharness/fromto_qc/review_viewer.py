@@ -21,6 +21,7 @@ import sys
 import ezdxf
 
 from . import edge_trace
+from .tracer import _build_components
 
 
 def _segments(msp):
@@ -54,12 +55,34 @@ def _device_labels(msp):
     return out
 
 
+def _terminals(sheet_path):
+    """2人目(端子番号)を座標付きで返す [[機器, 端子, x, y], ...]。
+    接点シンボルの '?' は contact_resolve で確実に解決できる分だけ実番号へ置換(回帰ゼロ)。"""
+    comp = _build_components(sheet_path)
+    resmap = edge_trace._resolve_map(sheet_path)
+    seen, out = set(), []
+    for terms in comp['comp_terms'].values():
+        for (d, t, x, y) in terms:
+            tt = t
+            if t == '?':
+                rp = edge_trace._lookup(resmap, d, x, y)
+                if rp is not None:
+                    tt = rp
+            k = (d, tt, round(x), round(y))
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append([d, tt, round(x, 1), round(y, 1)])
+    return out
+
+
 def extract(sheet_path):
     """1シートの図面geometryと配線(pos_edges)を抽出して dict で返す。"""
     doc = ezdxf.readfile(sheet_path)
     msp = doc.modelspace()
     segs = _segments(msp)
     _, _, pos = edge_trace.trace_edges(sheet_path, with_pos=True)
+    terminals = _terminals(sheet_path)
     edges = []
     for (da, ta, xa, ya), (db, tb, xb, yb) in pos:
         edges.append({
@@ -72,6 +95,8 @@ def extract(sheet_path):
         xs += [s[0], s[2]]; ys += [s[1], s[3]]
     for e in edges:
         xs += [e['ax'], e['bx']]; ys += [e['ay'], e['by']]
+    for t in terminals:
+        xs.append(t[2]); ys.append(t[3])
     if not xs:
         xs, ys = [0, 1], [0, 1]
     bbox = [min(xs), min(ys), max(xs), max(ys)]
@@ -80,6 +105,7 @@ def extract(sheet_path):
         'segments': segs,
         'devices': _device_labels(msp),
         'edges': edges,
+        'terminals': terminals,
         'bbox': bbox,
     }
 
@@ -107,12 +133,12 @@ _TEMPLATE = r"""<!doctype html>
 <title>配線確認</title>
 <style>
   :root{--bg:#ffffff;--fg:#1a1a1a;--line:#c8c8c8;--panel:#f4f4f6;--border:#dddde2;
-        --hl:#e4002b;--hldev:#0066cc;--okbg:#e8f5e9;--sel:#fff3cd;}
+        --hl:#e4002b;--hldev:#0066cc;--okbg:#e8f5e9;--sel:#fff3cd;--term:#0a7d2c;--termq:#c08a00;}
   @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
         --bg:#14151a;--fg:#e8e8ea;--line:#3a3b42;--panel:#1d1e25;--border:#2c2d35;
-        --hl:#ff5a76;--hldev:#5aaaff;--okbg:#1f3a24;--sel:#4a3f1a;}}
+        --hl:#ff5a76;--hldev:#5aaaff;--okbg:#1f3a24;--sel:#4a3f1a;--term:#4cd47a;--termq:#e0b84d;}}
   :root[data-theme="dark"]{--bg:#14151a;--fg:#e8e8ea;--line:#3a3b42;--panel:#1d1e25;
-        --border:#2c2d35;--hl:#ff5a76;--hldev:#5aaaff;--okbg:#1f3a24;--sel:#4a3f1a;}
+        --border:#2c2d35;--hl:#ff5a76;--hldev:#5aaaff;--okbg:#1f3a24;--sel:#4a3f1a;--term:#4cd47a;--termq:#e0b84d;}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 system-ui,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;}
   header{padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:14px;align-items:center;flex-wrap:wrap}
@@ -126,6 +152,12 @@ _TEMPLATE = r"""<!doctype html>
   .hlpt{fill:none;stroke:var(--hl);stroke-width:2.5;vector-effect:non-scaling-stroke}
   .devlbl{fill:var(--hldev);font-size:11px;font-weight:600}
   .devdot{fill:var(--hldev)}
+  .term{fill:var(--term);font-size:9px;font-weight:700;paint-order:stroke;
+        stroke:var(--bg);stroke-width:2px}
+  .termdot{fill:var(--term)}
+  .term.unres{fill:var(--termq);stroke:var(--bg)}
+  .termdot.unres{fill:var(--termq)}
+  label.tg{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
   .list{flex:0 0 40%;max-width:520px;overflow:auto;border-left:1px solid var(--border);background:var(--panel)}
   table{border-collapse:collapse;width:100%}
   th,td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
@@ -144,12 +176,13 @@ _TEMPLATE = r"""<!doctype html>
   <b id="title">配線確認</b>
   <span class="hint">行をクリック→図面上で配線をハイライト / 左端セルで OK 記録 / ホイールで拡大・ドラッグで移動</span>
   <button id="reset">全体表示</button>
+  <label class="tg"><input type="checkbox" id="tgterm" checked>端子番号(2人目)</label>
   <span class="hint" id="count"></span>
 </header>
 <div class="wrap">
   <div class="view">
     <svg id="svg"><g id="scene">
-      <g id="segs"></g><g id="hl"></g><g id="devs"></g>
+      <g id="segs"></g><g id="terms"></g><g id="hl"></g><g id="devs"></g>
     </g></svg>
   </div>
   <div class="list">
@@ -174,6 +207,19 @@ let sb = '';
 for(const s of DATA.segments){ sb += `<line class="seg" x1="${s[0]}" y1="${fy(s[1])}" x2="${s[2]}" y2="${fy(s[3])}"/>`; }
 gseg.innerHTML = sb;
 
+// 端子番号(2人目): 各端子位置に点＋番号。'?'(未解決)は橙で淡く。
+const gterm = document.getElementById('terms');
+let tbuf = '';
+for(const t of (DATA.terminals||[])){
+  const [dev,term,x,y]=t; const q = (term==='?'); const cls = q?' unres':'';
+  tbuf += `<circle class="termdot${cls}" cx="${x}" cy="${fy(y)}" r="3"/>`
+       +  `<text class="term${cls}" x="${x+6}" y="${fy(y)-4}">${term}</text>`;
+}
+gterm.innerHTML = tbuf;
+document.getElementById('tgterm').addEventListener('change',e=>{
+  gterm.style.display = e.target.checked ? '' : 'none';
+});
+
 // 一覧
 const tb = document.getElementById('tb');
 DATA.edges.forEach((e,i)=>{
@@ -181,7 +227,7 @@ DATA.edges.forEach((e,i)=>{
   tr.innerHTML=`<td class="c" data-ok="1">·</td><td>${i+1}</td><td>${e.from}</td><td>${e.to}</td>`;
   tb.appendChild(tr);
 });
-document.getElementById('count').textContent = `配線 ${DATA.edges.length} 本 / 図面要素 ${DATA.segments.length}`;
+document.getElementById('count').textContent = `配線 ${DATA.edges.length} 本 / 端子 ${(DATA.terminals||[]).length} 点`;
 document.getElementById('title').textContent = '配線確認 — ' + DATA.sheet;
 
 const ghl=document.getElementById('hl'), gdev=document.getElementById('devs');
