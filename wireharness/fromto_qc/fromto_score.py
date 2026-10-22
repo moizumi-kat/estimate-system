@@ -30,6 +30,18 @@ from . import locator_assign as LA
 from . import device_norm as dn
 
 
+def _seq_paths(seiban_dir):
+    """配線(シーケンス)図面のパス。制御盤=F系列、分電盤=H系列(配線図)。
+    分電盤の図面系列は G(外形)/H(配線)/M/P(仕様)/Z(社内表) で、配線は H系列にある。
+    系列コードのH(H001〜/H101〜)を狙い、製番中のHと誤爆しないよう H[0-9] で拾う。"""
+    pats = ('図面データ_*F*.DXF', '図面データ_*F*.dxf',
+            '図面データ_*H[0-9]*.DXF', '図面データ_*H[0-9]*.dxf')
+    out = []
+    for p in pats:
+        out += glob.glob(os.path.join(seiban_dir, p))
+    return sorted(set(out))
+
+
 def locator_resolution(seiban_dir):
     """{ロケーター表記(大文字): 設計実機器sym(大文字)}。
     主軸は locator_assign(内部配置図D001の実機器＋位置から我々が決定的に付番)。
@@ -53,8 +65,7 @@ def locator_resolution(seiban_dir):
         return m
     # --- フォールバック: 凡例＋④ピン照合 ---
     dcts = glob.glob(os.path.join(seiban_dir, '機器相番号_*.dxf'))
-    seq = (glob.glob(os.path.join(seiban_dir, '図面データ_*F*.DXF')) +
-           glob.glob(os.path.join(seiban_dir, '図面データ_*F*.dxf')))
+    seq = _seq_paths(seiban_dir)
     for p in dcts:
         for loc, act in LM.extract_pairs(p):
             _, lt = LM._split_locator(loc)
@@ -110,8 +121,7 @@ def generate_edges(seiban_dir, lmap=None):
     """統合生成の正規化エッジ集合を返す(制御＋主回路＋SPD)。"""
     if lmap is None:
         lmap = locator_resolution(seiban_dir)
-    seq = (glob.glob(os.path.join(seiban_dir, '図面データ_*F*.DXF')) +
-           glob.glob(os.path.join(seiban_dir, '図面データ_*F*.dxf')))
+    seq = _seq_paths(seiban_dir)
     draws = (glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF')) +
              glob.glob(os.path.join(seiban_dir, '図面データ_*E*.DXF')) +
              glob.glob(os.path.join(seiban_dir, '図面データ_*G0*.DXF')))
