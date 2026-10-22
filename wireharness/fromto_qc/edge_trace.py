@@ -123,9 +123,30 @@ def trace_edges(path, tol=TOL, with_pos=False, control_only=False):
     comp_termnodes = collections.defaultdict(list)
     for tn in termnodes:
         comp_termnodes[comp.get(tn, tn)].append(tn)
+    def _is_tb_node(n):
+        return any(_is_tb(d) for d, t in term_at.get(n, ()))
+
+    def _nearest(n, cands):
+        pn = node_pos.get(n)
+        if pn is None:
+            return cands[0]
+        return min(cands, key=lambda c: (node_pos.get(c, (1e9, 1e9))[0] - pn[0]) ** 2
+                   + (node_pos.get(c, (1e9, 1e9))[1] - pn[1]) ** 2)
+
     node_edges = set()
     for members in comp_termnodes.values():
         if len(members) < 2:
+            continue
+        hubs = [n for n in members if _is_tb_node(n)]
+        if hubs and len(members) > 2:
+            # ハブ(端子台)がある多点ネット: 各機器はハブへ星形接続(制御ファンアウトは中継端子
+            # 経由=現場回答③・実データ検証済)。機器どうしの直結は作らない。ハブ同士は渡り鎖。
+            devs = [n for n in members if n not in hubs]
+            horder = _rail_order(hubs, node_pos)
+            for a, b in zip(horder, horder[1:]):
+                node_edges.add(frozenset((a, b)))
+            for dnode in devs:
+                node_edges.add(frozenset((dnode, _nearest(dnode, hubs))))
             continue
         if len(members) == 2:
             node_edges.add(frozenset(members))
