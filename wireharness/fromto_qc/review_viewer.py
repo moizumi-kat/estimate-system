@@ -153,6 +153,7 @@ def senban_nets(sheet_path):
 
     doc = ezdxf.readfile(sheet_path)
     comp_sb = collections.defaultdict(list)
+    senban = []
     for ins in doc.modelspace().query('INSERT'):
         if 'SENBAN' not in ins.dxf.name:
             continue
@@ -160,14 +161,42 @@ def senban_nets(sheet_path):
         val = next((v for v in a.values() if v), '')
         if not val:
             continue
+        senban.append((val, ins.dxf.insert.x, ins.dxf.insert.y))
         c = comp_near(ins.dxf.insert.x, ins.dxf.insert.y)
         if c is not None:
             comp_sb[c].append(val)
 
+    # 端子台(TB=_LU0001でDEVICE=TB等)をコンポーネントに付与する。tracerに登録されない内部TBが
+    # あり、そのせいで『機器→TB渡り』ネット(例102F=52:73+TB)が1端子になって落ちるため。
+    terms_by_comp = collections.defaultdict(set)
+    for c, s in comp_terms.items():
+        terms_by_comp[c] |= set(s)
+
+    def _senban_at(x, y, r=TOL * 3.5):
+        best, bd = None, r * r
+        for val, sx, sy in senban:
+            dd = (x - sx) ** 2 + (y - sy) ** 2
+            if dd < bd:
+                bd, best = dd, val
+        return best
+    for ins in doc.modelspace().query('INSERT'):
+        a = {at.dxf.tag: (at.dxf.text or '').strip() for at in ins.attribs} if ins.attribs else {}
+        if a.get('DEVICE', '') != 'TB' and not (ins.dxf.name == '_LU0001' and a.get('PARTS') == 'TB'):
+            continue
+        x, y = round(ins.dxf.insert.x, 1), round(ins.dxf.insert.y, 1)
+        c = comp_near(x, y)
+        if c is None:
+            continue
+        if any(d == 'TB' and abs(tx - x) < TOL and abs(ty - y) < TOL
+               for d, t, tx, ty in terms_by_comp[c]):
+            continue
+        label = _senban_at(x, y) or a.get('DEVICE1', '') or '?'
+        terms_by_comp[c].add(('TB', label, x, y))
+
     def norm(s):                                   # '10206' -> '102-06'(回路-枝)
         return f'{s[:3]}-{s[3:]}' if len(s) > 3 and s[:3].isdigit() and s[3:].isdigit() else s
     nets = []
-    for c, terms in comp_terms.items():
+    for c, terms in terms_by_comp.items():
         if len(terms) < 2:
             continue
         sb = comp_sb.get(c, [])
