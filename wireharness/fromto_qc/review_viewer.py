@@ -98,23 +98,30 @@ def _device_labels(msp):
 
 
 def _terminals(sheet_path):
-    """2人目(端子番号)を座標付きで返す [[機器, 端子, x, y], ...]。
-    接点シンボルの '?' は contact_resolve で確実に解決できる分だけ実番号へ置換(回帰ゼロ)。"""
+    """2人目(端子番号)を座標付き+確度で返す [[機器, 端子, x, y, tier], ...]。
+    tier は接点番号の確度(3段階):
+      'drawn'   … 図面に端子番号が記載(確実)            → 青
+      'inferred'… 図面は空欄だが contact_resolve で解決(要判断) → 濃い黄色
+      'unknown' … 番号を決められない                    → 赤(脇に?)
+    どの接点も必ず1点として出す(○で『そこに接点がある』ことを明示)。"""
     comp = _build_components(sheet_path)
     resmap = edge_trace._resolve_map(sheet_path)
     seen, out = set(), []
     for terms in comp['comp_terms'].values():
         for (d, t, x, y) in terms:
-            tt = t
-            if t == '?':
+            if t != '?':                         # 図面に番号あり=確実
+                tt, tier = t, 'drawn'
+            else:
                 rp = edge_trace._lookup(resmap, d, x, y)
-                if rp is not None:
-                    tt = rp
+                if rp is not None:               # 推論で解決=要判断
+                    tt, tier = rp, 'inferred'
+                else:                            # 不明
+                    tt, tier = '?', 'unknown'
             k = (d, tt, round(x), round(y))
             if k in seen:
                 continue
             seen.add(k)
-            out.append([d, tt, round(x, 1), round(y, 1)])
+            out.append([d, tt, round(x, 1), round(y, 1), tier])
     return out
 
 
@@ -250,12 +257,15 @@ _TEMPLATE = r"""<!doctype html>
 <title>配線確認</title>
 <style>
   :root{--bg:#ffffff;--fg:#1a1a1a;--line:#c8c8c8;--panel:#f4f4f6;--border:#dddde2;
-        --hl:#e4002b;--hldev:#0066cc;--okbg:#e8f5e9;--sel:#fff3cd;--term:#0a7d2c;--termq:#c08a00;}
+        --hl:#e4002b;--hldev:#0066cc;--okbg:#e8f5e9;--sel:#fff3cd;
+        --tdrawn:#0a62d6;--tinfer:#b8860b;--tunknown:#e4002b;}
   @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
         --bg:#14151a;--fg:#e8e8ea;--line:#3a3b42;--panel:#1d1e25;--border:#2c2d35;
-        --hl:#ff5a76;--hldev:#5aaaff;--okbg:#1f3a24;--sel:#4a3f1a;--term:#4cd47a;--termq:#e0b84d;}}
+        --hl:#ff5a76;--hldev:#5aaaff;--okbg:#1f3a24;--sel:#4a3f1a;
+        --tdrawn:#5aaaff;--tinfer:#e0b84d;--tunknown:#ff5a76;}}
   :root[data-theme="dark"]{--bg:#14151a;--fg:#e8e8ea;--line:#3a3b42;--panel:#1d1e25;
-        --border:#2c2d35;--hl:#ff5a76;--hldev:#5aaaff;--okbg:#1f3a24;--sel:#4a3f1a;--term:#4cd47a;--termq:#e0b84d;}
+        --border:#2c2d35;--hl:#ff5a76;--hldev:#5aaaff;--okbg:#1f3a24;--sel:#4a3f1a;
+        --tdrawn:#5aaaff;--tinfer:#e0b84d;--tunknown:#ff5a76;}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 system-ui,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;}
   header{padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:14px;align-items:center;flex-wrap:wrap}
@@ -269,11 +279,12 @@ _TEMPLATE = r"""<!doctype html>
   .hlpt{fill:none;stroke:var(--hl);stroke-width:2.5;vector-effect:non-scaling-stroke}
   .devlbl{fill:var(--hldev);font-size:11px;font-weight:600}
   .devdot{fill:var(--hldev)}
-  .term{fill:var(--term);font-size:9px;font-weight:700;paint-order:stroke;
-        stroke:var(--bg);stroke-width:2px}
-  .termdot{fill:var(--term)}
-  .term.unres{fill:var(--termq);stroke:var(--bg)}
-  .termdot.unres{fill:var(--termq)}
+  /* 接点マーカー: 各接点に○を描き、確度で色分け(青=確実/濃黄=要判断/赤=不明)。 */
+  .tring{fill:var(--bg);stroke-width:1.6;vector-effect:non-scaling-stroke}
+  .tlbl{font-size:9px;font-weight:700;paint-order:stroke;stroke:var(--bg);stroke-width:2px}
+  .t-drawn .tring{stroke:var(--tdrawn)} .t-drawn .tlbl{fill:var(--tdrawn)}
+  .t-inferred .tring{stroke:var(--tinfer)} .t-inferred .tlbl{fill:var(--tinfer)}
+  .t-unknown .tring{stroke:var(--tunknown)} .t-unknown .tlbl{fill:var(--tunknown)}
   label.tg{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
   .list{flex:0 0 40%;max-width:520px;overflow:auto;border-left:1px solid var(--border);background:var(--panel)}
   table{border-collapse:collapse;width:100%}
@@ -324,13 +335,17 @@ let sb = '';
 for(const s of DATA.segments){ sb += `<line class="seg" x1="${s[0]}" y1="${fy(s[1])}" x2="${s[2]}" y2="${fy(s[3])}"/>`; }
 gseg.innerHTML = sb;
 
-// 端子番号(2人目): 各端子位置に点＋番号。'?'(未解決)は橙で淡く。
+// 接点(2人目): 各接点に○を描き確度で色分け。青=判断できた(図面に番号)、濃黄=要判断
+// (推論で解決)、赤=不明(脇に赤い?)。番号は○の右上に表示。
 const gterm = document.getElementById('terms');
 let tbuf = '';
 for(const t of (DATA.terminals||[])){
-  const [dev,term,x,y]=t; const q = (term==='?'); const cls = q?' unres':'';
-  tbuf += `<circle class="termdot${cls}" cx="${x}" cy="${fy(y)}" r="3"/>`
-       +  `<text class="term${cls}" x="${x+6}" y="${fy(y)-4}">${term}</text>`;
+  const [dev,term,x,y,tier]=t;
+  const cls = 't-'+(tier||'unknown');
+  tbuf += `<g class="${cls}"><circle class="tring" cx="${x}" cy="${fy(y)}" r="5"/>`;
+  if(tier==='unknown'){ tbuf += `<text class="tlbl" x="${x+8}" y="${fy(y)-5}">?</text>`; }
+  else { tbuf += `<text class="tlbl" x="${x+8}" y="${fy(y)-5}">${term}</text>`; }
+  tbuf += `</g>`;
 }
 gterm.innerHTML = tbuf;
 document.getElementById('tgterm').addEventListener('change',e=>{
