@@ -206,6 +206,45 @@ def senban_nets(sheet_path):
     return nets
 
 
+def _tb_attr_labels(msp):
+    """全接点シンボルの TB属性(端子位置)×TERMINAL属性(端子番号) から
+    [(機器, 端子番号, x, y), ...] を返す。図面に記載された番号の正本。
+    トレースが '?' にした接点でも、図面に番号があればここから直接読める(取得漏れの救済)。"""
+    import math as _m
+    out = []
+    for ins in msp.query('INSERT'):
+        a = {at.dxf.tag: (at.dxf.text or '').strip() for at in ins.attribs} if ins.attribs else {}
+        tb = a.get('TB', '')
+        dev = a.get('DEVICE', '')
+        if not tb or not dev:
+            continue
+        nums = []
+        for v in tb.split(','):
+            try:
+                nums.append(float(v.strip()))
+            except Exception:
+                nums.append(None)
+        rot = _m.radians(ins.dxf.rotation or 0)
+        sx = ins.dxf.xscale or 1
+        sy = ins.dxf.yscale or 1
+        ox, oy = ins.dxf.insert.x, ins.dxf.insert.y
+        terms = [a.get('TERMINAL1', ''), a.get('TERMINAL2', ''), a.get('TERMINAL3', '')]
+        idx = 0
+        for k in range(0, len(nums) - 1, 2):
+            dx, dy = nums[k], nums[k + 1]
+            if dx is None or dy is None:
+                continue
+            wx = ox + (dx * sx * _m.cos(rot) - dy * sy * _m.sin(rot))
+            wy = oy + (dx * sx * _m.sin(rot) + dy * sy * _m.cos(rot))
+            label = terms[idx] if idx < len(terms) else ''
+            num = a.get('DEVICE1', '')
+            full = f'{dev}-{num}' if num else dev
+            if label:
+                out.append((full, label, round(wx, 1), round(wy, 1)))
+            idx += 1
+    return out
+
+
 def _terminals(sheet_path):
     """2人目(端子番号)を座標付き+確度で返す [[機器, 端子, x, y, tier], ...]。
     tier は接点番号の確度(3段階):
@@ -371,6 +410,27 @@ def extract(sheet_path):
     for t in terminals:
         sx, sy = _snap(t[2], t[3])
         t[2], t[3] = round(sx, 1), round(sy, 1)
+    # 図面のTERMINAL属性で '?'(不明)を救済する。トレースが番号を結び付けられなくても、
+    # 記号に番号が書かれていれば図面どおりに読む(推論でなく正本=drawn)。
+    attr_labels = _tb_attr_labels(msp)
+    algrid = collections.defaultdict(list)
+    for i, (dv, lb, ax, ay) in enumerate(attr_labels):
+        algrid[(int(ax // TOL), int(ay // TOL))].append(i)
+    for t in terminals:
+        if t[1] != '?':
+            continue
+        x, y = t[2], t[3]
+        gx, gy = int(x // TOL), int(y // TOL)
+        best, bd = None, (TOL * 1.6) ** 2
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for i in algrid[(gx + dx, gy + dy)]:
+                    dv, lb, ax, ay = attr_labels[i]
+                    dd = (ax - x) ** 2 + (ay - y) ** 2
+                    if dd < bd:
+                        bd, best = dd, lb
+        if best:
+            t[1], t[4] = best, 'drawn'
     # 未検出の接点(押ボタンのラダー接点など)を接続点に足す(赤?=不明)。
     terminals += _extra_contacts(msp, comp, terminals)
     # --- 外部判定＋線番(端子台番号) ---
