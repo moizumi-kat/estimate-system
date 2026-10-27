@@ -97,6 +97,43 @@ def _device_labels(msp):
     return out
 
 
+def _hidden_layers(doc):
+    """点線(外部)レイヤ名の集合。線種が HIDDEN 系、またはレイヤ名 L_OUTSIDE。
+    図面規約: 点線=当社製品でない外部製品(客先手配等)。配線は端子台までが当社範囲。"""
+    out = set()
+    for ly in doc.layers:
+        name = ly.dxf.name
+        lt = (ly.dxf.linetype or '').upper()
+        if name == 'L_OUTSIDE' or 'HIDDEN' in lt or 'PHANTOM' in lt:
+            out.add(name)
+    return out
+
+
+def _external_boxes(msp, hidden):
+    """外部製品(点線レイヤ/HIDDEN線種)のINSERT位置 [(x,y), ...]。接点の外部判定に使う。"""
+    out = []
+    for ins in msp.query('INSERT'):
+        lt = (ins.dxf.linetype or '').upper()
+        if ins.dxf.layer in hidden or lt == 'HIDDEN' or lt == 'PHANTOM':
+            out.append((ins.dxf.insert.x, ins.dxf.insert.y))
+    return out
+
+
+def _senban(msp):
+    """線番(SENBAN)ブロックの (線番文字列, x, y) 一覧。
+    線番は電線1本の識別子で、同一線番の端子は同一ネット(人のFrom-Toの根拠)。
+    外部接続の端子台には線番が端子番号として振られている(図面規約・現場確認)。"""
+    out = []
+    for ins in msp.query('INSERT'):
+        if 'SENBAN' not in ins.dxf.name:
+            continue
+        a = {at.dxf.tag: (at.dxf.text or '').strip() for at in ins.attribs} if ins.attribs else {}
+        val = next((v for v in a.values() if v), '')
+        if val:
+            out.append((val, ins.dxf.insert.x, ins.dxf.insert.y))
+    return out
+
+
 def _terminals(sheet_path):
     """2人目(端子番号)を座標付き+確度で返す [[機器, 端子, x, y, tier], ...]。
     tier は接点番号の確度(3段階):
@@ -264,6 +301,33 @@ def extract(sheet_path):
         t[2], t[3] = round(sx, 1), round(sy, 1)
     # 未検出の接点(押ボタンのラダー接点など)を接続点に足す(赤?=不明)。
     terminals += _extra_contacts(msp, comp, terminals)
+    # --- 外部判定＋線番(端子台番号) ---
+    # 点線(L_OUTSIDE/HIDDEN)の機器=外部製品(客先手配等)。その接点は当社の接点でない→tier='external'。
+    # 外部へは端子台(TB)でつながり、その端子番号は線番(SENBAN)で図面に振られている。
+    hidden = _hidden_layers(doc)
+    exts = _external_boxes(msp, hidden)
+    senban = _senban(msp)
+
+    def _near_ext(x, y, r=TOL * 3):
+        return any((x - ex) ** 2 + (y - ey) ** 2 < r * r for ex, ey in exts)
+
+    def _senban_at(x, y, r=TOL * 3.5):
+        best, bd = None, r * r
+        for val, sx, sy in senban:
+            dd = (x - sx) ** 2 + (y - sy) ** 2
+            if dd < bd:
+                bd, best = dd, val
+        return best
+    for t in terminals:
+        dev, term, x, y, tier = t
+        if _near_ext(x, y):                          # 外部製品の接点
+            t[4] = 'external'
+            continue
+        if str(dev).upper().startswith('TB') or term == '?':
+            sb = _senban_at(x, y)                    # 端子台/不明点に線番(=端子番号)を付与
+            if sb:
+                t[1] = sb
+                t[4] = 'drawn' if str(dev).upper().startswith('TB') else t[4]
     # 配線経路: 2端子を直線で結ぶのでなく、実際に描かれた配線線分に沿って辿る折れ線を付す。
     nodes, adj = _wire_graph(comp['segs'], TOL)
     edges = []
@@ -346,6 +410,8 @@ _TEMPLATE = r"""<!doctype html>
   .t-drawn .tring{fill:var(--tdrawn)} .t-drawn .tlbl{fill:var(--tdrawn)}
   .t-inferred .tring{fill:var(--tinfer)} .t-inferred .tlbl{fill:var(--tinfer)}
   .t-unknown .tring{fill:var(--tunknown)} .t-unknown .tlbl{fill:var(--tunknown)}
+  .t-external .tring{fill:none;stroke:#999;stroke-width:1.4;stroke-dasharray:2 2}
+  .t-external .tlbl{fill:#999}
   label.tg{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
   .list{flex:0 0 40%;max-width:520px;overflow:auto;border-left:1px solid var(--border);background:var(--panel)}
   table{border-collapse:collapse;width:100%}
