@@ -24,18 +24,59 @@ from . import edge_trace
 from .tracer import _build_components
 
 
-def _segments(msp):
-    """図面の線分を [[x1,y1,x2,y2], ...] で返す(背景描画用)。"""
-    segs = []
-    for e in msp.query('LINE'):
+import math as _math
+
+
+def _poly_segs(pts, closed, segs):
+    for i in range(len(pts) - 1):
+        segs.append([pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]])
+    if closed and len(pts) > 2:
+        segs.append([pts[-1][0], pts[-1][1], pts[0][0], pts[0][1]])
+
+
+def _entity_segs(e, segs):
+    """1エンティティ → 線分群(背景描画用)。円弧/円はポリライン近似。"""
+    t = e.dxftype()
+    if t == 'LINE':
         segs.append([e.dxf.start.x, e.dxf.start.y, e.dxf.end.x, e.dxf.end.y])
-    for e in msp.query('LWPOLYLINE'):
-        pts = [(p[0], p[1]) for p in e.get_points()]
-        closed = e.closed
-        for i in range(len(pts) - 1):
-            segs.append([pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]])
-        if closed and len(pts) > 2:
-            segs.append([pts[-1][0], pts[-1][1], pts[0][0], pts[0][1]])
+    elif t == 'LWPOLYLINE':
+        _poly_segs([(p[0], p[1]) for p in e.get_points()], e.closed, segs)
+    elif t == 'POLYLINE':
+        try:
+            _poly_segs([(v.dxf.location.x, v.dxf.location.y) for v in e.vertices],
+                       e.is_closed, segs)
+        except Exception:
+            pass
+    elif t in ('CIRCLE', 'ARC'):
+        cx, cy, r = e.dxf.center.x, e.dxf.center.y, e.dxf.radius
+        if t == 'CIRCLE':
+            a0, a1 = 0.0, 360.0
+        else:
+            a0, a1 = e.dxf.start_angle, e.dxf.end_angle
+            if a1 < a0:
+                a1 += 360.0
+        n = max(6, int(abs(a1 - a0) / 15))
+        pts = [(cx + r * _math.cos(_math.radians(a0 + (a1 - a0) * k / n)),
+                cy + r * _math.sin(_math.radians(a0 + (a1 - a0) * k / n)))
+               for k in range(n + 1)]
+        _poly_segs(pts, t == 'CIRCLE', segs)
+
+
+def _segments(msp):
+    """図面の線分を [[x1,y1,x2,y2], ...] で返す(背景描画用)。
+    図面の大半はブロック(INSERT=シンボル)内にあるため、INSERTは virtual_entities で
+    ワールド座標に展開して線分を拾う(ネストブロックも再帰)。"""
+    segs = []
+    for e in msp:
+        t = e.dxftype()
+        if t == 'INSERT':
+            try:
+                for ve in e.virtual_entities():
+                    _entity_segs(ve, segs)
+            except Exception:
+                pass
+        else:
+            _entity_segs(e, segs)
     return segs
 
 
