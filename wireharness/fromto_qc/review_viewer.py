@@ -431,6 +431,33 @@ def extract(sheet_path):
                         bd, best = dd, lb
         if best:
             t[1], t[4] = best, 'drawn'
+    # 表示灯/コイルの不明端子を機器型の規約で補完する(機器固有=互換不可なので型で決める)。
+    #  表示灯(LO_PL*): 端子2つ=+/-(上=+,下=-)。 コイル(LA_AXR=RU4S): コイル端子=13/14。
+    #  他コイル(接触器系): A1/A2。いずれも図面に番号が無い空欄接点の救済(推論=要判断)。
+    sym_list = []
+    for ins in msp.query('INSERT'):
+        n = ins.dxf.name.upper()
+        if 'LO_PL' in n or 'LA_' in n:
+            kind = 'lamp' if 'LO_PL' in n else ('ru4s' if 'AXR' in n else 'coil')
+            sym_list.append((kind, ins.dxf.insert.x, ins.dxf.insert.y))
+    # 不明端子を機器シンボルごとにまとめ、上下位置で番号を割り当てる
+    unk_by_sym = collections.defaultdict(list)
+    for t in terminals:
+        if t[1] != '?':
+            continue
+        best, bd = None, (TOL * 6) ** 2
+        for j, (kind, sx, sy) in enumerate(sym_list):
+            dd = (sx - t[2]) ** 2 + (sy - t[3]) ** 2
+            if dd < bd:
+                bd, best = dd, j
+        if best is not None:
+            unk_by_sym[best].append(t)
+    _LBL = {'lamp': ['+', '-'], 'ru4s': ['13', '14'], 'coil': ['A1', 'A2']}
+    for j, ts in unk_by_sym.items():
+        kind = sym_list[j][0]
+        labels = _LBL[kind]
+        for t, lb in zip(sorted(ts, key=lambda t: -t[3]), labels):   # 上(yが大)から順に
+            t[1], t[4] = lb, 'inferred'
     # 未検出の接点(押ボタンのラダー接点など)を接続点に足す(赤?=不明)。
     terminals += _extra_contacts(msp, comp, terminals)
     # --- 外部判定＋線番(端子台番号) ---
