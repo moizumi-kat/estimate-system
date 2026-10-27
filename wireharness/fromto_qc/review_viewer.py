@@ -195,6 +195,41 @@ def _route(nodes, adj, pa, pb, tol):
     return pts
 
 
+def _extra_contacts(msp, comp, existing):
+    """接点シンボル(LS_系)で端子が未検出のもの(例: 押ボタンのラダー接点=属性空)を拾い、
+    その接続点(配線端点)に『不明接点』を足す。番号は決められないので tier='unknown'(赤?)。
+    既に検出済みの接点の近傍には足さない(重複回避)。◎誤答ゼロ: 存在のみ示し番号は付けない。"""
+    ex = [(t[2], t[3]) for t in existing]
+
+    def covered(x, y, r=TOL * 1.5):
+        return any((x - px) ** 2 + (y - py) ** 2 < r * r for px, py in ex)
+
+    eps = set()
+    for a, b in comp['segs']:
+        eps.add((round(a[0], 1), round(a[1], 1)))
+        eps.add((round(b[0], 1), round(b[1], 1)))
+    out, added = [], []
+
+    def near_added(x, y, r=TOL * 1.6):
+        return any((x - ax) ** 2 + (y - ay) ** 2 < r * r for ax, ay in added)
+
+    for ins in msp.query('INSERT'):
+        n = ins.dxf.name
+        if 'LS_' not in n:                       # 接点/スイッチ系シンボルのみ
+            continue
+        ox, oy = ins.dxf.insert.x, ins.dxf.insert.y
+        # シンボルの縦範囲にある配線端点=接点の上下端子。横ずれは小さく限定。
+        cand = sorted([(x, y) for (x, y) in eps
+                       if abs(x - ox) <= TOL * 1.2 and abs(y - oy) <= TOL * 4],
+                      key=lambda p: p[1])
+        for (x, y) in cand:
+            if covered(x, y) or near_added(x, y):   # 既存接点/近接追加点は除く(重複回避)
+                continue
+            added.append((x, y))
+            out.append(['接点', '?', round(x, 1), round(y, 1), 'unknown'])
+    return out
+
+
 def extract(sheet_path):
     """1シートの図面geometryと配線(pos_edges)を抽出して dict で返す。"""
     doc = ezdxf.readfile(sheet_path)
@@ -203,6 +238,32 @@ def extract(sheet_path):
     comp = _build_components(sheet_path)
     _, _, pos = edge_trace.trace_edges(sheet_path, with_pos=True)
     terminals = _terminals(sheet_path)
+    # 接点○の位置を『実際の接続点(配線が機器に接続する点=配線線分の端点)』へスナップする。
+    # (端子の代表座標はシンボル基準で線上に乗ることがあるため、配線端点に合わせて見た目を正す)
+    endpts = []
+    for (a, b) in comp['segs']:
+        endpts.append(a)
+        endpts.append(b)
+    egrid = collections.defaultdict(list)
+    for i, pq in enumerate(endpts):
+        egrid[(int(pq[0] // TOL), int(pq[1] // TOL))].append(i)
+
+    def _snap(x, y, maxd=TOL * 3):
+        best, bd = None, maxd * maxd
+        gx, gy = int(x // TOL), int(y // TOL)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for i in egrid[(gx + dx, gy + dy)]:
+                    ex, ey = endpts[i]
+                    dd = (ex - x) ** 2 + (ey - y) ** 2
+                    if dd < bd:
+                        bd, best = dd, (ex, ey)
+        return best if best else (x, y)
+    for t in terminals:
+        sx, sy = _snap(t[2], t[3])
+        t[2], t[3] = round(sx, 1), round(sy, 1)
+    # 未検出の接点(押ボタンのラダー接点など)を接続点に足す(赤?=不明)。
+    terminals += _extra_contacts(msp, comp, terminals)
     # 配線経路: 2端子を直線で結ぶのでなく、実際に描かれた配線線分に沿って辿る折れ線を付す。
     nodes, adj = _wire_graph(comp['segs'], TOL)
     edges = []
@@ -279,12 +340,12 @@ _TEMPLATE = r"""<!doctype html>
   .hlpt{fill:none;stroke:var(--hl);stroke-width:2.5;vector-effect:non-scaling-stroke}
   .devlbl{fill:var(--hldev);font-size:11px;font-weight:600}
   .devdot{fill:var(--hldev)}
-  /* 接点マーカー: 各接点に○を描き、確度で色分け(青=確実/濃黄=要判断/赤=不明)。 */
-  .tring{fill:var(--bg);stroke-width:1.6;vector-effect:non-scaling-stroke}
+  /* 接点マーカー: 各接点を塗りつぶし●で描き、確度で色分け(青=確実/濃黄=要判断/赤=不明)。 */
+  .tring{stroke:none}
   .tlbl{font-size:9px;font-weight:700;paint-order:stroke;stroke:var(--bg);stroke-width:2px}
-  .t-drawn .tring{stroke:var(--tdrawn)} .t-drawn .tlbl{fill:var(--tdrawn)}
-  .t-inferred .tring{stroke:var(--tinfer)} .t-inferred .tlbl{fill:var(--tinfer)}
-  .t-unknown .tring{stroke:var(--tunknown)} .t-unknown .tlbl{fill:var(--tunknown)}
+  .t-drawn .tring{fill:var(--tdrawn)} .t-drawn .tlbl{fill:var(--tdrawn)}
+  .t-inferred .tring{fill:var(--tinfer)} .t-inferred .tlbl{fill:var(--tinfer)}
+  .t-unknown .tring{fill:var(--tunknown)} .t-unknown .tlbl{fill:var(--tunknown)}
   label.tg{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
   .list{flex:0 0 40%;max-width:520px;overflow:auto;border-left:1px solid var(--border);background:var(--panel)}
   table{border-collapse:collapse;width:100%}
