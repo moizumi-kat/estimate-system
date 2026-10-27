@@ -14,6 +14,7 @@
 使い方:
   python3 -m fromto_qc.review_viewer <シートDXF> [出力HTML]
 """
+import collections
 import json
 import os
 import sys
@@ -21,7 +22,7 @@ import sys
 import ezdxf
 
 from . import edge_trace
-from .tracer import _build_components
+from .tracer import _build_components, TOL
 
 
 import math as _math
@@ -117,18 +118,93 @@ def _terminals(sheet_path):
     return out
 
 
+def _wire_graph(segs, tol):
+    """配線線分群 → (ノード座標[], 隣接adj)。端点を tol で同一視してグラフ化。"""
+    nodes = []
+    grid = collections.defaultdict(list)
+
+    def node_of(p):
+        gx, gy = int(p[0] // tol), int(p[1] // tol)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for i in grid[(gx + dx, gy + dy)]:
+                    if (nodes[i][0] - p[0]) ** 2 + (nodes[i][1] - p[1]) ** 2 < tol * tol:
+                        return i
+        i = len(nodes)
+        nodes.append((p[0], p[1]))
+        grid[(gx, gy)].append(i)
+        return i
+
+    adj = collections.defaultdict(set)
+    for (a, b) in segs:
+        ia, ib = node_of(a), node_of(b)
+        if ia != ib:
+            adj[ia].add(ib)
+            adj[ib].add(ia)
+    return nodes, adj
+
+
+def _nearest_node(nodes, p, maxd):
+    best, bd = None, maxd * maxd
+    for i, q in enumerate(nodes):
+        dd = (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2
+        if dd < bd:
+            bd, best = dd, i
+    return best
+
+
+def _route(nodes, adj, pa, pb, tol):
+    """2端点間を、描かれた配線線分に沿って辿る折れ線 [[x,y],...]。
+    見つからなければ None(呼び側で直線にフォールバック)。幾何最短(ダイクストラ)。"""
+    sa = _nearest_node(nodes, pa, tol * 3)
+    sb = _nearest_node(nodes, pb, tol * 3)
+    if sa is None or sb is None or sa == sb:
+        return None
+    import heapq
+    dist = {sa: 0.0}
+    prev = {}
+    pq = [(0.0, sa)]
+    while pq:
+        d, u = heapq.heappop(pq)
+        if u == sb:
+            break
+        if d > dist.get(u, 1e18):
+            continue
+        ux, uy = nodes[u]
+        for v in adj[u]:
+            vx, vy = nodes[v]
+            nd = d + ((ux - vx) ** 2 + (uy - vy) ** 2) ** 0.5
+            if nd < dist.get(v, 1e18):
+                dist[v] = nd
+                prev[v] = u
+                heapq.heappush(pq, (nd, v))
+    if sb not in dist:
+        return None
+    path = [sb]
+    while path[-1] != sa:
+        path.append(prev[path[-1]])
+    path.reverse()
+    pts = [list(pa)] + [[nodes[i][0], nodes[i][1]] for i in path] + [list(pb)]
+    return pts
+
+
 def extract(sheet_path):
     """1シートの図面geometryと配線(pos_edges)を抽出して dict で返す。"""
     doc = ezdxf.readfile(sheet_path)
     msp = doc.modelspace()
     segs = _segments(msp)
+    comp = _build_components(sheet_path)
     _, _, pos = edge_trace.trace_edges(sheet_path, with_pos=True)
     terminals = _terminals(sheet_path)
+    # 配線経路: 2端子を直線で結ぶのでなく、実際に描かれた配線線分に沿って辿る折れ線を付す。
+    nodes, adj = _wire_graph(comp['segs'], TOL)
     edges = []
     for (da, ta, xa, ya), (db, tb, xb, yb) in pos:
+        path = _route(nodes, adj, (xa, ya), (xb, yb), TOL)
         edges.append({
             'from': f'{da}:{ta}', 'to': f'{db}:{tb}',
             'ax': xa, 'ay': ya, 'bx': xb, 'by': yb,
+            'path': path,                         # [[x,y],...] or None(直線フォールバック)
         })
     # bbox(線分・端点・機器を含む)
     xs, ys = [], []
@@ -274,7 +350,15 @@ document.getElementById('title').textContent = '配線確認 — ' + DATA.sheet;
 const ghl=document.getElementById('hl'), gdev=document.getElementById('devs');
 function highlight(i){
   const e=DATA.edges[i];
-  ghl.innerHTML=`<line class="hl" x1="${e.ax}" y1="${fy(e.ay)}" x2="${e.bx}" y2="${fy(e.by)}"/>`
+  // 配線は実際に描かれた経路(path)に沿って強調。無ければ2端子直線にフォールバック。
+  let wire;
+  if(e.path && e.path.length>1){
+    const pts=e.path.map(p=>`${p[0]},${fy(p[1])}`).join(' ');
+    wire=`<polyline class="hl" fill="none" points="${pts}"/>`;
+  }else{
+    wire=`<line class="hl" x1="${e.ax}" y1="${fy(e.ay)}" x2="${e.bx}" y2="${fy(e.by)}"/>`;
+  }
+  ghl.innerHTML=wire
     +`<circle class="hlpt" cx="${e.ax}" cy="${fy(e.ay)}" r="18"/>`
     +`<circle class="hlpt" cx="${e.bx}" cy="${fy(e.by)}" r="18"/>`;
   gdev.innerHTML=`<circle class="devdot" cx="${e.ax}" cy="${fy(e.ay)}" r="4"/>`
