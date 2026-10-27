@@ -22,7 +22,7 @@ import sys
 import ezdxf
 
 from . import edge_trace
-from .tracer import _build_components, TOL
+from .tracer import _build_components, TOL, _pt_seg
 
 
 import math as _math
@@ -132,6 +132,49 @@ def _senban(msp):
         if val:
             out.append((val, ins.dxf.insert.x, ins.dxf.insert.y))
     return out
+
+
+def senban_nets(sheet_path):
+    """線番(SENBAN)ベースでネット(等電位)を構成して返す。
+    戻り: [{'線番':名, 'terminals':[(機器,端子,x,y),...]}]。
+    等電位コンポーネント(tracer)に線番を割り当て、同一コンポーネントの端子を1ネットとする。
+    同一線番の端子は同一ネット(人のFrom-To構成と同じ根拠)。実データ(5-29026)で人のネットと
+    機器構成が一致することを確認済み。線番が付かないコンポーネントは 'C<id>' の仮名とする。"""
+    comp = _build_components(sheet_path)
+    find, segs, comp_terms = comp['find'], comp['segs'], comp['comp_terms']
+
+    def comp_near(px, py, t=TOL * 3.5):
+        best, bd = None, t
+        for i, (a, b) in enumerate(segs):
+            dd = _pt_seg((px, py), a, b)
+            if dd < bd:
+                bd, best = dd, i
+        return find(best) if best is not None else None
+
+    doc = ezdxf.readfile(sheet_path)
+    comp_sb = collections.defaultdict(list)
+    for ins in doc.modelspace().query('INSERT'):
+        if 'SENBAN' not in ins.dxf.name:
+            continue
+        a = {at.dxf.tag: (at.dxf.text or '').strip() for at in ins.attribs} if ins.attribs else {}
+        val = next((v for v in a.values() if v), '')
+        if not val:
+            continue
+        c = comp_near(ins.dxf.insert.x, ins.dxf.insert.y)
+        if c is not None:
+            comp_sb[c].append(val)
+
+    def norm(s):                                   # '10206' -> '102-06'(回路-枝)
+        return f'{s[:3]}-{s[3:]}' if len(s) > 3 and s[:3].isdigit() and s[3:].isdigit() else s
+    nets = []
+    for c, terms in comp_terms.items():
+        if len(terms) < 2:
+            continue
+        sb = comp_sb.get(c, [])
+        name = norm(sb[0]) if sb else f'C{c}'
+        nets.append({'線番': name,
+                     'terminals': sorted((d, t, x, y) for (d, t, x, y) in terms)})
+    return nets
 
 
 def _terminals(sheet_path):
@@ -355,6 +398,7 @@ def extract(sheet_path):
         'devices': _device_labels(msp),
         'edges': edges,
         'terminals': terminals,
+        'nets': senban_nets(sheet_path),           # 線番ベースのネット(等電位)
         'bbox': bbox,
     }
 
