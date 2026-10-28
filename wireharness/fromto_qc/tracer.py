@@ -163,6 +163,28 @@ def _attach_devices_by_box(m, segs, find, comp_dev, margin=15):
 BUS_MINLEN = 800   # 母線とみなす L_MAIN 線の最小長さ（短い L_MAIN=機器記号/端子枠を除外）
 
 
+def _bus_label(a, b, sb, want, perp_tol=40, lead=250):
+    """母線線(a,b)に対応する号線名を返す。号線ラベルは母線の端（リードイン）に
+    置かれるので、端から大きく外れる（例: 101R ラベルがレール始点の150手前）。
+    クランプ距離だと取りこぼすため:
+      ・垂直距離(perp)で層を厳密に分離 … 50だけ離れて重なる母線(RC1/101R)を混同しない。
+      ・軸方向は lead ぶん延長まで許容 … 端のリードインラベルを拾う。
+    sb=[(号線, INSERT名, x, y)]。want=照合する SENBAN 名。戻り: 号線 or None。"""
+    horiz = abs(b[0] - a[0]) >= abs(b[1] - a[1])
+    rail = (a[1] + b[1]) / 2.0 if horiz else (a[0] + b[0]) / 2.0
+    lo = min(a[0], b[0]) if horiz else min(a[1], b[1])
+    hi = max(a[0], b[0]) if horiz else max(a[1], b[1])
+    name, best = None, perp_tol
+    for v, nm, x, y in sb:
+        if nm != want:
+            continue
+        perp = abs((y if horiz else x) - rail)
+        along = x if horiz else y
+        if perp < best and (lo - lead) <= along <= (hi + lead):
+            best, name = perp, v
+    return name
+
+
 def _bus_members(m, segs, find, comp_dev, tol=TOL, comp_terms=None):
     """母線（長い L_MAIN 線＋その線上の号線ラベル）に繋がる機器を、その母線号線ノードに集める。
 
@@ -210,13 +232,7 @@ def _bus_members(m, segs, find, comp_dev, tol=TOL, comp_terms=None):
     out = collections.defaultdict(set)
     for (a, b) in mains:
         want = 'H_SENBAN' if ori(a, b) == 'H' else 'V_SENBAN'
-        name, bestd = None, 60
-        for v, nm, x, y in sb:
-            if nm != want:
-                continue
-            d = _pt_seg((x, y), a, b)
-            if d < bestd:
-                bestd, name = d, v
+        name = _bus_label(a, b, sb, want)
         if not name:
             continue
         for i, (p1, p2) in enumerate(segs):
@@ -389,12 +405,15 @@ def trace_nodes(path, tol=TOL):
         for comp in comps:
             nd['members'] |= comp_terms.get(comp, set())
             nd['devices'] |= comp_dev.get(comp, set())
-    # 母線（長い L_MAIN 線）メンバーを端子粒度で追加
+    # 母線（長い L_MAIN 線）メンバーを端子粒度で追加。母線は bus_members が権威:
+    # レール線上に“終端”する端子だけを採る。_assign_gousen の最近傍推定はレール端
+    # （号線ラベルがレール手前のリードインに置かれる）で隣接回路を誤って拾う
+    # （例: 101R/102R に本来 RC1 の 3-LT1 が混ざる）ため、母線名は bus で上書きする。
     bus_terms = _bus_members(m, segs, find, comp_dev, tol, _bus_comp_terms(comp_terms))
     for g, mem in bus_terms.items():
         nd = nodes.setdefault(g, {'kind': 'ctrl', 'members': set(), 'devices': set()})
-        nd['members'] |= mem
-        nd['devices'] |= {d for (d, t, x, y) in mem}
+        nd['members'] = set(mem)
+        nd['devices'] = {d for (d, t, x, y) in mem}
     # 主回路ノード: 号線ラベルの無い成分でも、機器2つ以上なら結線ノードとして出力する。
     #   主回路(単線図)は相(SOU)で相ごとに1点しかラベルが無く、機器間セグメントは無名。
     #   これらを 'M@<id>' で拾うと、幾何的に取れているフィーダ節点が欠落しない。
