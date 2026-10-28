@@ -298,15 +298,22 @@ def duct_decision(seq_paths, skel_paths=None, seiban='', dct_paths=None, duct_ty
     return out
 
 
-def electrical_check(seq_paths, skel_paths=None, seiban=''):
+def electrical_check(seq_paths, skel_paths=None, seiban='', coord_tol=20):
     """生成ハーネスが電気的に問題ないか検証する。
     ・各号線(等電位ノード)内は連結(全端子が繋がる)＝渡りは全域木で構成(構造的に保証)。
-    ・同一端子が複数の号線に現れる＝短絡の疑い(誤トレース) → 指摘。
+    ・同一端子が複数の号線に現れる場合、原因を座標で切り分ける(◎誤答ゼロの要):
+        名寄せ(1座標): 同一端子が図面上の1点に在り号線名だけ複数
+            → 幾何的に1ノード=電気的短絡ではない。号線名の重複(同一ノードに複数線番名)。
+              これらの号線は等電位として名寄せすべきで、短絡としては数えない。
+        短絡候補(複数座標): 同一(機器,端子)が複数箇所に描かれ別成分に跨る
+            → 真の短絡 or 記号分散。人が結線を確認する(要確認)。
     ・端子1つだけの号線(結線相手が無い)＝浮き → 指摘(不備側で扱う)。
-    戻り: {'ok', 'shorts':[...], 'summary'}"""
+    戻り: {'ok','shorts':[...],'name_merge':[...],'summary'}。shorts=短絡候補のみ。"""
+    import math
     from . import tracer
     from .geometry import norm as _n
-    term_nodes = collections.defaultdict(set)   # 端子 → その端子が属する号線集合
+    # 端子 → {号線: set((x,y))}（座標付き）
+    term_nodes = collections.defaultdict(lambda: collections.defaultdict(set))
     for p in list(seq_paths) + list(skel_paths or []):
         for g, nd in tracer.trace_nodes(p).items():
             if str(g).startswith('M@'):
@@ -316,17 +323,31 @@ def electrical_check(seq_paths, skel_paths=None, seiban=''):
                 # 短絡判定は「実端子番号が付いた端子」だけを対象にする(誤検出を避ける)。
                 if not t or t == '?':
                     continue
-                term_nodes[(_n(d), _n(t))].add(_n(g))
-    shorts = []
-    for (dev, term), gs in term_nodes.items():
-        if term and len(gs) >= 2:
-            shorts.append({'terminal': f'{dev}:{term}', '号線': sorted(gs)})
+                term_nodes[(_n(d), _n(t))][_n(g)].add((round(x, 1), round(y, 1)))
+
+    def _one_cluster(pts):
+        """全点が coord_tol 以内で1塊か(=図面上の同一1点か)。"""
+        pts = list(pts)
+        seed = pts[0]
+        return all(math.hypot(px - seed[0], py - seed[1]) <= coord_tol for px, py in pts)
+
+    shorts = []        # B: 複数座標に跨る=真の短絡候補(要確認)
+    name_merge = []    # A: 1座標で号線名だけ複数=等電位の名寄せ(短絡でない)
+    for (dev, term), gmap in term_nodes.items():
+        if not (term and len(gmap) >= 2):
+            continue
+        allpts = set().union(*gmap.values())
+        rec = {'terminal': f'{dev}:{term}', '号線': sorted(gmap)}
+        if _one_cluster(allpts):
+            name_merge.append(rec)
+        else:
+            shorts.append(rec)
     # 各号線内の渡りは全域木(構造的に連結・同一電位)＝電気的に整合。
-    # shorts は「同一端子が複数号線に出現」= 真の短絡 or トレーサのノード形成曖昧の候補
-    # (内部QC。設計指摘には出さず、抽出精度の確認に使う)。
-    return {'ok': not shorts, 'shorts': shorts,
+    # 短絡候補(shorts)のみ要確認。名寄せ(name_merge)は等電位の号線名重複で電気的に正常。
+    return {'ok': not shorts, 'shorts': shorts, 'name_merge': name_merge,
             'summary': {'各号線内の結線': '全域木で連結(電気的に整合)',
-                        '要確認(同一端子が複数号線)': len(shorts)}}
+                        '短絡候補(複数座標・要確認)': len(shorts),
+                        '名寄せ(1座標・号線名重複)': len(name_merge)}}
 
 
 # 不備カテゴリ → 前工程(設計)への指摘と解決案
@@ -1120,6 +1141,6 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
                         'ダクト種別': routed['duct_type'],
                         '指摘件数(設計へ)': fb['summary']['指摘件数'],
                         '各号線内の電気整合': '全域木で連結(OK)',
-                        '要QC(同一端子が複数号線)': ec['summary']['要確認(同一端子が複数号線)'],
+                        '要QC(短絡候補・複数座標)': ec['summary']['短絡候補(複数座標・要確認)'],
                         'seq数': len(seq), 'skel数': len(skel), 'dct数': len(dct)},
             'duct_decision': dec['recommend']}
