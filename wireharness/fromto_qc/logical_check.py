@@ -102,6 +102,37 @@ def _apply(devs, alias):
     return {alias.get(d, d) for d in devs}
 
 
+def overmerge_candidates(draw_g, human_g, alias=None):
+    """過併合(ショート)候補を数える（◎誤答ゼロの監視指標）。
+
+    定義: ツールが号線 g に機器 d を入れているが、手本では d を g に一度も
+    置いていない（かつ d は手本の別号線に実在）→ ツールが d を g へ誤って
+    併合した候補。alias は人手→図面。
+    注) 機器単位の近似。同一機器が複数号線に正当に現れる点は、手本の所属号線
+        集合 dev2hg[d] に g が含まれるかで正しく除外する（端子単位の真の短絡は
+        harness_produce.electrical_check が別途・自己整合で扱う）。
+    戻り: {'nets','devs','total','pct'}。"""
+    alias = alias or {}
+    dev2hg = collections.defaultdict(set)
+    for g, ds in human_g.items():
+        for d in _apply(ds, alias):
+            dev2hg[d].add(g)
+    nets = set()
+    devs = total = 0
+    for g, ds in draw_g.items():
+        hit = False
+        for d in ds:
+            total += 1
+            hgs = dev2hg.get(d)
+            if hgs and g not in hgs:          # 手本に d は在るが g には無い=別号線扱い
+                devs += 1
+                hit = True
+        if hit:
+            nets.add(g)
+    return {'nets': len(nets), 'devs': devs, 'total': total,
+            'pct': round(devs / max(total, 1) * 100, 1)}
+
+
 def logical_match(draw_g, human_g, alias=None):
     """号線ごとの機器集合一致（論理層）。alias は人手→図面。"""
     alias = alias or {}

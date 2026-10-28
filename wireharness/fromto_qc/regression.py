@@ -96,13 +96,27 @@ def measure_seiban(files, human_paths, templates=None):
     hum = _human(human_paths)
     alias, _ = lc.auto_alias(draw, hum)
     m = lc.logical_match(draw, hum, alias)
+    om = lc.overmerge_candidates(draw, hum, alias)
+    nh = len(hum)
+    # ノード単位の正解率（茂泉様方針: 配線順序は不問・等電位ノード一致で判定）:
+    #   完全一致  … 端子集合がそっくり再現(exact, 機器単位)
+    #   再現可能  … 手本ネットの機器が全て1図面ネットに収まる(exact+subset=手本ルート選択可)
+    #   端子recall … 手本ネット機器の被覆(部分点)
+    repro = m['exact'] + m['subset(図面⊇人手)']
     return {'kind': kind, 'gousen_recall': m['gousen_recall%'],
-            'dev_recall': m['dev_recall%'], 'n_human': len(hum), 'n_draw': len(draw)}
+            'dev_recall': m['dev_recall%'], 'n_human': nh, 'n_draw': len(draw),
+            'node_exact%': round(m['exact'] / max(nh, 1) * 100, 1),
+            'repro%': round(repro / max(nh, 1) * 100, 1),
+            'overmerge%': om['pct']}
+
+
+_METRICS = ('gousen_recall', 'dev_recall', 'repro%', 'node_exact%', 'overmerge%')
 
 
 def run(data_dir, train_dir=None):
-    """data_dir 全製番の recall を計測。train_dir を渡すと母線テンプレを学習。
-    戻り: (rows, averages)。rows=[(製番, kind, 号線recall, 端子recall, 人手号線, 図面号線)]。"""
+    """data_dir 全製番の正解率を計測。train_dir を渡すと母線テンプレを学習。
+    戻り: (rows, averages)。rows=[dict(seiban,kind,n_human,n_draw,<_METRICS>)]。
+    主指標はノード単位(repro%=再現可能/node_exact%=完全一致)＋誤答監視(overmerge%)。"""
     templates = None
     if train_dir:
         try:
@@ -116,31 +130,36 @@ def run(data_dir, train_dir=None):
             continue
         try:
             r = measure_seiban(dxf[seiban], txt[seiban], templates)
-            rows.append((seiban, r['kind'], r['gousen_recall'], r['dev_recall'],
-                         r['n_human'], r['n_draw']))
-        except Exception as e:
-            rows.append((seiban, '?', None, None, 0, 0))
+            r['seiban'] = seiban
+            rows.append(r)
+        except Exception:
+            rows.append({'seiban': seiban, 'kind': '?', 'n_human': 0, 'n_draw': 0})
     # 種別別平均
     avg = {}
     for kind in ('制御盤', '分電盤'):
-        vals = [(g, d) for _, k, g, d, _, _ in rows if k == kind and g is not None]
+        vals = [r for r in rows if r['kind'] == kind and r.get('gousen_recall') is not None]
         if vals:
-            avg[kind] = (sum(v[0] for v in vals) / len(vals),
-                         sum(v[1] for v in vals) / len(vals), len(vals))
+            avg[kind] = {k: sum(v[k] for v in vals) / len(vals) for k in _METRICS}
+            avg[kind]['n'] = len(vals)
     return rows, avg
 
 
 def to_table(rows, avg):
-    L = [f"{'製番':<16}{'種別':<6}{'号線recall':>10}{'端子recall':>10}{'人手':>6}{'図面':>6}",
-         '-' * 56]
-    for seiban, kind, g, d, nh, nd in rows:
-        if g is None:
-            L.append(f"{seiban:<16}{kind:<6}{'ERR':>10}")
+    H = (f"{'製番':<16}{'種別':<6}{'再現可能':>8}{'完全一致':>8}{'端子R':>7}"
+         f"{'号線名R':>8}{'過併合':>7}{'人手':>6}")
+    L = [H, '-' * 66]
+    for r in rows:
+        if r.get('gousen_recall') is None:
+            L.append(f"{r['seiban']:<16}{r['kind']:<6}{'ERR':>8}")
         else:
-            L.append(f"{seiban:<16}{kind:<6}{g:>9.0f}%{d:>9.0f}%{nh:>6}{nd:>6}")
-    L.append('-' * 56)
-    for kind, (g, d, n) in avg.items():
-        L.append(f"{kind} 平均: 号線 {g:.0f}%  端子 {d:.0f}%  (n={n})")
+            L.append(f"{r['seiban']:<16}{r['kind']:<6}{r['repro%']:>7.0f}%"
+                     f"{r['node_exact%']:>7.0f}%{r['dev_recall']:>6.0f}%"
+                     f"{r['gousen_recall']:>7.0f}%{r['overmerge%']:>6.0f}%{r['n_human']:>6}")
+    L.append('-' * 66)
+    for kind, a in avg.items():
+        L.append(f"{kind} 平均: 再現可能 {a['repro%']:.0f}%  完全一致 {a['node_exact%']:.0f}%  "
+                 f"端子R {a['dev_recall']:.0f}%  号線名R {a['gousen_recall']:.0f}%  "
+                 f"過併合 {a['overmerge%']:.0f}%  (n={a['n']})")
     return '\n'.join(L)
 
 
