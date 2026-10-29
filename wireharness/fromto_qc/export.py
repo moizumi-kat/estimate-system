@@ -17,6 +17,7 @@ import json
 import collections
 from . import tracer
 from .equipotential import generate_wiring
+from .harness_sheet import _onoff_switch
 
 
 def build_nodes(seq_paths, skel_paths=None, seiban=''):
@@ -50,12 +51,14 @@ def node_records(nodes):
         seen = set()
         for (dev, term, x, y) in sorted(nd['members']):
             d, n = _split(dev)
+            # 操作SW 3-<回路> の接点 → 手本式 入/切（端子は空に）。dedupは元termで。
+            d, n, dterm = _onoff_switch(d, n, term)
             key = (d, n, term)
             if key in seen:
                 continue
             seen.add(key)
             mem.append({'device': d, 'no': n,
-                        'terminal': (term if term and term != '?' else ''),
+                        'terminal': (dterm if dterm and dterm != '?' else ''),
                         'x': x, 'y': y})
         recs.append({'gousen': g, 'kind': nd['kind'], 'members': mem})
     return recs

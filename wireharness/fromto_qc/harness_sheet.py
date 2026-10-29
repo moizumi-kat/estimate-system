@@ -83,6 +83,21 @@ def _circuit_of(gousen):
     return m.group(1) if m else ''
 
 
+_SWITCH_DEV = '3'   # 操作スイッチ(押ボタン・切換スイッチ)の DEVICE 記号
+
+
+def _onoff_switch(device, no, terminal):
+    """操作スイッチ 3-<回路番号> の接点端子を、手本式の 入/切 表記に変換する。
+    IDEC AR22 等: b接点(端子11,12)=切(OFF/-01G), a接点(端子13,14)=入(ON/-10R)。
+    手本は入/切を端子番号なしで表すため、端子は空にして返す。
+    対象は『DEVICE=3 かつ番号が回路番号(数字)』の接点端子のみ。押ボタン
+    (3-LT1/BT1/BS1 等=英字番号)や他の端子はそのまま返す。
+    戻り: (device, no, terminal)。"""
+    if norm(device) == _SWITCH_DEV and str(no).isdigit() and str(terminal) in ('11', '12', '13', '14'):
+        return ('切' if str(terminal) in ('11', '12') else '入'), no, ''
+    return device, no, terminal
+
+
 def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='connection',
                 default_wire=None):
     """ハーネスシートの電線レコードを生成。
@@ -134,6 +149,9 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
         terms = []
         for (dev, term, x, y) in sorted(nd['members']):
             d, n = split(dev)
+            # 操作SW 3-<回路> の接点 → 手本式 入/切（表示端子は空に）。dsp_term は
+            # 出力用、term(元の11/12/13/14)は dedup キーに残し同一SWの別接点を潰さない。
+            d, n, dsp_term = _onoff_switch(d, n, term)
             unfilled_tb = norm(d) == 'TB' and (not n) and (not term or term == '?')
             if unfilled_tb:
                 key = f"TB@{round(x)},{round(y)}#{norm(g)}"
@@ -143,7 +161,7 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
             if key not in idx:
                 idx[key] = {'place': place_of.get(norm(dev), ''), 'device': d,
                             'no': (prov if unfilled_tb else n),
-                            'terminal': (term if term and term != '?' else ''),
+                            'terminal': (dsp_term if dsp_term and dsp_term != '?' else ''),
                             'x': x, 'y': y, 'unfilled_tb': unfilled_tb}
                 terms.append((key, x, y))
         circ = _circuit_of(g)
