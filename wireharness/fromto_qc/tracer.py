@@ -10,8 +10,9 @@
 戻り: {号線: set(機器名 or 'TB')}
 """
 import math
+import re
 import collections
-from .geometry import DrawingModel, norm, UNFILLED_DEVICE1
+from .geometry import DrawingModel, norm, UNFILLED_DEVICE1, _mk_sym
 from . import terminal_db as _TDB
 
 TOL = 18
@@ -389,6 +390,60 @@ def _attach_main_terminals(m, segs, find, comp_terms, comp_dev, margin=45):
                     comp_terms[c].add((dv.sym, nm, round(cx, 1), round(ey, 1)))
 
 
+# 銘板/属性ブロック（端子座標を持たない凡例）の機器を拾うための命名規則。
+#   CP305 や DI/TOT1 等は LZ_MEISHOU(銘板)/LZ_ZOKUSEI(属性) ブロックで、端子リード
+#   (TB/TERMINAL/POINT)が無いため幾何トレースでは号線に結べない。これらは実機器なので、
+#   手本(3人目)で全製番一致を確認した決定論的規則で「図面に実在する既存号線」にのみ付与する。
+#   ◎誤答ゼロ: 新規号線は作らない。規則に合致し かつ その号線が既にトレースされている場合だけ結ぶ。
+_LEGEND_BLOCK_PREFIX = ('LZ_MEISHOU', 'LZ_ZOKUSEI')
+
+
+def _legend_target_gousen(dev, d1, node_keys):
+    """銘板/属性機器の付与先号線を、既存号線(node_keys)の中から規則で返す。
+    規則(手本で検証済み):
+      CP{n}(制御電源)   → {n}R,{n}S,F{n}R,F{n}S
+      CP-RM (CPRM)      → RMR,RMR1,RMS,RMS1
+      DI/TOT{p}(属性)   → {p}DI<n>(+含む), RMR1,RMS1
+    """
+    dev = (dev or '').strip()
+    d1 = (d1 or '').strip()
+    if dev == 'CP' and d1.isdigit():
+        return {f'{d1}R', f'{d1}S', f'F{d1}R', f'F{d1}S'} & node_keys
+    if dev == 'CP' and d1 in ('RM', 'ＲＭ'):
+        return {'RMR', 'RMR1', 'RMS', 'RMS1'} & node_keys
+    if dev == 'DI/TOT' and d1.isdigit():
+        pat = re.compile(rf'^{re.escape(d1)}DI\d')
+        cand = {g for g in node_keys if pat.match(str(g))}
+        return cand | ({'RMR1', 'RMS1'} & node_keys)
+    return set()
+
+
+def _attach_legend_devices(m, nodes):
+    """端子座標を持たない銘板/属性ブロックの機器を、規則で既存号線ノードへ付与する。
+    新規号線は作らない（◎誤答ゼロ）。cmp/製品は nd['members'] を使うため members にも足す。"""
+    node_keys = set(nodes.keys())
+    for e in m.msp:
+        if e.dxftype() != 'INSERT' or not e.attribs:
+            continue
+        if not str(e.dxf.name).startswith(_LEGEND_BLOCK_PREFIX):
+            continue
+        a = {at.dxf.tag: at.dxf.text for at in e.attribs}
+        dev = (a.get('DEVICE', '') or '').strip()
+        d1 = (a.get('DEVICE1', '') or '').strip()
+        # SKIP_DEVICES は見ない（'CP' は従来コネクタ扱いで除外されるが、ここでは
+        # LZ_MEISHOU/LZ_ZOKUSEI 凡例ブロックに限定し、規則に合致した時だけ付ける）。
+        targets = _legend_target_gousen(dev, d1, node_keys)
+        if not targets:
+            continue
+        sym = _mk_sym(dev, d1)
+        ins = e.dxf.insert
+        bx, by = round(ins.x, 1), round(ins.y, 1)
+        for g in targets:
+            nd = nodes[g]
+            nd['devices'].add(sym)
+            nd['members'].add((sym, '', bx, by))
+
+
 def trace_nodes(path, tol=TOL):
     """1シートを端子粒度で辿り、号線→ノード情報 を返す（§3.1 出力用）。
     戻り: {号線: {'kind': 'ctrl'|'main', 'members': set((機器, 端子名, x, y)),
@@ -428,6 +483,9 @@ def trace_nodes(path, tol=TOL):
             continue
         g = f"M@{comp}"
         nodes[g] = {'kind': 'main', 'members': set(mem), 'devices': set(devs)}
+    # 銘板/属性ブロック(端子座標なしの実機器: CP制御電源・DI/TOTリモートI/O 等)を
+    # 規則で既存号線に付与（新規号線は作らない＝◎誤答ゼロ）。
+    _attach_legend_devices(m, nodes)
     return nodes
 
 
