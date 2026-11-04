@@ -27,6 +27,7 @@ from . import main_circuit
 from . import fixed_wiring
 from . import locator_map as LM
 from . import locator_assign as LA
+from .geometry import norm
 from . import device_norm as dn
 
 
@@ -44,33 +45,52 @@ def _seq_paths(seiban_dir):
 
 def locator_resolution(seiban_dir):
     """{ロケーター表記(大文字): 設計実機器sym(大文字)}。
-    主軸は locator_assign(内部配置図D001の実機器＋位置から我々が決定的に付番)。
-    ④が使う表記(基前置 '2-A' / 素letter 'A')の双方を引けるよう登録する。
-    D001に実機器名が無い等で付番できない場合は、従来(凡例＋ピン照合)にフォールバック。"""
+    優先順位(◎誤答ゼロ):
+      1) 設計DCT(機器相番号)があれば、その採番(基-文字→実機器)を正解として直接採用。
+         手本が依拠する採番そのもので最も正確。位置ベース再生成は機器名の粒度差で誤る。
+      2) DCTが無い場合のみ、locator_assign(内部配置図D001の実機器＋位置)で我々が付番。
+      3) それでも引けない素letterは ④ピン照合 で補完。
+    ④が使う表記(基前置 '2-A' / 素letter 'A')の双方を引けるよう登録する。"""
     layout = (glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF')) +
               glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.dxf')) +
               glob.glob(os.path.join(seiban_dir, '図面データ_*G0*.DXF')) +
               glob.glob(os.path.join(seiban_dir, '図面データ_*G0*.dxf')))
     m = {}
+    dcts = glob.glob(os.path.join(seiban_dir, '機器相番号_*.dxf'))
+    seq = _seq_paths(seiban_dir)
+    # 1) 設計DCT(機器相番号)があれば、その採番(基-文字→実機器)を正解として直接採用する。
+    #    手本が依拠する採番そのものなので最も正確。位置ベース再生成(幾何assign/基指定)は
+    #    機器名の粒度差(例 DTX1↔DTX11)で誤マッピングを生むため、DCTがある限り使わない(◎誤答ゼロ)。
+    if dcts:
+        pairs = []
+        for p in dcts:
+            pairs += LM.extract_pairs(p)
+        bare = collections.Counter(LM._split_locator(loc)[1].upper()
+                                   for loc, _ in pairs if LM._split_locator(loc)[1])
+        for loc, act in pairs:
+            b, lt = LM._split_locator(loc)
+            if not lt:
+                continue
+            dev = norm(act).upper()                         # 図面側symと揃える(表記ハイフン除去: '2-1'→'21')
+            if b:
+                m[f'{b}-{lt}'.upper()] = dev                # 基-文字(基で一意)
+            if bare[lt.upper()] == 1:                       # 素letterは一意な時のみ(曖昧回避)
+                m.setdefault(lt.upper(), dev)
+        if m:
+            return m
+    # 2) DCTが無い場合のみ、我々が位置ベースで採番して代替する(内部配置図D001の実機器＋位置)。
     a = LA.assign(layout)
-    bare = collections.Counter()
+    bare2 = collections.Counter()
     for loc, actual in a['by_locator'].items():
         m[loc.upper()] = actual.upper()
-        bare[loc.split('-')[-1].upper()] += 1
+        bare2[loc.split('-')[-1].upper()] += 1
     for loc, actual in a['by_locator'].items():           # 素letterも(一意な時のみ)
         lt = loc.split('-')[-1].upper()
-        if bare[lt] == 1:
+        if bare2[lt] == 1:
             m.setdefault(lt, actual.upper())
     if m:
         return m
-    # --- フォールバック: 凡例＋④ピン照合 ---
-    dcts = glob.glob(os.path.join(seiban_dir, '機器相番号_*.dxf'))
-    seq = _seq_paths(seiban_dir)
-    for p in dcts:
-        for loc, act in LM.extract_pairs(p):
-            _, lt = LM._split_locator(loc)
-            if lt:
-                m[lt.upper()] = act.upper()
+    # 3) 最終フォールバック: ④ピン照合
     r = ft.load_seiban(seiban_dir)
     letter_pins = collections.defaultdict(set)
     for w in r['wires']:
