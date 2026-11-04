@@ -219,3 +219,83 @@ th{{background:#efefef;position:sticky;top:0}}
     with open(out_html, 'w', encoding='utf-8') as f:
         f.write(doc)
     return stats
+
+
+def stage1_mainwire(skel_paths, seiban, out_html, tmp_dir=None):
+    """1人目(太物経路・≥8sq)の確認UI(自己完結HTML)を out_html に書く。
+    主回路(スケルトンEシート)から太物の From-To(回路・相)を生成し、相色で一覧化。
+    主回路図(結線検査図)で経路を確認できる。実配線長(⑤太物経路)は別入力のため、
+    データがあれば後続で付加する前提の雛形。戻り: 統計。"""
+    from . import main_circuit
+    tmp_dir = tmp_dir or os.path.join(os.path.dirname(os.path.abspath(out_html)), '_tmp')
+    wires = main_circuit.generate(skel_paths, seiban=seiban)
+    imgs = _conn_imgs(skel_paths, tmp_dir)
+    by_c = collections.OrderedDict()
+    for w in wires:
+        by_c.setdefault(w.get('circuit', '') or '(共通)', []).append(w)
+    n_kakutei = sum(1 for w in wires if w.get('confidence') == '確定')
+    stats = {'wires': len(wires), 'circuits': len(by_c),
+             'kakutei': n_kakutei, 'sheets': len(skel_paths)}
+    PHASE = {'U': '#d33', 'V': '#888', 'W': '#36c', 'E': '#2a2',
+             'R': '#d33', 'S': '#888', 'T': '#36c', 'N': '#555'}
+
+    def esc(x):
+        return _html.escape(str(x))
+    trs = []
+    for c, ws in by_c.items():
+        for i, w in enumerate(ws):
+            c_cell = f'<td class="c" rowspan="{len(ws)}">{esc(c)}</td>' if i == 0 else ''
+            ph = w.get('phase', '')
+            col = PHASE.get(ph, '#333')
+            conf = w.get('confidence', '')
+            ccls = 'ok' if conf == '確定' else 'maybe'
+            trs.append(
+                f'<tr>{c_cell}<td><span class="ph" style="background:{col}">{esc(ph)}</span></td>'
+                f'<td>{esc(w.get("from",""))}</td><td class="ar">→</td>'
+                f'<td>{esc(w.get("to",""))}</td>'
+                f'<td class="{ccls}">{esc(conf)}</td></tr>')
+    if not trs:
+        trs = ['<tr><td colspan="5" class="none">太物(主回路)の接続は検出されませんでした</td></tr>']
+    img_html = ''.join(
+        f'<div class="sheet"><div class="sh">{esc(n)}'
+        + ('' if 'error' in s else f' <span class="st">ネット={s.get("nets","?")}</span>')
+        + '</div>' + (f'<img src="{b}">' if b else '') + '</div>'
+        for n, b, s in imgs)
+
+    doc = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{esc(seiban)} 1人目 太物経路 確認</title><style>
+body{{font-family:"IPAGothic","Yu Gothic",sans-serif;margin:0;background:#f4f4f5;color:#1a1a1a;font-size:14px}}
+.page{{max-width:1400px;margin:14px auto;background:#fff;padding:18px 22px;box-shadow:0 1px 6px rgba(0,0,0,.15);border-radius:6px}}
+h1{{font-size:19px;border-bottom:3px solid #1a1a1a;padding-bottom:8px}}
+.stat{{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}} .stat div{{background:#eef2f7;border:1px solid #cdd7e3;border-radius:6px;padding:6px 12px}} .stat b{{font-size:17px}}
+.cols{{display:flex;gap:16px;flex-wrap:wrap}} .left{{flex:1;min-width:380px;max-height:1600px;overflow:auto}} .right{{flex:1.4;min-width:420px}}
+table{{border-collapse:collapse;width:100%;font-size:13px}} th,td{{border:1px solid #dcdcdc;padding:4px 8px;text-align:left}}
+th{{background:#efefef;position:sticky;top:0}} .c{{font-weight:bold;vertical-align:top;background:#f3f6fb;white-space:nowrap}}
+.ph{{display:inline-block;min-width:16px;text-align:center;color:#fff;border-radius:3px;padding:0 5px;font-weight:bold}}
+.ar{{text-align:center;color:#999}} .ok{{color:#2a7a2a}} .maybe{{color:#c2410c}} .none{{color:#999}}
+.sheet{{margin-bottom:14px}} .sh{{font-weight:bold;margin:4px 0}} .st{{font-size:12px;color:#555;font-weight:normal}}
+.sheet img{{width:100%;border:1px solid #ddd;border-radius:4px}} .note{{font-size:12px;color:#555;margin:6px 0}}
+</style></head><body><div class="page">
+<h1>{esc(seiban)}　1人目 太物経路（≥8sq）確認UI</h1>
+<div class="stat">
+ <div>太物配線 <b>{stats['wires']}</b></div>
+ <div>回路 <b>{stats['circuits']}</b></div>
+ <div>確定 <b>{n_kakutei}</b></div>
+ <div>シート <b>{stats['sheets']}</b></div>
+</div>
+<div class="note">主回路(スケルトン)から太物(≥8sq)の From-To を相別に抽出。相色＝U/R赤・V/S灰・W/T青・E緑。
+<b>実配線長・経路ジオメトリ(⑤太物経路データ)は別入力</b>で、供給されれば各配線に実長を付加できます。</div>
+<div class="cols">
+ <div class="left"><table><tr><th>回路</th><th>相</th><th>From</th><th></th><th>To</th><th>確度</th></tr>
+ {''.join(trs)}</table></div>
+ <div class="right">
+  <div class="note">右＝主回路の結線検査図。太物の経路を図面上で確認できます。</div>
+  {img_html}
+ </div>
+</div>
+<p class="note">※ 社内資産につき取り扱い注意。太物(≥8sq)は3人目From-To(≤5.5sq)とは別工程。</p>
+</div></body></html>"""
+    with open(out_html, 'w', encoding='utf-8') as f:
+        f.write(doc)
+    return stats

@@ -50,7 +50,29 @@ def test_stage2_terminals_html():
         SV._conn_imgs = orig_imgs
 
 
+def test_stage1_mainwire_html():
+    import fromto_qc.main_circuit as MC
+    orig_gen = MC.generate
+    orig_imgs = SV._conn_imgs
+    MC.generate = lambda skel, seiban=None: [
+        {'from': 'LUG:', 'to': 'MCCB-101:1', 'circuit': '101', 'phase': 'U', 'confidence': '確定'},
+        {'from': 'TB:302E', 'to': 'TB:401E', 'circuit': '', 'phase': 'E', 'confidence': '要確認'}]
+    SV._conn_imgs = lambda seq, tmp: [('E001', 'data:image/png;base64,AAAA', {'nets': 3})]
+    try:
+        import tempfile, os
+        out = os.path.join(tempfile.mkdtemp(), 't.html')
+        st = SV.stage1_mainwire(['E001.DXF'], 'TEST', out)
+        assert st['wires'] == 2 and st['kakutei'] == 1, st
+        doc = open(out, encoding='utf-8').read()
+        assert 'MCCB-101:1' in doc and '要確認' in doc and '太物経路' in doc
+        assert 'data:image/png;base64,AAAA' in doc
+    finally:
+        MC.generate = orig_gen
+        SV._conn_imgs = orig_imgs
+
+
 if __name__ == '__main__':
     test_stage3_fromto_html()
     test_stage2_terminals_html()
+    test_stage1_mainwire_html()
     print('stage_views tests: OK')
