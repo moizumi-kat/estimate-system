@@ -28,6 +28,29 @@ def test_stage3_fromto_html():
         SV._fromto_rows, SV.conn_view.render, SV._img_b64 = orig_rows, orig_render, orig_img
 
 
+def test_stage2_terminals_html():
+    orig_def = SV.harness_produce.terminal_number_defects
+    orig_imgs = SV._conn_imgs
+    SV.harness_produce.terminal_number_defects = lambda seq, skel_paths, seiban: {
+        'items': [{'provisional': '仮1', 'position': {'x': 1300.0, 'y': 2100.0},
+                   'gousen': ['101A'], 'fix': ''}],
+        'count': 1, 'note': 'テスト'}
+    SV._conn_imgs = lambda seq, tmp: [('F001', 'data:image/png;base64,AAAA', {'nets': 5})]
+    try:
+        import tempfile, os
+        out = os.path.join(tempfile.mkdtemp(), 't.html')
+        st = SV.stage2_terminals(['F001.DXF'], [], 'TEST', out)
+        assert st == {'tb': 1, 'kakunin': 1, 'sheets': 1}, st
+        doc = open(out, encoding='utf-8').read()
+        assert '仮1' in doc and '101A' in doc and '要付番' in doc
+        assert '2人目 端子番号付与 確認UI' in doc
+        assert 'data:image/png;base64,AAAA' in doc
+    finally:
+        SV.harness_produce.terminal_number_defects = orig_def
+        SV._conn_imgs = orig_imgs
+
+
 if __name__ == '__main__':
     test_stage3_fromto_html()
+    test_stage2_terminals_html()
     print('stage_views tests: OK')
