@@ -77,6 +77,31 @@ def _cluster_panels(parts, gap=_PANEL_GAP):
     return panels
 
 
+_YROW_TOL = 40.0   # 同一行とみなすyの許容差（作図上、同じ行でもyが数単位ズレる）
+
+
+def _reading_order(panel, yrow_tol=_YROW_TOL):
+    """盤内の読み順で部品を並べる: 上→下で行にまとめ、同一行(±yrow_tol)は左→右。
+    DCT実データで、同じ行の部品でも作図上 y が 0.25 程度ズレるため、厳密な
+    (-y, x) ソートでは行内の左右順が崩れる(例: 117盤2の H/I/J)。行に束ねてから
+    左→右に並べることで、読み順を正しく再現する。"""
+    if not panel:
+        return []
+    ps = sorted(panel, key=lambda r: -r['y'])
+    rows, cur = [], [ps[0]]
+    for pr in ps[1:]:
+        if abs(pr['y'] - cur[-1]['y']) <= yrow_tol:
+            cur.append(pr)
+        else:
+            rows.append(cur)
+            cur = [pr]
+    rows.append(cur)
+    out = []
+    for row in rows:
+        out += sorted(row, key=lambda r: r['x'])   # 行内 左→右
+    return out
+
+
 def _letters(n):
     """A,B,...,Z,AA,AB,… を n 個。"""
     out = []
@@ -104,7 +129,7 @@ def assign(layout_paths, basis_prefix='auto'):
     prefix = (basis_prefix is True) or (basis_prefix == 'auto' and multi)
     by_actual, by_locator, panel_out = {}, {}, []
     for bi, panel in enumerate(panels, start=1):
-        ordered = sorted(panel, key=lambda r: (-r['y'], r['x']))   # 上→下, 左→右
+        ordered = _reading_order(panel)                            # 上→下(行まとめ), 左→右
         letters = _letters(len(ordered))
         rows = []
         for lt, pr in zip(letters, ordered):

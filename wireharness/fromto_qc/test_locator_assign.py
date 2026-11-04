@@ -37,6 +37,25 @@ def test_assign_reading_order(monkeypatch=None):
         la.actual_parts = orig
 
 
+def test_reading_order_row_tolerance():
+    # 同一行でも作図上 y が微小にズレる(0.25等)。行にまとめて左→右に並べる。
+    # (117盤2の H/I/J 実例: y=2370.75/2371.00 混在で厳密ソートだと順序が崩れる)
+    panel = [
+        {'sym': 'J', 'x': 1272, 'y': 2371.00},
+        {'sym': 'H', 'x': 1193, 'y': 2370.75},
+        {'sym': 'I', 'x': 1222, 'y': 2370.75},
+    ]
+    order = [p['sym'] for p in la._reading_order(panel, yrow_tol=40)]
+    assert order == ['H', 'I', 'J'], order       # x昇順(左→右)
+    # 行が離れていれば(>yrow_tol)別行として上→下
+    panel2 = [
+        {'sym': 'top', 'x': 100, 'y': 2000.0},
+        {'sym': 'bot', 'x': 90, 'y': 1700.0},
+    ]
+    assert [p['sym'] for p in la._reading_order(panel2, yrow_tol=40)] == ['top', 'bot']
+
+
 if __name__ == '__main__':
     test_letters(); test_cluster_panels(); test_assign_reading_order()
+    test_reading_order_row_tolerance()
     print('locator_assign tests: OK')
