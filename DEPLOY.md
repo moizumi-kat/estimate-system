@@ -9,7 +9,7 @@
 |---|---|
 | `app.py` | 選定ロジック本体（受変電計器グループA解消・高圧LBS/TR・リアクトル・制御盤たすき掛け統合・スコットTR/PF/警報盤・確認ゲート等） |
 | `index.html` | UI（セット確認ゲートのコンボボックスを追加） |
-| `db.json` | コードDB 3,641件（配電盤セット・AX付・段積等を含む） |
+| `db.json` | コードDB 3,666件（配電盤セット・AX付・段積等を含む） |
 
 > **二重Vision（Claude＋Gemini）を使う場合**：EC2 に Gemini キー（環境変数 `GEMINI_API_KEY` かリポジトリ外 `.gemini_key`）を設定。
 > 無ければ自動で Claude 単独にフォールバック（システムは止まらない）。`DUAL_VISION=0` で無効化可。Gemini は1枚数分かかるため
@@ -49,7 +49,7 @@ CLAUDE.md記載の「v1.7d（Excel名の英数字化）がEC2にあり正本未�
    sudo systemctl status estimate --no-pager | head
    ```
 5. **動作確認**
-   - `curl -s localhost:<PORT>/api/health` → `{"db":3641,...,"ok":true}`
+   - `curl -s localhost:<PORT>/api/health` → `{"db":3666,...,"ok":true}`
    - ブラウザで図面を1件アップ→抽出→選定→**セット確認ゲート**（配電盤の計器種別/VCB/操作方式のコンボボックス）が
      出ることを確認→回答して再選定→受電盤の計器が抑制されコードにまとまる→Excel ダウンロード。
 
