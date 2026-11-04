@@ -20,12 +20,19 @@ import re
 import ezdxf
 
 _RELAY_TYPE = re.compile(r'RU\d*S', re.I)
-_PANEL_GAP = 300.0     # これ以上xが離れたら別の盤(基)とみなす
+_PANEL_GAP = 200.0     # これ以上xが離れたら別の盤(基)とみなす
+# （DCT実データ検証: 盤内の横幅は約180-210、盤間ギャップは約290以上。
+#   旧値300だと盤間296の製番で隣接盤が誤併合したため200に調整。）
+
+
+# ロケーター対象の小部品種別: 補助リレー(AXR)・タイマ(TM)。
+# DCT実データで、A=タイマ(MS4S) → B,C…=補助リレー(RU4S/RU2S/MY4/G7K…) の順で採番される。
+_LOCATOR_PARTS = {'AXR', 'TM'}
 
 
 def _is_locator_part(attrs):
-    """ロケーター対象の小部品か(補助リレー等)。PARTS=AXR または 型式 RU?S。"""
-    return attrs.get('PARTS') == 'AXR' or bool(_RELAY_TYPE.search(attrs.get('TYPE', '')))
+    """ロケーター対象の小部品か(補助リレー・タイマ)。PARTS=AXR/TM または 型式 RU?S。"""
+    return attrs.get('PARTS') in _LOCATOR_PARTS or bool(_RELAY_TYPE.search(attrs.get('TYPE', '')))
 
 
 def actual_parts(layout_paths):
