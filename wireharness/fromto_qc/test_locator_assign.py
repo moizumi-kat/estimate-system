@@ -55,7 +55,41 @@ def test_reading_order_row_tolerance():
     assert [p['sym'] for p in la._reading_order(panel2, yrow_tol=40)] == ['top', 'bot']
 
 
+def test_assign_by_basis_grouping():
+    # 設計の基割当(basis_of)で基ごとにグループ化し、各基内を読み順で A,B,C…。
+    # 幾何クラスタを使わない: 離れていても同一基ならまとめる / 近くても別基なら分ける。
+    parts = [
+        {'sym': 'P1', 'x': 100, 'y': 2000.0, 'type': ''},   # 基2・上段
+        {'sym': 'P2', 'x': 900, 'y': 2000.0, 'type': ''},   # 基2・上段(離れていても同一基)
+        {'sym': 'P3', 'x': 120, 'y': 1700.0, 'type': ''},   # 基2・下段
+        {'sym': 'Q1', 'x': 130, 'y': 2000.0, 'type': ''},   # 基3(近くても別基)
+    ]
+    orig = la._all_device_parts
+    la._all_device_parts = lambda paths: parts
+    try:
+        r = la.assign_by_basis(['x'], {'P1': '2', 'P2': '2', 'P3': '2', 'Q1': '3'})
+        a = r['by_actual']
+        assert a['P1'] == '2-A' and a['P2'] == '2-B' and a['P3'] == '2-C', a   # 上段左→右, 次段
+        assert a['Q1'] == '3-A', a                                             # 別基は A から
+    finally:
+        la._all_device_parts = orig
+
+
+def test_assign_by_basis_ignores_unlisted():
+    # basis_of に無い機器は採番しない(設計がロケーター対象を決める)。
+    parts = [{'sym': 'A1', 'x': 100, 'y': 2000.0, 'type': ''},
+             {'sym': 'B1', 'x': 130, 'y': 2000.0, 'type': ''}]
+    orig = la._all_device_parts
+    la._all_device_parts = lambda paths: parts
+    try:
+        r = la.assign_by_basis(['x'], {'A1': '1'})
+        assert r['by_actual'] == {'A1': '1-A'}, r['by_actual']
+    finally:
+        la._all_device_parts = orig
+
+
 if __name__ == '__main__':
     test_letters(); test_cluster_panels(); test_assign_reading_order()
     test_reading_order_row_tolerance()
+    test_assign_by_basis_grouping(); test_assign_by_basis_ignores_unlisted()
     print('locator_assign tests: OK')
