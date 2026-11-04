@@ -7,12 +7,19 @@ HOME_DIR=/home/ec2-user
 APP_DIR="$HOME_DIR/estimate_code_system_v1.4"
 
 # 1) 差分がある時だけ pull + 再起動するスクリプト
+#    ※抽出が進行中(直近25分に更新された running ジョブがある)なら再起動を次回に延期し、
+#      ユーザーの抽出を中断しない(重い多ページ図面は数分かかるため)。
 cat > "$HOME_DIR/autodeploy.sh" <<'EOS'
 #!/bin/bash
 cd /home/ec2-user/estimate_code_system_v1.4 || exit 0
 git fetch origin main -q || exit 0
 if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
   git reset --hard origin/main -q
+  JOBDIR="$HOME/.estimate_jobs"
+  if [ -d "$JOBDIR" ] && find "$JOBDIR" -name '*.json' -mmin -25 2>/dev/null -exec grep -l '"status": *"running"' {} \; 2>/dev/null | grep -q .; then
+    echo "$(date) extraction in progress -> defer restart" >> "$HOME/autodeploy.log"
+    exit 0
+  fi
   sudo systemctl restart estimate
 fi
 EOS

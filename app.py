@@ -11,7 +11,7 @@
   pip install flask anthropic pdf2image openpyxl pillow
   python3 app.py        # → http://localhost:8000
 """
-import os, re, io, json, base64, unicodedata, datetime, zipfile, tempfile, hmac, secrets, functools, contextvars
+import os, re, io, json, base64, unicodedata, datetime, zipfile, tempfile, hmac, secrets, functools, contextvars, time
 from flask import Flask, request, jsonify, send_file, Response
 from anthropic import Anthropic
 from openpyxl import Workbook
@@ -412,18 +412,26 @@ def extract_pdf_hires(cli, data_bytes):
     except ImportError:
         # PyMuPDF未導入なら従来方式(PDFそのまま)にフォールバック
         return _extract_vision(cli, data_bytes, "application/pdf")
+    import gc
     all_panels=[]; dual_sum=None
     doc=fitz.open(stream=data_bytes, filetype="pdf")
-    for page in doc:
-        # 3倍解像度でレンダリング(細部の文字が潰れないように)
-        pix=page.get_pixmap(matrix=fitz.Matrix(3,3))
-        png=pix.tobytes("png")
-        res=_extract_vision(cli, png, "image/png")
-        for p in res.get("panels",[]):
-            all_panels.append(p)
-        if res.get('_dual'):   # 二重Vision突合サマリをページ横断で合算
-            if dual_sum is None: dual_sum={'dual':0,'claude_only':0,'gemini_only':0}
-            for k in dual_sum: dual_sum[k]+=res['_dual'].get(k,0)
+    try:
+        for page in doc:
+            # 3倍解像度でレンダリング(細部の文字が潰れないように・精度は不変)
+            pix=page.get_pixmap(matrix=fitz.Matrix(3,3))
+            png=pix.tobytes("png")
+            pix=None                 # 大きなPixmapを即解放(多ページ図面の累積OOM対策・t3.micro 1GB)
+            res=_extract_vision(cli, png, "image/png")
+            png=None
+            for p in res.get("panels",[]):
+                all_panels.append(p)
+            if res.get('_dual'):   # 二重Vision突合サマリをページ横断で合算
+                if dual_sum is None: dual_sum={'dual':0,'claude_only':0,'gemini_only':0}
+                for k in dual_sum: dual_sum[k]+=res['_dual'].get(k,0)
+            res=None; gc.collect()   # ページ間でメモリを返す(ピークメモリを1ページ分に抑える)
+    finally:
+        try: doc.close()
+        except Exception: pass
     out={"panels":all_panels}
     if dual_sum is not None: out['_dual']=dual_sum
     return out
@@ -3962,13 +3970,33 @@ def _do_extract(payload):
                 vision=('Claude+Gemini(二重Vision)' if _dual_used else 'Claude'))
 
 # 抽出ジョブ置き場(gunicorn複数ワーカー対策でファイル保存=どのワーカーからも進捗を読める)。
+# 【永続ディレクトリに保存】/tmp はサービス再起動(systemd PrivateTmp)やOSのtmp掃除で消えることがあり、
+# その場合ジョブ置き場が消えて「ジョブが見つかりません」になる。再起動で消えないホーム配下に置く。
 import threading
-_JOB_DIR=os.path.join(tempfile.gettempdir(),'estimate_jobs')
-try: os.makedirs(_JOB_DIR,exist_ok=True)
-except Exception: pass
+def _persist_dir(name):
+    for base in (os.path.expanduser('~'), HERE, tempfile.gettempdir()):
+        try:
+            d=os.path.join(base,name); os.makedirs(d,exist_ok=True)
+            t=os.path.join(d,'.wtest')
+            with open(t,'w') as f: f.write('ok')
+            os.remove(t); return d
+        except Exception: continue
+    return tempfile.gettempdir()
+_JOB_DIR=_persist_dir('.estimate_jobs')
+def _cleanup_old(dirpath, max_age=86400):
+    """古いジョブ/結果ファイルを掃除(永続ディレクトリの肥大化防止・既定1日)。"""
+    try:
+        now=time.time()
+        for fn in os.listdir(dirpath):
+            fp=os.path.join(dirpath,fn)
+            try:
+                if os.path.isfile(fp) and now-os.path.getmtime(fp)>max_age: os.remove(fp)
+            except Exception: pass
+    except Exception: pass
 def _job_path(jid): return os.path.join(_JOB_DIR, re.sub(r'[^0-9a-zA-Z]','',str(jid))[:40]+'.json')
 def _job_write(jid,obj):
     try:
+        obj=dict(obj); obj.setdefault('ts', time.time())   # 最終更新時刻(進捗/中断判定の材料)
         with open(_job_path(jid),'w',encoding='utf-8') as f: json.dump(obj,f,ensure_ascii=False)
     except Exception: pass
 def _job_read(jid):
@@ -3987,6 +4015,7 @@ def api_extract():
     payload=[(f.filename, f.read()) for f in files if f and f.filename]
     if not payload:
         return jsonify(error='ファイルがありません'),400
+    _cleanup_old(_JOB_DIR); _cleanup_old(_LAST_DIR)   # 永続ディレクトリの古いファイルを掃除(肥大化防止)
     jid=secrets.token_hex(8)
     _job_write(jid, {'status':'running'})
     def _work(jid=jid, payload=payload):
@@ -4007,6 +4036,13 @@ def api_extract_status(jid):
     j=_job_read(jid)
     if not j:
         return jsonify(status='unknown', error='ジョブが見つかりません(時間切れの可能性)'),404
+    # running のまま長時間更新が無い=ワーカーがメモリ不足/再起動で中断した可能性。分かりやすく案内。
+    if j.get('status')=='running':
+        age=time.time()-float(j.get('ts') or 0)
+        if age>1500:   # 25分以上(重い多ページでも通常これ未満)→中断とみなす
+            return jsonify(status='error',
+                error='抽出が中断した可能性があります(サーバのメモリ不足/再起動)。図面を1〜2ページに分けて再試行してください。')
+        j['elapsed']=int(age)
     return jsonify(j)
 
 # 【段階2】選定：抽出済みの盤・機器リスト→コード選定（◎○△）
@@ -4059,9 +4095,7 @@ def api_select():
 # gunicorn -w N ではメモリがワーカー間で共有されないため、ダウンロードが別ワーカーに当たると
 # 「選定結果がありません」になる。ファイルにも保存し、どのワーカーからでも読めるようにする。
 _LAST_RESULT={}
-_LAST_DIR=os.path.join(tempfile.gettempdir(),'estimate_last')
-try: os.makedirs(_LAST_DIR,exist_ok=True)
-except Exception: pass
+_LAST_DIR=_persist_dir('.estimate_last')   # 再起動で消えない永続ディレクトリ(選定結果のGET取得用)
 def _save_last(sid,panels):
     try:
         with open(os.path.join(_LAST_DIR,re.sub(r'[^0-9a-zA-Z]','',str(sid))[:32]+'.json'),'w',encoding='utf-8') as f:
