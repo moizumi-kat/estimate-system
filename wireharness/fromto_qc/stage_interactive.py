@@ -84,36 +84,62 @@ def locator_confirm(layout_paths, seiban, out_html, basis_of=None):
     return len(items)
 
 
+def _edges_of(dxf_path):
+    """edge_trace で『機器間の配線』(同点・同一機器内・重複を除去)を返す。
+    戻り: [(adev, aterm, ax, ay, bdev, bterm, bx, by), ...]。太物ハーネスの一本一本。"""
+    res = edge_trace.trace_edges(dxf_path, with_pos=True)
+    edges = res[2] if isinstance(res, tuple) and len(res) >= 3 else []
+    out, seen = [], set()
+    for e in edges:
+        (d1, t1, x1, y1), (d2, t2, x2, y2) = e[0], e[1]
+        if abs(x1 - x2) + abs(y1 - y2) < 1 or str(d1) == str(d2):
+            continue
+        key = tuple(sorted([(str(d1), str(t1)), (str(d2), str(t2))]))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((str(d1), str(t1), x1, y1, str(d2), str(t2), x2, y2))
+    return out
+
+
 def stage1_wires(skel_paths, seiban, out_html):
-    """1人目(太物)の配線を一本ずつ図面上に表示するUI。戻り: 配線本数。
-    各Fシート(スケルトン)ごとに edge_trace で端点座標付きの配線を取り、from→to を線で描く。"""
+    """1人目(太物)の配線を一本ずつ図面上に表示・編集するUI。戻り: 配線本数。"""
     sheets = []
     total = 0
     for p in skel_paths:
-        name = _basename(p)
-        res = edge_trace.trace_edges(p, with_pos=True)
-        edges = res[2] if isinstance(res, tuple) and len(res) >= 3 else []
-        pts = []
-        for e in edges:
-            (d1, t1, x1, y1), (d2, t2, x2, y2) = e[0], e[1]
-            pts.append((x1, y1))
-            pts.append((x2, y2))
-        if not pts:
+        es = _edges_of(p)
+        if not es:
             continue
+        pts = [(e[2], e[3]) for e in es] + [(e[6], e[7]) for e in es]
         uri, w, h, ext = _render_base(p, pts)
         wires = []
-        for e in edges:
-            (d1, t1, x1, y1), (d2, t2, x2, y2) = e[0], e[1]
-            if abs(x1 - x2) + abs(y1 - y2) < 1:
-                continue      # 同点(端子内)の自己ループは除外
-            ax_, ay_ = _to_px(x1, y1, ext, w, h)
-            bx_, by_ = _to_px(x2, y2, ext, w, h)
-            wires.append({'a': f'{d1}:{t1}', 'b': f'{d2}:{t2}',
+        for (ad, at, ax, ay, bd, bt, bx, by) in es:
+            ax_, ay_ = _to_px(ax, ay, ext, w, h)
+            bx_, by_ = _to_px(bx, by, ext, w, h)
+            wires.append({'a': f'{ad}:{at}', 'b': f'{bd}:{bt}',
+                          'adev': ad, 'aterm': at, 'bdev': bd, 'bterm': bt,
                           'ax': ax_, 'ay': ay_, 'bx': bx_, 'by': by_})
         total += len(wires)
-        sheets.append({'name': name, 'uri': uri, 'w': w, 'h': h, 'wires': wires})
+        sheets.append({'name': _basename(p), 'uri': uri, 'w': w, 'h': h, 'wires': wires})
     _write_wire_html(out_html, seiban, sheets)
     return total
+
+
+def export_stage1_harness(skel_paths, seiban, out_csv):
+    """1人目(太物)ハーネス情報を CSV 出力(サーバー側・無編集の基準出力)。
+    列: シート, From機器, From端子, To機器, To端子, サイズ。戻り: 行数。
+    UI(stage1_wires)の『ハーネスCSV出力』は、これに人手修正を反映したもの。"""
+    import csv
+    rows = []
+    for p in skel_paths:
+        name = _basename(p)
+        for (ad, at, ax, ay, bd, bt, bx, by) in _edges_of(p):
+            rows.append([name, ad, at, bd, bt, ''])
+    with open(out_csv, 'w', encoding='cp932', errors='replace', newline='') as f:
+        wr = csv.writer(f)
+        wr.writerow(['シート', 'From機器', 'From端子', 'To機器', 'To端子', 'サイズ'])
+        wr.writerows(rows)
+    return len(rows)
 
 
 # ---- HTML ビルダ ----
@@ -143,70 +169,99 @@ tbody tr{cursor:pointer} tbody tr.on td{background:#ffe3cc}
 
 
 def _write_marker_html(out_html, seiban, subtitle, uri, w, h, items, cols, headers, note):
+    """機器マーカー確認＋編集UI。ロケーター/機器を修正でき、対象外も可。CSV出力付き。"""
     body_rows = ''.join(
-        f'<tr data-i="{i}">' + ''.join(f'<td class="{"lc" if c=="loc" else ""}">{_esc(d[c])}</td>' for c in cols) + '</tr>'
+        f'<tr data-i="{i}">'
+        f'<td><input class=cloc value="{_esc(d["loc"])}"></td>'
+        f'<td><input class=csym value="{_esc(d["sym"])}"></td>'
+        f'<td class=ce><input type=checkbox class=ex></td></tr>'
         for i, d in enumerate(items))
-    head = ''.join(f'<th>{_esc(hh)}</th>' for hh in headers)
     doc = f"""<!doctype html><html lang=ja><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
-<title>{_esc(seiban)} {_esc(subtitle)}</title><style>{_CSS}</style></head><body>
-<div class=hd><h1>{_esc(seiban)}　{_esc(subtitle)}</h1><div class=n>機器 {len(items)}件。{_esc(note)}</div></div>
+<title>{_esc(seiban)} {_esc(subtitle)}</title><style>{_CSS}
+.L input{{border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:12.5px;width:92%}}
+.ce{{text-align:center}} tr.del input{{text-decoration:line-through;color:#999;background:#f6f6f6}}
+.dl{{background:#1565c0;color:#fff;border:none;border-radius:5px;padding:5px 14px;cursor:pointer;margin-left:10px;font-size:13px}}</style></head><body>
+<div class=hd><h1>{_esc(seiban)}　{_esc(subtitle)}
+<button class=dl onclick="exportCSV()">ロケーターCSV出力（修正反映）</button></h1>
+<div class=n>機器 {len(items)}件。{_esc(note)} <b>ロケーター/機器は直接編集でき、対象外にもできます。</b></div></div>
 <div class=wrap>
- <div class=L><table><thead><tr>{head}</tr></thead><tbody>{body_rows}</tbody></table></div>
+ <div class=L><table><thead><tr><th>{_esc(headers[0])}</th><th>{_esc(headers[1])}</th><th>対象外</th></tr></thead>
+   <tbody>{body_rows}</tbody></table></div>
  <div class=R><div class=box style="width:{w}px"><img src="{uri}" width="{w}" height="{h}">
    <svg class=ov viewBox="0 0 {w} {h}" width="{w}" height="{h}"></svg></div></div>
 </div>
 <script>
 const items={json.dumps(items, ensure_ascii=False)};
 const ov=document.querySelector('.ov');
+function curLoc(i){{const tr=document.querySelector(`tr[data-i="${{i}}"]`);return tr?tr.querySelector('.cloc').value:items[i].loc;}}
 function draw(sel){{let s='';items.forEach((d,i)=>{{const on=i===sel;
  s+=`<circle cx="${{d.px}}" cy="${{d.py}}" r="${{on?26:12}}" fill="none" stroke="${{on?'#ff2d00':'#e65100'}}" stroke-width="${{on?5:2}}"/>`;
- if(on)s+=`<text x="${{d.px}}" y="${{d.py-32}}" fill="#ff2d00" font-size="32" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="5">${{d.loc||''}}</text>`;}});ov.innerHTML=s;}}
+ if(on)s+=`<text x="${{d.px}}" y="${{d.py-32}}" fill="#ff2d00" font-size="32" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="5">${{curLoc(i)||''}}</text>`;}});ov.innerHTML=s;}}
 draw(-1);
-document.querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>{{
- document.querySelectorAll('tbody tr').forEach(t=>t.classList.remove('on'));tr.classList.add('on');
- const i=+tr.dataset.i;draw(i);const d=items[i];
- document.querySelector('.R').scrollTo({{left:d.px-320,top:d.py-260,behavior:'smooth'}});}});
+document.querySelectorAll('tbody tr').forEach(tr=>{{
+ tr.querySelector('.ex').onchange=e=>tr.classList.toggle('del',e.target.checked);
+ tr.onclick=ev=>{{if(ev.target.tagName==='INPUT')return;
+  document.querySelectorAll('tbody tr').forEach(t=>t.classList.remove('on'));tr.classList.add('on');
+  const i=+tr.dataset.i;draw(i);const d=items[i];
+  document.querySelector('.R').scrollTo({{left:d.px-320,top:d.py-260,behavior:'smooth'}});}};}});
+function exportCSV(){{let out=[['ロケーター','機器']];
+ document.querySelectorAll('tbody tr').forEach(tr=>{{if(tr.querySelector('.ex').checked)return;
+  out.push([tr.querySelector('.cloc').value,tr.querySelector('.csym').value]);}});
+ const csv='\\ufeff'+out.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+ const b=new Blob([csv],{{type:'text/csv'}});const a=document.createElement('a');
+ a.href=URL.createObjectURL(b);a.download='{_esc(seiban)}_ロケーター.csv';a.click();}}
 </script></body></html>"""
     with open(out_html, 'w', encoding='utf-8') as f:
         f.write(doc)
 
 
 def _write_wire_html(out_html, seiban, sheets):
+    """1人目(太物)配線の確認＋編集UI。From/To/サイズを修正でき、除外も可。
+    『ハーネスCSV出力』で修正を反映した1人目ハーネス情報をダウンロードする。"""
     total = sum(len(s['wires']) for s in sheets)
-    # シートセレクタ＋各シートの一覧/図
     secs = []
     for si, s in enumerate(sheets):
         rows = ''.join(
-            f'<tr data-i="{i}"><td>{_esc(w["a"])}</td><td class=ar>→</td><td>{_esc(w["b"])}</td></tr>'
+            f'<tr data-i="{i}">'
+            f'<td><input class=fa value="{_esc(w["a"])}"></td><td class=ar>→</td>'
+            f'<td><input class=fb value="{_esc(w["b"])}"></td>'
+            f'<td><input class=sz value="" placeholder="例 8sq" size=6></td>'
+            f'<td class=ce><input type=checkbox class=ex></td></tr>'
             for i, w in enumerate(s['wires']))
         secs.append(f"""<section data-sheet="{si}" style="display:{'block' if si==0 else 'none'}">
 <div class=wrap>
  <div class=L><div class=sh>{_esc(s['name'])}（配線 {len(s['wires'])}本）</div>
-  <table><thead><tr><th>From</th><th></th><th>To</th></tr></thead><tbody>{rows}</tbody></table></div>
+  <table><thead><tr><th>From</th><th></th><th>To</th><th>サイズ</th><th>除外</th></tr></thead>
+  <tbody>{rows}</tbody></table></div>
  <div class=R><div class=box style="width:{s['w']}px"><img src="{s['uri']}" width="{s['w']}" height="{s['h']}">
    <svg class=ov viewBox="0 0 {s['w']} {s['h']}" width="{s['w']}" height="{s['h']}"></svg></div></div>
 </div></section>""")
     tabs = ''.join(f'<button data-t="{si}" class="{"on" if si==0 else ""}">{_esc(s["name"])}</button>'
                    for si, s in enumerate(sheets))
     data = {si: s['wires'] for si, s in enumerate(sheets)}
+    names = {si: s['name'] for si, s in enumerate(sheets)}
     doc = f"""<!doctype html><html lang=ja><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
-<title>{_esc(seiban)} 1人目 太物配線 確認</title><style>{_CSS}
+<title>{_esc(seiban)} 1人目 太物配線 確認・編集</title><style>{_CSS}
 .tabs{{padding:6px 12px;background:#fff}} .tabs button{{margin-right:6px;padding:4px 10px;border:1px solid #ccc;background:#f3f3f3;border-radius:5px;cursor:pointer}}
-.tabs button.on{{background:#1a1a1a;color:#fff;border-color:#1a1a1a}}</style></head><body>
-<div class=hd><h1>{_esc(seiban)}　1人目 太物配線 確認（一本ずつ図面表示）</h1>
-<div class=n>配線 {total}本。行をクリックすると、その配線の From→To を図面上に線で表示します。</div></div>
+.tabs button.on{{background:#1a1a1a;color:#fff;border-color:#1a1a1a}}
+.L input{{border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:12.5px;width:95%}}
+.L input.sz{{width:56px}} .ce{{text-align:center}} tr.del input{{text-decoration:line-through;color:#999;background:#f6f6f6}}
+.dl{{background:#1565c0;color:#fff;border:none;border-radius:5px;padding:5px 14px;cursor:pointer;margin-left:10px;font-size:13px}}</style></head><body>
+<div class=hd><h1>{_esc(seiban)}　1人目 太物配線 確認・編集
+<button class=dl onclick="exportCSV()">ハーネスCSV出力（修正反映）</button></h1>
+<div class=n>配線 {total}本。行クリックで図面に表示。<b>From/To/サイズは直接編集でき、誤りは「除外」で外せます。</b>修正後「ハーネスCSV出力」で1人目ハーネス情報を保存。</div></div>
 <div class=tabs>{tabs}</div>
 {''.join(secs)}
 <script>
 const DATA={json.dumps(data, ensure_ascii=False)};
+const NAMES={json.dumps(names, ensure_ascii=False)};
 function ov(si){{return document.querySelector(`section[data-sheet="${{si}}"] .ov`);}}
-function drawAll(si){{const ws=DATA[si];let s='';ws.forEach(w=>{{
- s+=`<line x1="${{w.ax}}" y1="${{w.ay}}" x2="${{w.bx}}" y2="${{w.by}}" stroke="#9cc3ff" stroke-width="2"/>`;}});ov(si).innerHTML=s;}}
-function sel(si,i){{const ws=DATA[si];let s='';ws.forEach((w,j)=>{{const on=j===i;
+function drawAll(si){{let s='';DATA[si].forEach(w=>{{s+=`<line x1="${{w.ax}}" y1="${{w.ay}}" x2="${{w.bx}}" y2="${{w.by}}" stroke="#9cc3ff" stroke-width="2"/>`;}});ov(si).innerHTML=s;}}
+function sel(si,i){{let s='';DATA[si].forEach((w,j)=>{{const on=j===i;
  s+=`<line x1="${{w.ax}}" y1="${{w.ay}}" x2="${{w.bx}}" y2="${{w.by}}" stroke="${{on?'#ff2d00':'#cfe0fb'}}" stroke-width="${{on?6:1.6}}"/>`;}});
- const w=ws[i];
+ const w=DATA[si][i];
  s+=`<circle cx="${{w.ax}}" cy="${{w.ay}}" r="11" fill="#2a7a2a"/><circle cx="${{w.bx}}" cy="${{w.by}}" r="11" fill="#c0392b"/>`;
  s+=`<text x="${{w.ax}}" y="${{w.ay-16}}" fill="#2a7a2a" font-size="30" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="5">From</text>`;
  s+=`<text x="${{w.bx}}" y="${{w.by-16}}" fill="#c0392b" font-size="30" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="5">To</text>`;
@@ -216,10 +271,23 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{{
  document.querySelectorAll('section').forEach(se=>se.style.display='none');
  const si=b.dataset.t;document.querySelector(`section[data-sheet="${{si}}"]`).style.display='block';drawAll(si);}});
 document.querySelectorAll('section').forEach(se=>{{const si=se.dataset.sheet;drawAll(si);
- se.querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>{{
-  se.querySelectorAll('tbody tr').forEach(t=>t.classList.remove('on'));tr.classList.add('on');
-  const i=+tr.dataset.i;sel(si,i);const w=DATA[si][i];
-  se.querySelector('.R').scrollTo({{left:(w.ax+w.bx)/2-320,top:(w.ay+w.by)/2-260,behavior:'smooth'}});}});}});
+ se.querySelectorAll('tbody tr').forEach(tr=>{{
+  tr.querySelector('.ex').onchange=e=>tr.classList.toggle('del',e.target.checked);
+  tr.onclick=ev=>{{if(ev.target.tagName==='INPUT')return;
+   se.querySelectorAll('tbody tr').forEach(t=>t.classList.remove('on'));tr.classList.add('on');
+   const i=+tr.dataset.i;sel(si,i);const w=DATA[si][i];
+   se.querySelector('.R').scrollTo({{left:(w.ax+w.bx)/2-320,top:(w.ay+w.by)/2-260,behavior:'smooth'}});}};}});}});
+function splitFT(s){{const p=String(s).split(':');return p.length>1?[p.slice(0,-1).join(':'),p[p.length-1]]:[s,''];}}
+function exportCSV(){{
+ let out=[['シート','From機器','From端子','To機器','To端子','サイズ']];
+ document.querySelectorAll('section').forEach(se=>{{const si=se.dataset.sheet;
+  se.querySelectorAll('tbody tr').forEach(tr=>{{
+   if(tr.querySelector('.ex').checked)return;
+   const fa=splitFT(tr.querySelector('.fa').value), fb=splitFT(tr.querySelector('.fb').value);
+   out.push([NAMES[si],fa[0],fa[1],fb[0],fb[1],tr.querySelector('.sz').value]);}});}});
+ const csv='\\ufeff'+out.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+ const b=new Blob([csv],{{type:'text/csv'}});const a=document.createElement('a');
+ a.href=URL.createObjectURL(b);a.download='{_esc(seiban)}_1人目ハーネス.csv';a.click();}}
 </script></body></html>"""
     with open(out_html, 'w', encoding='utf-8') as f:
         f.write(doc)

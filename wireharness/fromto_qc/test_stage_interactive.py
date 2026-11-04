@@ -47,6 +47,23 @@ def test_stage1_wires_html():
         SI._render_base = orig_render
 
 
+def test_export_stage1_harness(tmp_path=None):
+    import tempfile, os, csv
+    orig = SI.edge_trace.trace_edges
+    SI.edge_trace.trace_edges = lambda p, with_pos=True: (
+        None, None, [[['52-101', '5', 1200.0, 1670.0], ['AM-101', '1', 1200.0, 1900.0]],
+                     [['AM-101', '1', 1200.0, 1900.0], ['AM-101', '1', 1200.0, 1900.0]]])  # 自己ループは除外
+    try:
+        out = os.path.join(tempfile.mkdtemp(), 'h.csv')
+        n = SI.export_stage1_harness(['E001.DXF'], 'TEST', out)
+        assert n == 1, n
+        rows = list(csv.reader(open(out, encoding='cp932')))
+        assert rows[0] == ['シート', 'From機器', 'From端子', 'To機器', 'To端子', 'サイズ']
+        assert rows[1] == ['E001', '52-101', '5', 'AM-101', '1', '']
+    finally:
+        SI.edge_trace.trace_edges = orig
+
+
 if __name__ == '__main__':
-    test_to_px(); test_locator_confirm_html(); test_stage1_wires_html()
+    test_to_px(); test_locator_confirm_html(); test_stage1_wires_html(); test_export_stage1_harness()
     print('stage_interactive tests: OK')
