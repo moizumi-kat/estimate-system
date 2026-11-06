@@ -80,7 +80,10 @@ def stage3_fromto(seq_paths, skel_paths, seiban, out_html, tmp_dir=None):
                       f'<span class="kind">{esc(kind_of[g])}</span></td>') if i == 0 else ''
             frm = f"{esc(r[2])}{esc(r[3])}" + (f" :{esc(r[4])}" if r[4] else '')
             to = f"{esc(r[5])}{esc(r[6])}" + (f" :{esc(r[7])}" if r[7] else '')
-            trs.append(f'<tr>{g_cell}<td>{frm}</td><td class="ar">→</td><td>{to}</td></tr>')
+            trs.append(f'<tr data-g="{esc(g)}" data-k="{esc(kind_of[g])}">{g_cell}'
+                       f'<td><input class=ef value="{frm}"></td><td class="ar">→</td>'
+                       f'<td><input class=et value="{to}"></td>'
+                       f'<td class=ce><input type=checkbox class=ex></td></tr>')
     img_html = ''.join(
         f'<div class="sheet"><div class="sh">{esc(n)}'
         + (f' <span class="st">nets={s.get("nets","?")} 浮端子={s.get("floating","?")} '
@@ -112,8 +115,12 @@ th{{background:#efefef;position:sticky;top:0}}
 .st{{font-size:12px;color:#555;font-weight:normal}} .err{{color:#c00}}
 .sheet img{{width:100%;border:1px solid #ddd;border-radius:4px}}
 .note{{font-size:12px;color:#555;margin-top:6px}}
+.left input{{border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:12.5px;width:92%}}
+.ce{{text-align:center}} tr.del input{{text-decoration:line-through;color:#999;background:#f6f6f6}}
+.dl{{background:#1565c0;color:#fff;border:none;border-radius:5px;padding:5px 14px;cursor:pointer;margin-left:10px;font-size:13px}}
 </style></head><body><div class="page">
-<h1>{esc(seiban)}　3人目 From-To 確認UI</h1>
+<h1>{esc(seiban)}　3人目 From-To 確認・編集
+<button class="dl" onclick="exportCSV()">From-To CSV出力（修正反映）</button></h1>
 <div class="stat">
  <div>号線 <b>{stats['gousen']}</b></div>
  <div>配線(From-To) <b>{stats['wires']}</b></div>
@@ -122,14 +129,23 @@ th{{background:#efefef;position:sticky;top:0}}
  <div>シート <b>{stats['sheets']}</b></div>
 </div>
 <div class="cols">
- <div class="left"><table><tr><th>号線</th><th>From</th><th></th><th>To</th></tr>
+ <div class="left"><table><tr><th>号線</th><th>From</th><th></th><th>To</th><th>除外</th></tr>
  {''.join(trs)}</table></div>
  <div class="right">
-  <div class="note">右＝結線検査図。<b>同じ色＝1つの繋がったネット</b>。左のFrom-To一覧と図面を見比べて、号線ごとの結線をご確認ください。</div>
+  <div class="note">右＝結線検査図。<b>同じ色＝1つの繋がったネット</b>。<b>From/To は直接編集でき、誤りは「除外」で外せます。</b>修正後「From-To CSV出力」で保存。</div>
   {img_html}
  </div>
 </div>
 <p class="note">※ 社内資産につき取り扱い注意。From-Toは図面(制御シート)から自動生成。</p>
+<script>
+document.querySelectorAll('tr[data-g] .ex').forEach(c=>c.onchange=e=>e.target.closest('tr').classList.toggle('del',e.target.checked));
+function exportCSV(){{let out=[['号線','種別','From','To']];
+ document.querySelectorAll('tr[data-g]').forEach(tr=>{{if(tr.querySelector('.ex').checked)return;
+  out.push([tr.dataset.g,tr.dataset.k,tr.querySelector('.ef').value,tr.querySelector('.et').value]);}});
+ const csv='\\ufeff'+out.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+ const b=new Blob([csv],{{type:'text/csv'}});const a=document.createElement('a');
+ a.href=URL.createObjectURL(b);a.download='{esc(seiban)}_3人目FromTo.csv';a.click();}}
+</script>
 </div></body></html>"""
     with open(out_html, 'w', encoding='utf-8') as f:
         f.write(doc)
@@ -169,12 +185,13 @@ def stage2_terminals(seq_paths, skel_paths, seiban, out_html, tmp_dir=None):
         gs = '／'.join(str(g) for g in it['gousen']) or '(なし)'
         pos = f"({it['position']['x']:.0f}, {it['position']['y']:.0f})"
         trs.append(
-            f'<tr><td class="pv">{esc(it["provisional"])}</td>'
-            f'<td>{esc(gs)}</td>'
-            f'<td class="need">未記入 ▲要付番</td>'
+            f'<tr data-pv="{esc(it["provisional"])}"><td class="pv">{esc(it["provisional"])}</td>'
+            f'<td><input class=eg value="{esc(gs)}"></td>'
+            f'<td><input class=tn placeholder="端子番号を入力"></td>'
+            f'<td class=ce><input type=checkbox class=ex></td>'
             f'<td class="pos">{esc(pos)}</td></tr>')
     if not trs:
-        trs = ['<tr><td colspan="4" class="none">未記入の端子台はありません</td></tr>']
+        trs = ['<tr><td colspan="5" class="none">未記入の端子台はありません</td></tr>']
     img_html = ''.join(
         f'<div class="sheet"><div class="sh">{esc(n)}'
         + ('' if 'error' in s else f' <span class="st">端子/ネット={s.get("nets","?")}</span>')
@@ -198,8 +215,12 @@ th{{background:#efefef;position:sticky;top:0}}
 .pos{{color:#777;font-size:12px}} .none{{color:#999}}
 .sheet{{margin-bottom:14px}} .sh{{font-weight:bold;margin:4px 0}} .st{{font-size:12px;color:#555;font-weight:normal}}
 .sheet img{{width:100%;border:1px solid #ddd;border-radius:4px}} .note{{font-size:12px;color:#555;margin:6px 0}}
+.left input{{border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:12.5px;width:92%}}
+.left input.tn{{background:#fffbe9}} .ce{{text-align:center}} tr.del input{{text-decoration:line-through;color:#999;background:#f6f6f6}}
+.dl{{background:#1565c0;color:#fff;border:none;border-radius:5px;padding:5px 14px;cursor:pointer;margin-left:10px;font-size:13px}}
 </style></head><body><div class="page">
-<h1>{esc(seiban)}　2人目 端子番号付与 確認UI</h1>
+<h1>{esc(seiban)}　2人目 端子番号付与 確認・編集
+<button class="dl" onclick="exportCSV()">端子番号CSV出力（修正反映）</button></h1>
 <div class="stat">
  <div>端子台(未記入) <b>{stats['tb']}</b></div>
  <div class="warn">要付番 <b>{stats['kakunin']}</b></div>
@@ -207,14 +228,23 @@ th{{background:#efefef;position:sticky;top:0}}
 </div>
 <div class="note">制御線の端子台(TB)の端子番号は設計図で未記入＝<b>製造工程(2人目)で付番</b>します。システムは位置で個別化し仮番号を割当て、接続号線を提示します。下表の仮番号に正式な台番号・端子番号を付けてください。</div>
 <div class="cols">
- <div class="left"><table><tr><th>仮番号</th><th>接続号線</th><th>端子番号</th><th>位置</th></tr>
+ <div class="left"><table><tr><th>仮番号</th><th>接続号線</th><th>端子番号</th><th>除外</th><th>位置</th></tr>
  {''.join(trs)}</table></div>
  <div class="right">
-  <div class="note">右＝結線検査図。端子台の位置・接続を図面上で確認できます。</div>
+  <div class="note">右＝結線検査図。端子台の位置・接続を図面上で確認できます。<b>黄欄に端子番号を入力、接続号線も編集でき、誤りは「除外」。</b></div>
   {img_html}
  </div>
 </div>
 <p class="note">※ 社内資産につき取り扱い注意。{esc(d.get('note',''))}</p>
+<script>
+document.querySelectorAll('tr[data-pv] .ex').forEach(c=>c.onchange=e=>e.target.closest('tr').classList.toggle('del',e.target.checked));
+function exportCSV(){{let out=[['仮番号','接続号線','端子番号']];
+ document.querySelectorAll('tr[data-pv]').forEach(tr=>{{if(tr.querySelector('.ex').checked)return;
+  out.push([tr.dataset.pv,tr.querySelector('.eg').value,tr.querySelector('.tn').value]);}});
+ const csv='\\ufeff'+out.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+ const b=new Blob([csv],{{type:'text/csv'}});const a=document.createElement('a');
+ a.href=URL.createObjectURL(b);a.download='{esc(seiban)}_2人目端子番号.csv';a.click();}}
+</script>
 </div></body></html>"""
     with open(out_html, 'w', encoding='utf-8') as f:
         f.write(doc)

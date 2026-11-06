@@ -23,7 +23,7 @@ def test_stage3_fromto_html():
         assert '101C1' in doc and 'CT101 :K' in doc and 'CT101 :L' in doc
         assert 'ELCB101 :ALa' in doc and '30X1A' in doc
         assert 'data:image/png;base64,AAAA' in doc      # 検査図が埋め込まれている
-        assert '3人目 From-To 確認UI' in doc
+        assert '3人目 From-To 確認・編集' in doc and 'From-To CSV出力' in doc
     finally:
         SV._fromto_rows, SV.conn_view.render, SV._img_b64 = orig_rows, orig_render, orig_img
 
@@ -42,8 +42,8 @@ def test_stage2_terminals_html():
         st = SV.stage2_terminals(['F001.DXF'], [], 'TEST', out)
         assert st == {'tb': 1, 'kakunin': 1, 'sheets': 1}, st
         doc = open(out, encoding='utf-8').read()
-        assert '仮1' in doc and '101A' in doc and '要付番' in doc
-        assert '2人目 端子番号付与 確認UI' in doc
+        assert '仮1' in doc and '101A' in doc and '端子番号CSV出力' in doc
+        assert '2人目 端子番号付与 確認・編集' in doc
         assert 'data:image/png;base64,AAAA' in doc
     finally:
         SV.harness_produce.terminal_number_defects = orig_def
