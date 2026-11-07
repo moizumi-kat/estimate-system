@@ -148,11 +148,26 @@ def _draw_table_per_basis(msp, rows, layer, color, dct_paths=None):
         byb.setdefault(b, []).append((loc, sym, x, y))
     if not byb:
         return
-    y_top, th = _table_style_from_dct(dct_paths)
-    if y_top is None:                       # 手本に表が無い場合: 機器群の下に置く
-        ys = [y for loc, sym, x, y, t in rows if y is not None]
-        y_top = (min(ys) - 80.0) if ys else 0.0
+    _dcty, th = _table_style_from_dct(dct_paths)
+    if th is None:
         th = 25.0
+    # 盤に近い位置(盤の直下)に表示: 図面上の全機器の最下yの少し下に置く。
+    # (手本DCTの表位置は盤から離れて下方にあるため、盤寄りへ引き上げる)
+    dev_ys = []
+    for ins in msp.query('INSERT'):
+        if not ins.attribs:
+            continue
+        a = {k.dxf.tag: (k.dxf.text or '').strip() for k in ins.attribs}
+        if a.get('DEVICE') and a.get('DEVICE2') != ':':
+            try:
+                dev_ys.append(ins.dxf.insert.y)
+            except Exception:
+                pass
+    if dev_ys:
+        y_top = min(dev_ys) - 500.0         # 盤最下端機器の下・寸法線帯の直下(盤に近い位置)
+    else:
+        ys = [y for loc, sym, x, y, t in rows if y is not None]
+        y_top = (min(ys) - 500.0) if ys else (_dcty or 0.0)
     row_h = th * 1.5                         # 行間は文字高基準(潰れ防止)
     char_w = th * 0.62                       # 概算字幅(列センタリング用)
     for b, items in byb.items():
