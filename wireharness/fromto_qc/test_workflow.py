@@ -14,7 +14,7 @@ def test_run_workflow_order_and_hub():
     import fromto_qc.stage_views as SV
     import fromto_qc.stage_interactive as SI
     orig = dict(wd=LAP.write_dxf, bd=LA.basis_from_dct, ad=HP.analyze_defects,
-                lc=SI.locator_confirm, s2=SV.stage2_terminals, s1=SI.stage1_wires,
+                lc=SI.locator_confirm, s2=SI.stage2_terminal_assign, s1=SI.stage1_wires,
                 ex=SI.export_stage1_harness, s3=SV.stage3_fromto)
     LAP.write_dxf = lambda layout, out, basis_of=None, dct_paths=None: (calls.append('loc_dxf'), 5)[1]
     LA.basis_from_dct = lambda dct: {}
@@ -22,7 +22,7 @@ def test_run_workflow_order_and_hub():
         AssertionError('ロケーター確認UIは廃止(手本準拠なら確認不要)'))
     HP.analyze_defects = lambda seq, skel, sb, layout_path=None: (calls.append('defect'),
                                                                   {'defects': [], 'summary': {'不備件数': 0}})[1]
-    SV.stage2_terminals = lambda seq, skel, sb, out: (calls.append('term'), open(out, 'w').write('x'), {'tb': 41})[2]
+    SI.stage2_terminal_assign = lambda seq, skel, sb, out: (calls.append('term'), open(out, 'w').write('x'), 41)[2]
     SI.stage1_wires = lambda skel, sb, out: (calls.append('s1'), open(out, 'w').write('x'), 108)[2]
     SI.export_stage1_harness = lambda skel, sb, out: (calls.append('s1csv'), open(out, 'w').write('x'), 108)[2]
     SV.stage3_fromto = lambda seq, skel, sb, out: (calls.append('s3'), open(out, 'w').write('x'),
@@ -41,7 +41,7 @@ def test_run_workflow_order_and_hub():
         assert '2人目（入口）' in hub and '並行' in hub and '1人目' in hub and '3人目' in hub
     finally:
         LAP.write_dxf, LA.basis_from_dct, HP.analyze_defects = orig['wd'], orig['bd'], orig['ad']
-        SI.locator_confirm, SV.stage2_terminals = orig['lc'], orig['s2']
+        SI.locator_confirm, SI.stage2_terminal_assign = orig['lc'], orig['s2']
         SI.stage1_wires, SI.export_stage1_harness, SV.stage3_fromto = orig['s1'], orig['ex'], orig['s3']
 
 

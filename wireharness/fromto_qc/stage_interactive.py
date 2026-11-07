@@ -17,6 +17,8 @@ import json
 import ezdxf
 
 from . import locator_apply as LAP, locator_assign as LA, edge_trace
+from . import tracer
+from .geometry import norm
 
 
 def _render_base(dxf_path, pts, margin_frac=0.06, w_in=24.0, dpi=130):
@@ -125,6 +127,89 @@ def stage1_wires(skel_paths, seiban, out_html):
     return total
 
 
+def _split_dev(dev):
+    if '-' in str(dev):
+        d, n = str(dev).rsplit('-', 1)
+        return d, n
+    return str(dev), ''
+
+
+def _is_tb_lug(dev, term):
+    """端子番号未記入の端子台ラグ(DEVICE=TB・番号なし・端子なし/?)か。"""
+    d, n = _split_dev(dev)
+    return norm(d) == 'TB' and (not n) and (not term or term == '?')
+
+
+def _terminals_by_sheet(seq_paths, skel_paths):
+    """端子番号未記入の端子台ラグを『シートごと』に返す。仮番号は全体で一意採番。
+    戻り: [(sheet_path, [{'prov','x','y','gousen':[...]}, ...]), ...]。
+    (harness_sheet.build_sheet と同じ仮番号採番規則に揃える)"""
+    paths = list(seq_paths) + list(skel_paths or [])
+    per = {}
+    gmembers = {}
+    for p in paths:
+        try:
+            tn = tracer.trace_nodes(p)
+        except Exception:
+            tn = {}
+        per[p] = tn
+        for g, nd in tn.items():
+            gmembers.setdefault(g, set()).update(nd['members'])
+    lugs = set()
+    for g, mem in gmembers.items():
+        if str(g).startswith('M@'):
+            continue
+        for (dev, term, x, y) in mem:
+            if _is_tb_lug(dev, term):
+                lugs.add((round(x), round(y), norm(g)))
+    tb_prov = {lug: f"仮{i + 1}" for i, lug in enumerate(sorted(lugs))}
+    prov_gousen = {}
+    for g, mem in gmembers.items():
+        if str(g).startswith('M@'):
+            continue
+        for (dev, term, x, y) in mem:
+            if _is_tb_lug(dev, term):
+                prov = tb_prov.get((round(x), round(y), norm(g)))
+                if prov:
+                    prov_gousen.setdefault(prov, set()).add(g)
+    sheets = []
+    for p in paths:
+        seen = {}
+        for g, nd in per[p].items():
+            if str(g).startswith('M@'):
+                continue
+            for (dev, term, x, y) in nd['members']:
+                if _is_tb_lug(dev, term):
+                    prov = tb_prov.get((round(x), round(y), norm(g)))
+                    if prov and prov not in seen:
+                        seen[prov] = {'prov': prov, 'x': x, 'y': y,
+                                      'gousen': sorted(str(v) for v in prov_gousen.get(prov, []))}
+        if seen:
+            sheets.append((p, sorted(seen.values(),
+                                     key=lambda t: int(str(t['prov']).replace('仮', '') or 0))))
+    return sheets
+
+
+def stage2_terminal_assign(seq_paths, skel_paths, seiban, out_html):
+    """2人目(端子番号付与)の対話UI。端子台の未記入ラグを図面上に表示し、リストの行を
+    クリックするとその端子位置を図面上でハイライトする。端子番号を入力し CSV 出力。
+    戻り: 端子(仮番号)件数。"""
+    sheets_data = []
+    total = 0
+    for p, terms in _terminals_by_sheet(seq_paths, skel_paths):
+        pts = [(t['x'], t['y']) for t in terms]
+        uri, w, h, ext = _render_base(p, pts)
+        items = []
+        for t in terms:
+            px, py = _to_px(t['x'], t['y'], ext, w, h)
+            items.append({'prov': t['prov'], 'gousen': '／'.join(t['gousen']),
+                          'px': px, 'py': py})
+        total += len(items)
+        sheets_data.append({'name': _basename(p), 'uri': uri, 'w': w, 'h': h, 'items': items})
+    _write_terminal_html(out_html, seiban, sheets_data)
+    return total
+
+
 def export_stage1_harness(skel_paths, seiban, out_csv):
     """1人目(太物)ハーネス情報を CSV 出力(サーバー側・無編集の基準出力)。
     列: シート, From機器, From端子, To機器, To端子, サイズ。戻り: 行数。
@@ -211,6 +296,73 @@ function exportCSV(){{let out=[['ロケーター','機器']];
  const csv='\\ufeff'+out.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
  const b=new Blob([csv],{{type:'text/csv'}});const a=document.createElement('a');
  a.href=URL.createObjectURL(b);a.download='{_esc(seiban)}_ロケーター.csv';a.click();}}
+</script></body></html>"""
+    with open(out_html, 'w', encoding='utf-8') as f:
+        f.write(doc)
+
+
+def _write_terminal_html(out_html, seiban, sheets):
+    """2人目(端子番号付与)の確認＋編集UI。端子台の未記入ラグを図面上に表示し、
+    リストの行クリックで該当端子をハイライト。黄欄に端子番号を入力し CSV 出力。"""
+    total = sum(len(s['items']) for s in sheets)
+    secs = []
+    for si, s in enumerate(sheets):
+        rows = ''.join(
+            f'<tr data-i="{i}">'
+            f'<td class=lc>{_esc(it["prov"])}</td>'
+            f'<td><input class=eg value="{_esc(it["gousen"])}"></td>'
+            f'<td><input class=tn placeholder="端子番号を入力"></td>'
+            f'<td class=ce><input type=checkbox class=ex></td></tr>'
+            for i, it in enumerate(s['items']))
+        secs.append(f"""<section data-sheet="{si}" style="display:{'block' if si == 0 else 'none'}">
+<div class=wrap>
+ <div class=L><div class=sh>{_esc(s['name'])}（端子 {len(s['items'])}）</div>
+  <table><thead><tr><th>仮番号</th><th>接続号線</th><th>端子番号</th><th>除外</th></tr></thead>
+  <tbody>{rows}</tbody></table></div>
+ <div class=R><div class=box style="width:{s['w']}px"><img src="{s['uri']}" width="{s['w']}" height="{s['h']}">
+   <svg class=ov viewBox="0 0 {s['w']} {s['h']}" width="{s['w']}" height="{s['h']}"></svg></div></div>
+</div></section>""")
+    tabs = ''.join(f'<button data-t="{si}" class="{"on" if si == 0 else ""}">{_esc(s["name"])}</button>'
+                   for si, s in enumerate(sheets))
+    data = {si: s['items'] for si, s in enumerate(sheets)}
+    doc = f"""<!doctype html><html lang=ja><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>{_esc(seiban)} 2人目 端子番号付与 確認・編集</title><style>{_CSS}
+.tabs{{padding:6px 12px;background:#fff}} .tabs button{{margin-right:6px;padding:4px 10px;border:1px solid #ccc;background:#f3f3f3;border-radius:5px;cursor:pointer}}
+.tabs button.on{{background:#1a1a1a;color:#fff;border-color:#1a1a1a}}
+.L input{{border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:12.5px;width:95%}}
+.L input.tn{{background:#fffbe9}} .ce{{text-align:center}} tr.del input{{text-decoration:line-through;color:#999;background:#f6f6f6}}
+.dl{{background:#1565c0;color:#fff;border:none;border-radius:5px;padding:5px 14px;cursor:pointer;margin-left:10px;font-size:13px}}</style></head><body>
+<div class=hd><h1>{_esc(seiban)}　2人目 端子番号付与 確認・編集
+<button class=dl onclick="exportCSV()">端子番号CSV出力（修正反映）</button></h1>
+<div class=n>端子 {total}。行クリックで図面に該当端子を表示。<b>黄欄に端子番号を入力、接続号線は編集でき、誤りは「除外」。</b>修正後「端子番号CSV出力」で保存。</div></div>
+<div class=tabs>{tabs}</div>
+{''.join(secs)}
+<script>
+const DATA={json.dumps(data, ensure_ascii=False)};
+function ov(si){{return document.querySelector(`section[data-sheet="${{si}}"] .ov`);}}
+function drawAll(si){{let s='';DATA[si].forEach(t=>{{s+=`<circle cx="${{t.px}}" cy="${{t.py}}" r="12" fill="none" stroke="#e65100" stroke-width="2"/>`;}});ov(si).innerHTML=s;}}
+function sel(si,i){{let s='';DATA[si].forEach((t,j)=>{{const on=j===i;
+ s+=`<circle cx="${{t.px}}" cy="${{t.py}}" r="${{on?26:12}}" fill="none" stroke="${{on?'#ff2d00':'#e65100'}}" stroke-width="${{on?5:2}}"/>`;
+ if(on)s+=`<text x="${{t.px}}" y="${{t.py-32}}" fill="#ff2d00" font-size="30" font-weight="bold" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="5">${{t.prov}}</text>`;}});ov(si).innerHTML=s;}}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{{
+ const si=+b.dataset.t;document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+ document.querySelectorAll('section[data-sheet]').forEach(se=>se.style.display=(+se.dataset.sheet===si)?'block':'none');}});
+document.querySelectorAll('section[data-sheet]').forEach(se=>{{
+ const si=+se.dataset.sheet;drawAll(si);
+ se.querySelectorAll('tbody tr').forEach(tr=>{{
+  tr.querySelector('.ex').onchange=e=>tr.classList.toggle('del',e.target.checked);
+  tr.onclick=ev=>{{if(ev.target.tagName==='INPUT')return;
+   se.querySelectorAll('tbody tr').forEach(t=>t.classList.remove('on'));tr.classList.add('on');
+   const i=+tr.dataset.i;sel(si,i);const t=DATA[si][i];
+   se.querySelector('.R').scrollTo({{left:t.px-320,top:t.py-260,behavior:'smooth'}});}};}});}});
+function exportCSV(){{let out=[['シート','仮番号','接続号線','端子番号']];
+ document.querySelectorAll('section[data-sheet]').forEach(se=>{{const nm=se.querySelector('.sh').textContent.replace(/（.*/,'');
+  se.querySelectorAll('tbody tr').forEach(tr=>{{if(tr.querySelector('.ex').checked)return;
+   out.push([nm,tr.querySelector('.lc').textContent,tr.querySelector('.eg').value,tr.querySelector('.tn').value]);}});}});
+ const csv='\\ufeff'+out.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+ const b=new Blob([csv],{{type:'text/csv'}});const a=document.createElement('a');
+ a.href=URL.createObjectURL(b);a.download='{_esc(seiban)}_2人目端子番号.csv';a.click();}}
 </script></body></html>"""
     with open(out_html, 'w', encoding='utf-8') as f:
         f.write(doc)

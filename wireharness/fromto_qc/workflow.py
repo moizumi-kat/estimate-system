@@ -61,16 +61,16 @@ def run_workflow(seiban, seq_paths, skel_paths, layout_paths, dct_paths=None, ou
         res['defect_error'] = str(e)
     defect_html = P('2人目b_不備チェック.html')
     _write_defect_html(defect_html, seiban, defects)
-    # ③ 端子番号付与(確認UI)
+    # ③ 端子番号付与(対話UI): 図面上に端子を表示し、リスト行クリックで該当端子をハイライト
     term_html = P('2人目c_端子番号確認.html')
-    term_stats = {}
+    n_term = 0
     try:
-        term_stats = stage_views.stage2_terminals(seq_paths, skel_paths, seiban, term_html)
+        n_term = stage_interactive.stage2_terminal_assign(seq_paths, skel_paths, seiban, term_html)
     except Exception as e:
         res['terminal_error'] = str(e)
 
     res['2人目'] = {'locator': n_loc, 'defects': len(defects.get('defects', [])),
-                    'terminals': term_stats.get('tb', 0),
+                    'terminals': n_term,
                     'files': {'ロケーター付図面(DXF)': os.path.basename(loc_dxf),
                               'ロケーター対応表(CSV)': os.path.basename(loc_csv),
                               '不備チェック': os.path.basename(defect_html),
