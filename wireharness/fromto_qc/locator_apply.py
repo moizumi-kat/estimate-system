@@ -170,6 +170,7 @@ def _draw_table_per_basis(msp, rows, layer, color, dct_paths=None):
         y_top = (min(ys) - 500.0) if ys else (_dcty or 0.0)
     import math
     row_h = th * 1.5                         # 行間は文字高基準(潰れ防止)
+    y_top -= row_h                           # 寸法線と表の間に1行分の余白を空ける
     char_w = th * 0.62                       # 概算字幅(列センタリング用)
     max_rows = 7                             # 1列の最大行数(これを超えたら横に折り返し、下枠に掛けない)
     for b, items in byb.items():
