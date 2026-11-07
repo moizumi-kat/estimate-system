@@ -81,6 +81,50 @@ def write_table_csv(layout_paths, out_csv, basis_of=None, dct_paths=None):
     return len(rows)
 
 
+def _dct_table_cells(dct_paths):
+    """手本DCT(機器相番号)の盤下ロケーター対応表のセルを、元の位置そのままで取得する。
+    戻り: [(text, x, y, height), ...]（loc / ':' / actual を各セルの原位置で）。
+    手本の列構成・位置を忠実に再現するため、ロケーター付図面へ同座標で描き写す用途。"""
+    import re as _re
+    cells = []
+    for p in (dct_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        A = []
+        for ins in doc.modelspace().query('INSERT'):
+            for at in (ins.attribs or []):
+                s = (at.dxf.text or '').strip()
+                if not s:
+                    continue
+                try:
+                    x, y, h = at.dxf.insert.x, at.dxf.insert.y, at.dxf.height
+                except Exception:
+                    continue
+                if at.dxf.tag in ('DEVICE', 'DEVICE1', 'DEVICE2'):
+                    A.append((x, y, at.dxf.tag, s, h))
+        anchors = [(x, y, h) for x, y, t, s, h in A if t == 'DEVICE2' and s == ':']
+        anchor_xs = sorted(set(round(x) for x, y, h in anchors))
+        for (ax, ay, ah) in anchors:
+            right = min([bx for bx in anchor_xs if bx > ax + 1], default=ax + 1e9)
+            loc = act = None
+            locp = actp = None
+            loch = acth = ah
+            for x, y, t, s, h in A:
+                if abs(y - ay) > 4:
+                    continue
+                if t == 'DEVICE1' and x < ax and (locp is None or x > locp[0]):
+                    loc, locp, loch = s, (x, y), h
+                if t == 'DEVICE' and ax < x < right and (actp is None or x < actp[0]):
+                    act, actp, acth = s, (x, y), h
+            if loc and act and _re.search(r'[A-Za-z]', loc) and _re.search(r'\d', act):
+                cells.append((loc, locp[0], locp[1], loch))
+                cells.append((':', ax, ay, ah))
+                cells.append((act, actp[0], actp[1], acth))
+    return cells
+
+
 def _draw_table(msp, rows, layer, color, th=38.0, col_w=620.0, line_h=66.0):
     """ロケーター対応表(ロケーター：実機器名)を図面の右隣(既存作図の外側)に描画する。
     機器名が長くハーネスのタグに出せないため、図面上で『この仮名=どの機器か』を
@@ -139,7 +183,15 @@ def write_dxf(layout_paths, out_path, basis_of=None, dct_paths=None, layer='LOCA
         )
         n += 1
     if draw_table:
-        _draw_table(msp, rows, layer, color)
+        # ① 手本DCTに対応表があれば、その位置・列構成のまま描き写す(手本の図面を参考に)
+        cells = _dct_table_cells(dct_paths) if dct_paths else []
+        if cells:
+            for text, x, y, h in cells:
+                msp.add_text(text, dxfattribs={'layer': layer, 'height': h or 25.0,
+                                               'color': color, 'insert': (x, y)})
+        else:
+            # ② 手本に表が無い図面は、図面右隣の空きに一覧を描画
+            _draw_table(msp, rows, layer, color)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     doc.saveas(out_path)
     return n
