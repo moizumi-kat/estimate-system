@@ -81,21 +81,56 @@ def write_table_csv(layout_paths, out_csv, basis_of=None, dct_paths=None):
     return len(rows)
 
 
+def _draw_table(msp, rows, layer, color, th=38.0, col_w=620.0, line_h=66.0):
+    """ロケーター対応表(ロケーター：実機器名)を図面の右隣(既存作図の外側)に描画する。
+    機器名が長くハーネスのタグに出せないため、図面上で『この仮名=どの機器か』を
+    確認できるよう対応表を記載する(機器相番号DCTと同じ役割)。
+    既存図面は下部も密に埋まっているため、図面全体の外接範囲の右側の空き領域に置く。
+    rows は (loc, sym, x, y, type)。配置済/未配置の両方を載せる。"""
+    allrows = [(loc, sym) for loc, sym, x, y, t in rows]
+    if not allrows:
+        return
+    try:
+        from ezdxf import bbox
+        b = bbox.extents(msp, fast=True)
+        x_left = b.extmax.x + 300.0      # 図面の右隣
+        y_top = b.extmax.y
+        height = max(1000.0, b.size.y)
+    except Exception:
+        x_left, y_top, height = 0.0, 0.0, 4000.0
+    rows_per_col = max(1, int((height - line_h) / line_h))
+    # 見出し
+    msp.add_text('ロケーター対応表 (ロケーター : 実機器)',
+                 dxfattribs={'layer': layer, 'height': th * 1.15, 'color': color,
+                             'insert': (x_left, y_top)})
+    top = y_top - line_h * 1.6           # 見出しの下から明細
+    for i, (loc, sym) in enumerate(allrows):
+        col = i // rows_per_col
+        row = i % rows_per_col
+        tx = x_left + col * col_w
+        ty = top - row * line_h
+        msp.add_text(f'{loc} : {sym}',
+                     dxfattribs={'layer': layer, 'height': th, 'color': color,
+                                 'insert': (tx, ty)})
+
+
 def write_dxf(layout_paths, out_path, basis_of=None, dct_paths=None, layer='LOCATOR',
-              height=28.0, color=1, dx=0.0, dy=40.0):
+              height=28.0, color=1, dx=0.0, dy=40.0, draw_table=True):
     """元の内部配置図にロケーター文字を TEXT で重ね書きして保存する(機器相番号DCT相当)。
-    先頭の layout を基図として読み、各機器位置の近くへ『手本(DCT印字)通りの文字』を書く。
-    dct_paths があれば手本の印字文字をそのまま使う(再生成しない)。
-    color: ACI色(1=赤)。dx,dy: 機器位置からの文字オフセット。
-    戻り: 書いた件数。"""
+    先頭の layout を基図として読み、各機器位置の近くへ『手本(盤下対応表)通りの文字』を書き、
+    さらに盤下へロケーター対応表(ロケーター↔実機器名)を記載する。
+    dct_paths があれば盤下対応表の表記をそのまま使う(再生成しない)。
+    color: ACI色(1=赤)。dx,dy: 機器位置からの文字オフセット。draw_table: 対応表を描くか。
+    戻り: 機器に書いた件数。"""
     base = layout_paths[0]
     doc = ezdxf.readfile(base)
     msp = doc.modelspace()
     if layer not in doc.layers:
         doc.layers.add(layer, color=color)
+    rows = locator_rows(layout_paths, basis_of, dct_paths)
     n = 0
-    for loc, sym, x, y, _t in locator_rows(layout_paths, basis_of, dct_paths):
-        if x is None or y is None:          # 対応表にあるが配置図に未配置 → 描画はスキップ
+    for loc, sym, x, y, _t in rows:
+        if x is None or y is None:          # 対応表にあるが配置図に未配置 → 機器描画はスキップ
             continue
         msp.add_text(
             loc,
@@ -103,6 +138,8 @@ def write_dxf(layout_paths, out_path, basis_of=None, dct_paths=None, layer='LOCA
                         'insert': (x + dx, y + dy)},
         )
         n += 1
+    if draw_table:
+        _draw_table(msp, rows, layer, color)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     doc.saveas(out_path)
     return n
