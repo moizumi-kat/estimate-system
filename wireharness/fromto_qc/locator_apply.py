@@ -168,18 +168,27 @@ def _draw_table_per_basis(msp, rows, layer, color, dct_paths=None):
     else:
         ys = [y for loc, sym, x, y, t in rows if y is not None]
         y_top = (min(ys) - 500.0) if ys else (_dcty or 0.0)
+    import math
     row_h = th * 1.5                         # 行間は文字高基準(潰れ防止)
     char_w = th * 0.62                       # 概算字幅(列センタリング用)
+    max_rows = 7                             # 1列の最大行数(これを超えたら横に折り返し、下枠に掛けない)
     for b, items in byb.items():
         items.sort(key=lambda r: _basis_key(r[0]))
         xs = [x for loc, sym, x, y in items if x is not None]
         if not xs:
             continue
         cx = sum(xs) / len(xs)               # 盤(基)の中心x
+        n = len(items)
+        ncol = max(1, math.ceil(n / max_rows))
+        rows_per = math.ceil(n / ncol)       # 列をできるだけ均等に
         maxlen = max(len(f'{loc} : {sym}') for loc, sym, x, y in items)
-        tx = cx - maxlen * char_w / 2.0      # 盤中心に文字列を揃える
+        col_w = maxlen * char_w + 3 * char_w  # 列幅(文字列＋列間)
+        x_start = cx - (ncol * col_w - 3 * char_w) / 2.0   # 盤中心に全体を揃える
         for i, (loc, sym, x, y) in enumerate(items):
-            ty = y_top - i * row_h
+            col = i // rows_per
+            row = i % rows_per
+            tx = x_start + col * col_w
+            ty = y_top - row * row_h
             msp.add_text(f'{loc} : {sym}',
                          dxfattribs={'layer': layer, 'height': th, 'color': color,
                                      'insert': (tx, ty)})
