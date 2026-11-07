@@ -29,44 +29,59 @@ def test_locator_rows_with_basis():
         LA._all_device_parts = orig
 
 
-def test_locator_rows_prefers_dct_printed():
-    """◎手本準拠: DCT(機器相番号)に印字されたロケーター文字があれば、再生成せず
-    その文字をそのまま出力する。位置照合が過半を満たす場合に採用。"""
+def test_locator_rows_prefers_dct_table():
+    """◎手本準拠: 盤下ロケーター対応表(locator_map)があれば、基-文字↔実機器名を
+    そのまま出力する(再生成しない)。基割当とは別値でも表どおりに出る事を検証。"""
+    import fromto_qc.locator_map as LM
     parts = [{'sym': 'FX1', 'x': 100, 'y': 2000.0, 'type': ''},
              {'sym': 'ALX1', 'x': 900, 'y': 2000.0, 'type': ''}]
-    orig = dict(ap=LA.actual_parts, ad=LA._all_device_parts, rp=LA.read_printed)
-    LA.actual_parts = lambda paths: parts
+    orig = dict(ad=LA._all_device_parts, ep=LM.extract_pairs)
     LA._all_device_parts = lambda paths: parts
-    # 手本の印字: FX1→D, ALX1→C(あえて基割当(A,B)と異なる値)。これがそのまま出る事を検証。
-    LA.read_printed = lambda dct, layout: {'FX1': 'D', 'ALX1': 'C'}
+    # 対応表: 3-B↔FX1, 1-A↔ALX1(あえて basis_of(2-*)と異なる)。表どおりに出る。
+    LM.extract_pairs = lambda path: [('3-B', 'FX1'), ('1-A', 'ALX1')]
     try:
         rows = LAP.locator_rows(['x'], basis_of={'FX1': '2', 'ALX1': '2'}, dct_paths=['dct'])
-        got = {(r[1], r[0]) for r in rows}
-        assert got == {('FX1', 'D'), ('ALX1', 'C')}, rows   # 手本の印字どおり
+        got = {(r[0], r[1]) for r in rows}
+        assert got == {('3-B', 'FX1'), ('1-A', 'ALX1')}, rows   # 表どおり(基-文字付き)
+        # 整列: 基昇順 → 1-A が先頭
+        assert rows[0][0] == '1-A', rows
     finally:
-        LA.actual_parts, LA._all_device_parts, LA.read_printed = orig['ap'], orig['ad'], orig['rp']
+        LA._all_device_parts, LM.extract_pairs = orig['ad'], orig['ep']
 
 
-def test_locator_rows_falls_back_when_dct_coverage_low():
-    """座標系ずれ等でDCT印字の照合が過半に満たない場合は、基割当にフォールバック(取りこぼし防止)。"""
-    parts = [{'sym': 'FX1', 'x': 100, 'y': 2000.0, 'type': ''},
-             {'sym': 'ALX1', 'x': 900, 'y': 2000.0, 'type': ''},
-             {'sym': 'BX1', 'x': 1700, 'y': 2000.0, 'type': ''},
-             {'sym': 'CX1', 'x': 2500, 'y': 2000.0, 'type': ''}]
-    orig = dict(ap=LA.actual_parts, ad=LA._all_device_parts, rp=LA.read_printed)
-    LA.actual_parts = lambda paths: parts
+def test_locator_rows_table_keeps_unplaced():
+    """対応表にあるが配置図に未配置の機器も、対応(x,y=None)として保持する(取りこぼさない)。"""
+    import fromto_qc.locator_map as LM
+    parts = [{'sym': 'FX1', 'x': 100, 'y': 2000.0, 'type': ''}]
+    orig = dict(ad=LA._all_device_parts, ep=LM.extract_pairs)
     LA._all_device_parts = lambda paths: parts
-    LA.read_printed = lambda dct, layout: {'FX1': 'D'}     # 4台中1台のみ照合(<50%)
+    LM.extract_pairs = lambda path: [('2-A', 'FX1'), ('2-G', 'DTX9')]  # DTX9は配置図に無い
     try:
-        rows = LAP.locator_rows(['x'], basis_of={p['sym']: '2' for p in parts}, dct_paths=['dct'])
-        # フォールバック: 全台に基割当(2-A..2-D)。印字のみの1件返しにならない。
-        assert len(rows) == 4, rows
+        rows = LAP.locator_rows(['x'], dct_paths=['dct'])
+        d = {r[1]: (r[0], r[2]) for r in rows}
+        assert d['FX1'] == ('2-A', 100), rows
+        assert d['DTX9'] == ('2-G', None), rows   # 対応は残し、位置はNone
+    finally:
+        LA._all_device_parts, LM.extract_pairs = orig['ad'], orig['ep']
+
+
+def test_locator_rows_falls_back_without_table():
+    """対応表が無ければ(DCT無し/空)、基割当にフォールバックする。"""
+    import fromto_qc.locator_map as LM
+    parts = [{'sym': 'FX1', 'x': 100, 'y': 2000.0, 'type': ''},
+             {'sym': 'ALX1', 'x': 900, 'y': 2000.0, 'type': ''}]
+    orig = dict(ad=LA._all_device_parts, ep=LM.extract_pairs)
+    LA._all_device_parts = lambda paths: parts
+    LM.extract_pairs = lambda path: []                    # 対応表なし
+    try:
+        rows = LAP.locator_rows(['x'], basis_of={'FX1': '2', 'ALX1': '2'}, dct_paths=['dct'])
         assert ('2-A', 'FX1') in [(r[0], r[1]) for r in rows], rows
     finally:
-        LA.actual_parts, LA._all_device_parts, LA.read_printed = orig['ap'], orig['ad'], orig['rp']
+        LA._all_device_parts, LM.extract_pairs = orig['ad'], orig['ep']
 
 
 if __name__ == '__main__':
     test_locator_rows_structure(); test_locator_rows_with_basis()
-    test_locator_rows_prefers_dct_printed(); test_locator_rows_falls_back_when_dct_coverage_low()
+    test_locator_rows_prefers_dct_table(); test_locator_rows_table_keeps_unplaced()
+    test_locator_rows_falls_back_without_table()
     print('locator_apply tests: OK')

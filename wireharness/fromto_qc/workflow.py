@@ -46,6 +46,12 @@ def run_workflow(seiban, seq_paths, skel_paths, layout_paths, dct_paths=None, ou
         n_loc = locator_apply.write_dxf(layout_paths, loc_dxf, basis_of=basis, dct_paths=dct_paths)
     except Exception as e:
         res['locator_dxf_error'] = str(e)
+    # 盤下ロケーター対応表(ロケーター↔実機器名)をCSVに出力
+    loc_csv = P('2人目a_ロケーター対応表.csv')
+    try:
+        locator_apply.write_table_csv(layout_paths, loc_csv, basis_of=basis, dct_paths=dct_paths)
+    except Exception as e:
+        res['locator_csv_error'] = str(e)
     # ② 図面不備チェック
     layout_path = layout_paths[0] if layout_paths else None
     defects = {'defects': [], 'external': 0, 'summary': {}}
@@ -66,6 +72,7 @@ def run_workflow(seiban, seq_paths, skel_paths, layout_paths, dct_paths=None, ou
     res['2人目'] = {'locator': n_loc, 'defects': len(defects.get('defects', [])),
                     'terminals': term_stats.get('tb', 0),
                     'files': {'ロケーター付図面(DXF)': os.path.basename(loc_dxf),
+                              'ロケーター対応表(CSV)': os.path.basename(loc_csv),
                               '不備チェック': os.path.basename(defect_html),
                               '端子番号確認': os.path.basename(term_html)}}
 
