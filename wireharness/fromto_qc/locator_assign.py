@@ -38,6 +38,44 @@ def _is_locator_part(attrs):
     return attrs.get('PARTS') in _LOCATOR_PARTS or bool(_RELAY_TYPE.search(attrs.get('TYPE', '')))
 
 
+def _insert_center(ins):
+    """機器マーカーを置くべき『機器の中心』(x,y)を返す。
+    挿入点はブロック原点(端や接続点)にあることが多く、機器の中央とは限らない。また
+    bbox中心は端子スタブ等の非対称ジオメトリで偏る。そこで、設計者が機器本体に配置した
+    機器名(DEVICE/DEVICE1)属性のアンカー(中央寄せは align_point、無ければ insert)を平均し、
+    機器名の上に乗る点を機器中心とする。
+    優先: ① 機器名アンカー → ② ブロック外接範囲の中心 → ③ 挿入点。"""
+    # ① 機器名(DEVICE/DEVICE1)属性のアンカー平均
+    try:
+        pts = []
+        for at in ins.attribs:
+            if at.dxf.tag in ('DEVICE', 'DEVICE1'):
+                ap = getattr(at.dxf, 'align_point', None)
+                if ap is not None and (ap.x or ap.y):
+                    pts.append((ap.x, ap.y))     # 中央/右寄せテキストの基準点
+                else:
+                    pts.append((at.dxf.insert.x, at.dxf.insert.y))
+        if pts:
+            return (round(sum(x for x, _ in pts) / len(pts), 1),
+                    round(sum(y for _, y in pts) / len(pts), 1))
+    except Exception:
+        pass
+    # ② ブロック本体ジオメトリの外接範囲中心
+    try:
+        from ezdxf import bbox
+        box = bbox.extents([ins], fast=True)
+        if box.has_data:
+            c = box.center
+            return round(c.x, 1), round(c.y, 1)
+    except Exception:
+        pass
+    # ③ 挿入点
+    try:
+        return round(ins.dxf.insert.x, 1), round(ins.dxf.insert.y, 1)
+    except Exception:
+        return 0.0, 0.0
+
+
 def actual_parts(layout_paths):
     """設計内部配置図群 → [{'sym','base','num','x','y','type'}]。実機器名を持つ小部品。
     sym=DEVICE+DEVICE1(例 'ALX2')。凡例行(DEVICE2=':')は除外。"""
@@ -57,10 +95,7 @@ def actual_parts(layout_paths):
             if not dev:                       # 実機器名が無い(ロケーター文字のみ)図面はスキップ
                 continue
             sym = f'{dev}{no}'
-            try:
-                x, y = round(ins.dxf.insert.x, 1), round(ins.dxf.insert.y, 1)
-            except Exception:
-                x, y = 0.0, 0.0
+            x, y = _insert_center(ins)
             seen.setdefault(sym, {'sym': sym, 'base': dev.upper(), 'num': no,
                                   'x': x, 'y': y, 'type': a.get('TYPE', '')})
     return list(seen.values())
@@ -86,10 +121,7 @@ def _all_device_parts(layout_paths):
             if not dev:
                 continue
             sym = f'{dev}{no}'
-            try:
-                x, y = round(ins.dxf.insert.x, 1), round(ins.dxf.insert.y, 1)
-            except Exception:
-                x, y = 0.0, 0.0
+            x, y = _insert_center(ins)
             seen.setdefault(sym, {'sym': sym, 'base': dev.upper(), 'num': no,
                                   'x': x, 'y': y, 'type': a.get('TYPE', '')})
     return list(seen.values())
