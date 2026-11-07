@@ -18,8 +18,8 @@ def test_run_workflow_order_and_hub():
                 ex=SI.export_stage1_harness, s3=SV.stage3_fromto)
     LAP.write_dxf = lambda layout, out, basis_of=None: (calls.append('loc_dxf'), 5)[1]
     LA.basis_from_dct = lambda dct: {}
-    SI.locator_confirm = lambda layout, sb, out, basis_of=None: (calls.append('loc_html'),
-                                                                 open(out, 'w').write('x'), 5)[2]
+    SI.locator_confirm = lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError('ロケーター確認UIは廃止(手本準拠なら確認不要)'))
     HP.analyze_defects = lambda seq, skel, sb, layout_path=None: (calls.append('defect'),
                                                                   {'defects': [], 'summary': {'不備件数': 0}})[1]
     SV.stage2_terminals = lambda seq, skel, sb, out: (calls.append('term'), open(out, 'w').write('x'), {'tb': 41})[2]
@@ -30,8 +30,10 @@ def test_run_workflow_order_and_hub():
     try:
         d = tempfile.mkdtemp()
         res = WF.run_workflow('T', ['F.DXF'], ['E.DXF'], ['D.DXF'], dct_paths=['x.dxf'], out_dir=d)
-        # 工程の順序: 2人目(ロケーター→不備→端子) が 1人目/3人目 より前
-        assert calls.index('loc_html') < calls.index('defect') < calls.index('term')
+        # 工程の順序: 2人目(ロケーター付与→不備→端子) が 1人目/3人目 より前。
+        # ロケーターは自動書き戻し(loc_dxf)のみ。確認UI(loc_html)は廃止。
+        assert 'loc_html' not in calls
+        assert calls.index('loc_dxf') < calls.index('defect') < calls.index('term')
         assert calls.index('term') < calls.index('s1') and calls.index('term') < calls.index('s3')
         assert res['2人目']['terminals'] == 41 and res['1人目']['wires'] == 108
         assert res['3人目']['gousen'] == 189

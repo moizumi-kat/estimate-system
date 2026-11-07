@@ -38,18 +38,14 @@ def run_workflow(seiban, seq_paths, skel_paths, layout_paths, dct_paths=None, ou
     res = {}
 
     # ===== 2人目(入口) =====
-    # ① ロケーター付与(図面へ書き戻し＋確認UI)
+    # ① ロケーター付与(自動): 設計図面へロケーター情報を書き戻す。
+    #    手本通りに生成できていれば現場でも確認しないため、人による確認UIは設けない。
     loc_dxf = P('2人目a_ロケーター付図面.dxf')
     n_loc = 0
     try:
         n_loc = locator_apply.write_dxf(layout_paths, loc_dxf, basis_of=basis)
     except Exception as e:
         res['locator_dxf_error'] = str(e)
-    loc_html = P('2人目a_ロケーター確認.html')
-    try:
-        n_loc = stage_interactive.locator_confirm(layout_paths, seiban, loc_html, basis_of=basis) or n_loc
-    except Exception as e:
-        res['locator_html_error'] = str(e)
     # ② 図面不備チェック
     layout_path = layout_paths[0] if layout_paths else None
     defects = {'defects': [], 'external': 0, 'summary': {}}
@@ -69,8 +65,7 @@ def run_workflow(seiban, seq_paths, skel_paths, layout_paths, dct_paths=None, ou
 
     res['2人目'] = {'locator': n_loc, 'defects': len(defects.get('defects', [])),
                     'terminals': term_stats.get('tb', 0),
-                    'files': {'ロケーター確認': os.path.basename(loc_html),
-                              'ロケーター付図面(DXF)': os.path.basename(loc_dxf),
+                    'files': {'ロケーター付図面(DXF)': os.path.basename(loc_dxf),
                               '不備チェック': os.path.basename(defect_html),
                               '端子番号確認': os.path.basename(term_html)}}
 
@@ -166,7 +161,7 @@ a{{display:inline-block;margin:4px 8px 0 0;color:#1565c0;font-size:13px;text-dec
  <div class=card>
   <h2>2人目（入口）<span class="tag t2">受け取り・前処理</span></h2>
   <div class=steps>
-   <div class=step><div class=k>① ロケーター付与</div><div class=v>機器 {s2.get('locator',0)} 件</div></div>
+   <div class=step><div class=k>① ロケーター付与（自動）</div><div class=v>機器 {s2.get('locator',0)} 件（確認不要）</div></div>
    <div class=step><div class=k>② 図面不備チェック</div><div class=v>不備 {s2.get('defects',0)} 件</div></div>
    <div class=step><div class=k>③ 端子番号付与</div><div class=v>要付番 {s2.get('terminals',0)} 件</div></div>
   </div>
