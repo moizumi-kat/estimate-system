@@ -125,37 +125,49 @@ def _dct_table_cells(dct_paths):
     return cells
 
 
-def _draw_table(msp, rows, layer, color, th=38.0, col_w=620.0, line_h=66.0):
-    """ロケーター対応表(ロケーター：実機器名)を図面の右隣(既存作図の外側)に描画する。
-    機器名が長くハーネスのタグに出せないため、図面上で『この仮名=どの機器か』を
-    確認できるよう対応表を記載する(機器相番号DCTと同じ役割)。
-    既存図面は下部も密に埋まっているため、図面全体の外接範囲の右側の空き領域に置く。
-    rows は (loc, sym, x, y, type)。配置済/未配置の両方を載せる。"""
-    allrows = [(loc, sym) for loc, sym, x, y, t in rows]
-    if not allrows:
+def _table_style_from_dct(dct_paths):
+    """手本DCTの対応表から、縦位置の基準(y_top)・文字高(th)を得る。無ければ(None,None)。
+    手本と同じ『盤の下の空き帯・文字サイズ』に合わせるため。行間は文字高から決める
+    (手本のy値は列が入り組み最小差分が過小になるため、行間推定には使わない)。"""
+    cells = _dct_table_cells(dct_paths) if dct_paths else []
+    ys = [round(y) for tx, x, y, h in cells if tx == ':']
+    if ys:
+        th = next((h for tx, x, y, h in cells if tx == ':' and h), 25.0)
+        return max(ys), th
+    return None, None
+
+
+def _draw_table_per_basis(msp, rows, layer, color, dct_paths=None):
+    """各基の対応表(ロケーター：実機器名)を、その盤の中心の真下に縦並びで描画する。
+    『盤の下に基ごと』の記載。縦位置・行間・文字高は手本DCTに合わせる(無ければ既定)。
+    rows は (loc, sym, x, y, type)。配置済(x,y)の機器から各基の盤中心xを決める。"""
+    import collections
+    byb = collections.OrderedDict()
+    for loc, sym, x, y, t in rows:
+        b, _lt = LM._split_locator(loc)
+        byb.setdefault(b, []).append((loc, sym, x, y))
+    if not byb:
         return
-    try:
-        from ezdxf import bbox
-        b = bbox.extents(msp, fast=True)
-        x_left = b.extmax.x + 300.0      # 図面の右隣
-        y_top = b.extmax.y
-        height = max(1000.0, b.size.y)
-    except Exception:
-        x_left, y_top, height = 0.0, 0.0, 4000.0
-    rows_per_col = max(1, int((height - line_h) / line_h))
-    # 見出し
-    msp.add_text('ロケーター対応表 (ロケーター : 実機器)',
-                 dxfattribs={'layer': layer, 'height': th * 1.15, 'color': color,
-                             'insert': (x_left, y_top)})
-    top = y_top - line_h * 1.6           # 見出しの下から明細
-    for i, (loc, sym) in enumerate(allrows):
-        col = i // rows_per_col
-        row = i % rows_per_col
-        tx = x_left + col * col_w
-        ty = top - row * line_h
-        msp.add_text(f'{loc} : {sym}',
-                     dxfattribs={'layer': layer, 'height': th, 'color': color,
-                                 'insert': (tx, ty)})
+    y_top, th = _table_style_from_dct(dct_paths)
+    if y_top is None:                       # 手本に表が無い場合: 機器群の下に置く
+        ys = [y for loc, sym, x, y, t in rows if y is not None]
+        y_top = (min(ys) - 80.0) if ys else 0.0
+        th = 25.0
+    row_h = th * 1.5                         # 行間は文字高基準(潰れ防止)
+    char_w = th * 0.62                       # 概算字幅(列センタリング用)
+    for b, items in byb.items():
+        items.sort(key=lambda r: _basis_key(r[0]))
+        xs = [x for loc, sym, x, y in items if x is not None]
+        if not xs:
+            continue
+        cx = sum(xs) / len(xs)               # 盤(基)の中心x
+        maxlen = max(len(f'{loc} : {sym}') for loc, sym, x, y in items)
+        tx = cx - maxlen * char_w / 2.0      # 盤中心に文字列を揃える
+        for i, (loc, sym, x, y) in enumerate(items):
+            ty = y_top - i * row_h
+            msp.add_text(f'{loc} : {sym}',
+                         dxfattribs={'layer': layer, 'height': th, 'color': color,
+                                     'insert': (tx, ty)})
 
 
 def write_dxf(layout_paths, out_path, basis_of=None, dct_paths=None, layer='LOCATOR',
@@ -183,15 +195,8 @@ def write_dxf(layout_paths, out_path, basis_of=None, dct_paths=None, layer='LOCA
         )
         n += 1
     if draw_table:
-        # ① 手本DCTに対応表があれば、その位置・列構成のまま描き写す(手本の図面を参考に)
-        cells = _dct_table_cells(dct_paths) if dct_paths else []
-        if cells:
-            for text, x, y, h in cells:
-                msp.add_text(text, dxfattribs={'layer': layer, 'height': h or 25.0,
-                                               'color': color, 'insert': (x, y)})
-        else:
-            # ② 手本に表が無い図面は、図面右隣の空きに一覧を描画
-            _draw_table(msp, rows, layer, color)
+        # 各基の対応表を、その盤の中心の真下に基ごとに描画(縦位置・行間・文字高は手本に合わせる)
+        _draw_table_per_basis(msp, rows, layer, color, dct_paths=dct_paths)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     doc.saveas(out_path)
     return n
