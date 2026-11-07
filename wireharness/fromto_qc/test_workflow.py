@@ -16,7 +16,7 @@ def test_run_workflow_order_and_hub():
     orig = dict(wd=LAP.write_dxf, bd=LA.basis_from_dct, ad=HP.analyze_defects,
                 lc=SI.locator_confirm, s2=SV.stage2_terminals, s1=SI.stage1_wires,
                 ex=SI.export_stage1_harness, s3=SV.stage3_fromto)
-    LAP.write_dxf = lambda layout, out, basis_of=None: (calls.append('loc_dxf'), 5)[1]
+    LAP.write_dxf = lambda layout, out, basis_of=None, dct_paths=None: (calls.append('loc_dxf'), 5)[1]
     LA.basis_from_dct = lambda dct: {}
     SI.locator_confirm = lambda *a, **k: (_ for _ in ()).throw(
         AssertionError('ロケーター確認UIは廃止(手本準拠なら確認不要)'))

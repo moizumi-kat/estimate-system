@@ -43,7 +43,7 @@ def run_workflow(seiban, seq_paths, skel_paths, layout_paths, dct_paths=None, ou
     loc_dxf = P('2人目a_ロケーター付図面.dxf')
     n_loc = 0
     try:
-        n_loc = locator_apply.write_dxf(layout_paths, loc_dxf, basis_of=basis)
+        n_loc = locator_apply.write_dxf(layout_paths, loc_dxf, basis_of=basis, dct_paths=dct_paths)
     except Exception as e:
         res['locator_dxf_error'] = str(e)
     # ② 図面不備チェック
