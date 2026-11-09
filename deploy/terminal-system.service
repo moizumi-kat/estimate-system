@@ -1,0 +1,30 @@
+# systemd ユニット（EC2）: 端子番号割付（2人目）システムを gunicorn で常駐させる。
+# 見積(estimate:8000)・検図(kenzu:8001)・ハーネス(harness:8002)とは
+# 別プロセス・別ポート(8100)・別データ。稼働中の同じEC2に相乗りできる。
+# 設置: /etc/systemd/system/terminal-system.service にコピーして
+#   sudo systemctl daemon-reload && sudo systemctl enable --now terminal-system
+# ---- 環境に合わせて {APP_DIR} / {APP_USER} を書き換える ----
+[Unit]
+Description=端子番号割付（2人目）システム (terminal-assign) Flask/gunicorn
+After=network.target
+
+[Service]
+Type=simple
+User={APP_USER}
+Group={APP_USER}
+WorkingDirectory={APP_DIR}
+# 環境変数は平文でユニットに書かず専用ファイルに置く。/etc/terminal-system.env に記載し chmod 600:
+#   TERMINAL_WORK=/var/lib/terminal-system/work   アップロード/出力/保存/ログ(永続領域=EBS)
+#   HARNESS_STATE=/var/lib/harness-system/state   学習コーパス(現場修正の蓄積)。ハーネスと同じ
+#                                                 永続領域を共有してよい(端子番号学習は別ファイル)。
+#   TERMINAL_USER / TERMINAL_PASSWORD / TERMINAL_SECRET  画面ログイン。PASSWORD未設定なら認証オフ。
+EnvironmentFile=/etc/terminal-system.env
+# DXF解析・PDF描画は重いので timeout を大きめに。ワーカ数はvCPUに合わせて調整。
+ExecStart={APP_DIR}/venv/bin/gunicorn wireharness.terminal_app:app \
+    --workers 3 --timeout 300 --graceful-timeout 30 \
+    --bind 127.0.0.1:8100 --access-logfile - --error-logfile -
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
