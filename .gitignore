@@ -21,3 +21,12 @@ confirm_log.jsonl
 kenzu_data/
 .mplcache/
 *.env
+
+# 端子番号割付(2人目 terminal_app)・ハーネス工程の実行時データ／運用学習の蓄積
+wireharness/terminal_work/
+wireharness/harness_work/
+wireharness/fromto_qc/confirmed/
+# base学習(terminal_rules_proven.json)は別途コミット。以下は運用蓄積のみ=コミットしない。
+wireharness/fromto_qc/terminal_feedback/
+wireharness/fromto_qc/terminal_corrections.json
+wireharness/_data/
