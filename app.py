@@ -29,7 +29,36 @@ except Exception:
 MODEL=os.environ.get('SELECT_MODEL','claude-opus-4-8')
 app=Flask(__name__)
 app.config['MAX_CONTENT_LENGTH']=40*1024*1024  # 40MB
-app.secret_key=os.environ.get('APP_SECRET', secrets.token_hex(16))
+# セッション鍵: APP_SECRET があればそれを使う。無い場合でも、起動ごと/ワーカーごとに
+# 鍵が変わると「ログインが毎回切れる」ため、ホーム配下の固定ファイルに保存した鍵を共有する。
+def _app_secret():
+    s=os.environ.get('APP_SECRET')
+    if s: return s
+    for base in (os.path.expanduser('~'), HERE, tempfile.gettempdir()):
+        try:
+            fp=os.path.join(base,'.estimate_secret')
+            if os.path.exists(fp):
+                with open(fp) as f:
+                    v=f.read().strip()
+                if v: return v
+            v=secrets.token_hex(32)
+            with open(fp,'w') as f: f.write(v)
+            try: os.chmod(fp,0o600)
+            except Exception: pass
+            return v
+        except Exception: continue
+    return secrets.token_hex(16)
+app.secret_key=_app_secret()
+# ログイン維持: スマホで別アプリに移動→戻るとタブが再読込されても再ログイン不要にする。
+# 既定のFlaskは「ブラウザセッション限りのクッキー(期限なし)」なので、タブ破棄で消えてログイン画面に戻る。
+# 永続クッキー(30日)＋毎リクエストで期限延長にして、使っている間は切れないようにする。
+app.config.update(
+    PERMANENT_SESSION_LIFETIME=datetime.timedelta(days=30),
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,          # Cloudflare 経由の HTTPS 前提
+    SESSION_REFRESH_EACH_REQUEST=True,
+)
 APP_PASSWORD=os.environ.get('APP_PASSWORD','')  # 未設定なら認証オフ（ローカル試用向け）
 
 from flask import session, redirect
@@ -40,6 +69,7 @@ def login_required(f):
         if not APP_PASSWORD:        # パスワード未設定時は素通り（ローカル用）
             return f(*a,**k)
         if session.get('auth'):
+            session.permanent=True          # 既存ログインも永続クッキーへ(再ログイン不要に)
             return f(*a,**k)
         # API呼び出しは401、画面はログインへ
         if request.path.startswith('/api/'):
@@ -75,6 +105,7 @@ def login():
     if not APP_PASSWORD: return redirect('/')
     if request.method=='POST':
         if hmac.compare_digest(request.form.get('pw',''),APP_PASSWORD):
+            session.permanent=True          # 永続クッキー化(30日)=別アプリから戻っても再ログイン不要
             session['auth']=True
             session['user']=request.form.get('user','').strip()[:200]   # 利用者(メール)をセッションに保持
             return redirect('/')
@@ -4123,6 +4154,26 @@ def api_excel():
     ts=datetime.datetime.now().strftime('%Y%m%d_%H%M')
     return send_file(buf,as_attachment=True,download_name=f'estimate_code_{ts}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@app.route('/api/last', methods=['GET'])
+@login_required
+def api_last():
+    """画面再読込(スマホで別アプリ→戻るとタブが破棄され再読込される)後に、
+    直近の選定結果を復帰表示するためのJSON。結果はsidごとに永続保存済み。"""
+    sid=session.get('sid')
+    panels=_LAST_RESULT.get(sid) or _load_last(sid)
+    if not panels:
+        return jsonify(ok=False)
+    c={'◎':0,'○':0,'△':0}; ndetail=0
+    for p in panels:
+        for r in p.get('rows',[]):
+            if r.get('load_detail'): ndetail+=1; continue
+            cf=r.get('conf')
+            if cf in c: c[cf]+=1
+    tot=sum(c.values()) or 1
+    return jsonify(ok=True, panels=panels,
+        summary=dict(total=sum(c.values()),ok=c['◎'],warn=c['○'],chk=c['△'],
+                     detail=ndetail, rate=round((c['◎']+c['○'])/tot*100)))
 
 @app.route('/api/codeinfo', methods=['GET'])
 @login_required

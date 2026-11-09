@@ -136,6 +136,30 @@ $('stopBtn').onclick=()=>{ if(controller){controller.abort();} idle();showStop(f
   $('err').textContent='処理を中止しました。';$('err').classList.add('show');};
 
 // ① 抽出
+// --- 抽出ジョブの保存/復帰(スマホで別アプリ→戻るとタブが破棄され再読込されるため) ---
+function _jobSave(jid,n){try{localStorage.setItem('estimate_job',JSON.stringify({jid:jid,n:n,ts:Date.now()}));}catch(e){}}
+function _jobClear(){try{localStorage.removeItem('estimate_job');}catch(e){}}
+function _jobGet(){try{return JSON.parse(localStorage.getItem('estimate_job')||'null');}catch(e){return null;}}
+// 抽出ジョブの進捗ポーリング(開始後・復帰後 共通)。完了でdを返す。中止でnull。
+async function pollJob(jid,n){
+  let waited=0;
+  while(true){
+    await new Promise(res=>setTimeout(res,3000));
+    if(controller&&controller.signal.aborted)return null;
+    waited+=3;
+    busy('[1/2] 図面から部品を抽出しています…（'+n+'件・'+waited+'秒経過／重い図面は数分かかります）');
+    let sj;
+    try{
+      const sr=await fetch('/api/extract/status/'+jid,{signal:controller?controller.signal:undefined});
+      if(sr.status===401){ throw new Error('ログインの有効期限が切れました。ページを再読み込みしてログインし直してください。'); }
+      sj=await sr.json();
+    }catch(e){ if(e.name==='AbortError')return null; if(e&&e.message&&e.message.indexOf('ログイン')>=0)throw e; continue; }  // 一時的な通信エラーは継続
+    if(sj.status==='done'){ return sj.result; }
+    if(sj.status==='error'){ throw new Error(sj.error||'抽出に失敗しました'); }
+    if(sj.status==='unknown'){ throw new Error('抽出ジョブが見つかりません（時間切れの可能性）'); }
+    if(waited>1800){ throw new Error('抽出がとても長くかかっています。図面を分割してお試しください。'); }
+  }
+}
 $('goExtract').onclick=async()=>{
   if(!curFiles||!curFiles.length)return;
   $('err').classList.remove('show');$('goExtract').disabled=true;setStep(2);
@@ -148,26 +172,15 @@ $('goExtract').onclick=async()=>{
     const j=await r.json();
     if(!r.ok)throw new Error(j.error||'抽出に失敗しました');
     const jid=j.job_id;
-    let d=null, waited=0;
-    while(true){
-      await new Promise(res=>setTimeout(res,3000));
-      if(controller.signal.aborted)return;
-      waited+=3;
-      busy('[1/2] 図面から部品を抽出しています…（'+curFiles.length+'件・'+waited+'秒経過／重い図面は数分かかります）');
-      let sj;
-      try{
-        const sr=await fetch('/api/extract/status/'+jid,{signal:controller.signal});
-        sj=await sr.json();
-      }catch(e){ if(e.name==='AbortError')return; continue; }  // 一時的な通信エラーは継続
-      if(sj.status==='done'){ d=sj.result; break; }
-      if(sj.status==='error'){ throw new Error(sj.error||'抽出に失敗しました'); }
-      if(sj.status==='unknown'){ throw new Error('抽出ジョブが見つかりません（時間切れの可能性）'); }
-      if(waited>900){ throw new Error('抽出がとても長くかかっています。図面を分割してお試しください。'); }
-    }
+    _jobSave(jid,curFiles.length);   // 画面が消えても復帰できるようジョブIDを保存
+    const d=await pollJob(jid,curFiles.length);
+    if(d===null)return;              // 中止
+    _jobClear();
     extracted=d.panels;idle();showStop(false);
     renderExtracted(d);
     $('confirm').classList.add('show');
   }catch(e){
+    _jobClear();
     if(e.name==='AbortError')return;
     fail(e.message);
   }finally{$('goExtract').disabled=false;}
@@ -560,4 +573,47 @@ document.querySelectorAll('.fbar button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.fbar button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
   if(lastData)render(lastData,b.dataset.f);
 });
+
+// ===== 画面復帰(スマホで別アプリ→戻るとタブが破棄され再読込される) =====
+// ①進行中/完了済みの抽出ジョブがあれば取り戻す ②直近の選定結果があれば表示する
+function _restoreBanner(msg){
+  try{
+    var b=document.createElement('div');
+    b.style.cssText='margin:10px 0;padding:9px 12px;background:#eef6ee;border:1px solid #bcd3bc;border-radius:7px;font-size:13px;color:#2e6b3a';
+    b.textContent=msg;
+    var out=$('out'); if(out&&out.parentNode) out.parentNode.insertBefore(b,out);
+  }catch(e){}
+}
+async function restoreState(){
+  const job=_jobGet();
+  if(job&&job.jid){
+    if(Date.now()-(job.ts||0)<30*60*1000){
+      // 進行中/完了済みの抽出を復帰
+      setStep(2);showStop(true);controller=new AbortController();
+      busy('前回の抽出を復帰しています…');
+      try{
+        const d=await pollJob(job.jid,job.n||1);
+        if(d===null)return;          // 中止
+        _jobClear();
+        extracted=d.panels;idle();showStop(false);
+        renderExtracted(d);$('confirm').classList.add('show');
+        _restoreBanner('前回の抽出結果を復帰しました。続けて確認・選定してください。');
+        return;
+      }catch(e){ _jobClear();idle();showStop(false);
+        // 復帰失敗(時間切れ等)は静かに通常画面へ(直近の選定結果があれば次で表示)
+      }
+    }else{ _jobClear(); }           // 古いジョブは破棄
+  }
+  // 直近の選定結果があれば表示(選定まで終えていた場合)
+  try{
+    const r=await fetch('/api/last');
+    if(r.ok){ const d=await r.json();
+      if(d&&d.ok&&d.panels&&d.panels.length){
+        lastData=d;setStep(3);render(d,'all');$('xlsbar').style.display='flex';
+        _restoreBanner('前回の選定結果を復帰しました（この端末で最後に選定した結果です）。');
+      }
+    }
+  }catch(e){}
+}
+restoreState();
 </script></body></html>
