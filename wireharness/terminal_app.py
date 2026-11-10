@@ -42,6 +42,7 @@ from wireharness.fromto_qc import locator_assign as LA
 from wireharness.fromto_qc import terminal_feedback as TFB
 from wireharness.fromto_qc import terminal_print as TP
 from wireharness.fromto_qc import run_local as RL
+from wireharness.fromto_qc import dwg_convert as DWG
 from wireharness.fromto_qc.geometry import norm as _norm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -222,8 +223,9 @@ def new():
             '<form method=post action="/create" enctype="multipart/form-data">'
             '<p>製番 <input type=text name=seiban placeholder="例 1-12188-132" required '
             'style="padding:8px;border:1px solid #ccd;border-radius:6px"></p>'
-            '<div class=drop>設計DXF一式を選択（制御シートF＊・スケルトンE＊・配置図D/G＊・機器相番号＊-DCT）<br>'
-            '<input type=file name=files multiple accept=".dxf,.DXF" style="margin-top:10px"></div>'
+            '<div class=drop>設計図一式を選択（制御シートF＊・スケルトンE＊・配置図D/G＊・機器相番号＊-DCT）<br>'
+            '<span class=muted>DXF・DWG どちらでも可（DWGはサーバ内でDXFへ自動変換）</span><br>'
+            '<input type=file name=files multiple accept=".dxf,.DXF,.dwg,.DWG" style="margin-top:10px"></div>'
             '<p style="margin-top:12px"><button class="btn o" type=submit>登録してロケーター生成 ▶</button> '
             '<span class=muted>アップロード→ロケーター生成→端子番号割付へ</span></p>'
             '</form></div><div class=card><a class="btn g" href="/">← ホーム</a></div>')
@@ -244,13 +246,25 @@ def create():
     os.makedirs(outdir, exist_ok=True)
     saved = []
     for f in files:
-        if not (f.filename or '').lower().endswith('.dxf'):
+        if not (f.filename or '').lower().endswith(('.dxf', '.dwg')):
             continue
         p = os.path.join(indir, os.path.basename(f.filename))
         f.save(p)
         saved.append(p)
     if not saved:
-        return _page('<div class=card err>DXFファイルがありません。</div>'
+        return _page('<div class=card err>DXF/DWGファイルがありません。</div>'
+                     '<div class=card><a class="btn g" href="/new">← 戻る</a></div>')
+    # DWG(AutoCAD独自)はサーバ内でDXFへ変換してから解析(外部送信なし)。
+    # sanitize=True: 変換後に ezdxf.recover 正規化し、解析側が素の readfile で読めるようにする。
+    conv = DWG.convert_dir(indir, sanitize=True)
+    failed = [(src, err) for (src, dxf, err) in conv if dxf is None]
+    if failed:
+        for src, err in failed:
+            app.logger.warning('dwg convert failed %s: %s', os.path.basename(src), err)
+        rows = ''.join(f'<li>{os.path.basename(n)}: {e}</li>' for n, e in failed)
+        return _page('<div class=card err>一部のDWGをDXFへ変換できませんでした。'
+                     'その図面はDXFで保存して再アップロードしてください。'
+                     f'<ul>{rows}</ul></div>'
                      '<div class=card><a class="btn g" href="/new">← 戻る</a></div>')
     # 製番でDXFを分類(制御F/スケルトンE/配置D,G/機器相番号DCT)
     seq, skel, layout, dct = RL.collect_inputs(indir, safe)
