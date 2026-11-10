@@ -1,0 +1,632 @@
+{
+ "proven": [
+  [
+   "27X",
+   "a接点"
+  ],
+  [
+   "27X",
+   "b接点"
+  ],
+  [
+   "3",
+   "a接点"
+  ],
+  [
+   "51",
+   "他"
+  ],
+  [
+   "52",
+   "a接点"
+  ],
+  [
+   "52",
+   "b接点"
+  ],
+  [
+   "52",
+   "他"
+  ],
+  [
+   "52A",
+   "a接点"
+  ],
+  [
+   "52B",
+   "a接点"
+  ],
+  [
+   "52B",
+   "b接点"
+  ],
+  [
+   "ELCB",
+   "他"
+  ],
+  [
+   "GL",
+   "極性"
+  ],
+  [
+   "MCCB",
+   "他"
+  ],
+  [
+   "OL",
+   "極性"
+  ],
+  [
+   "RL",
+   "極性"
+  ],
+  [
+   "RS",
+   "a接点"
+  ],
+  [
+   "WL",
+   "極性"
+  ]
+ ],
+ "contradicted_types": [
+  "43S",
+  "FAN",
+  "SPD",
+  "TH",
+  "WHM"
+ ],
+ "device_templates": {
+  "SPD": {
+   "0": "COM上",
+   "1": "NO 上"
+  },
+  "TH": {
+   "0": "CM 下",
+   "1": "CL 下"
+  },
+  "WHM": {
+   "0": "CA 下",
+   "1": "CB 下"
+  }
+ },
+ "blank_types": [
+  "FAN"
+ ],
+ "selector_templates": {
+  "43": {
+   "0": "13",
+   "1": "21",
+   "2": "14"
+  }
+ },
+ "selector_inventory": {
+  "43": [
+   "13",
+   "14",
+   "21",
+   "22"
+  ],
+  "43S": [
+   "13",
+   "14",
+   "21",
+   "22",
+   "33",
+   "34",
+   "41",
+   "42"
+  ],
+  "43R": [
+   "13",
+   "14"
+  ]
+ },
+ "stats": {
+  "2|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 34,
+   "mism_ex": []
+  },
+  "30X|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 64,
+   "mism_ex": []
+  },
+  "BZ|極性": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 22,
+   "mism_ex": []
+  },
+  "SPDX|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 20,
+   "mism_ex": []
+  },
+  "OL|極性": {
+   "match": 46,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "3|a接点": {
+   "match": 20,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "SPD|a接点": {
+   "match": 0,
+   "mismatch": 8,
+   "unseen": 0,
+   "mism_ex": [
+    [
+     "1-12188-132",
+     "SPD-1",
+     "14",
+     [
+      "alarm",
+      "earth",
+      "meter",
+      "pole_in",
+      "pole_out"
+     ]
+    ],
+    [
+     "1-12188-132",
+     "SPD-1",
+     "13",
+     [
+      "alarm",
+      "earth",
+      "meter",
+      "pole_in",
+      "pole_out"
+     ]
+    ],
+    [
+     "1-12188-132",
+     "SPD-2",
+     "14",
+     [
+      "alarm",
+      "earth",
+      "meter",
+      "pole_in",
+      "pole_out"
+     ]
+    ],
+    [
+     "1-12188-132",
+     "SPD-2",
+     "13",
+     [
+      "alarm",
+      "earth",
+      "meter",
+      "pole_in",
+      "pole_out"
+     ]
+    ],
+    [
+     "1-12188-132",
+     "SPD-3",
+     "14",
+     [
+      "alarm",
+      "earth",
+      "meter",
+      "pole_in",
+      "pole_out"
+     ]
+    ]
+   ]
+  },
+  "52|他": {
+   "match": 16,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "86X|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 100,
+   "mism_ex": []
+  },
+  "52|b接点": {
+   "match": 30,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "52|a接点": {
+   "match": 46,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "MCCB|他": {
+   "match": 104,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "FX|b接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 10,
+   "mism_ex": []
+  },
+  "SFX|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 2,
+   "mism_ex": []
+  },
+  "ELCB|他": {
+   "match": 36,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "51|他": {
+   "match": 8,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "RL|極性": {
+   "match": 4,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "STX|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 8,
+   "mism_ex": []
+  },
+  "2|コイルA": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 4,
+   "mism_ex": []
+  },
+  "30X|b接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 8,
+   "mism_ex": []
+  },
+  "GL|極性": {
+   "match": 4,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "52B|a接点": {
+   "match": 8,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "52A|a接点": {
+   "match": 8,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "2|b接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 4,
+   "mism_ex": []
+  },
+  "43S|b接点": {
+   "match": 4,
+   "mismatch": 4,
+   "unseen": 0,
+   "mism_ex": [
+    [
+     "1-12188-133",
+     "43S-305",
+     "12",
+     [
+      "13",
+      "14",
+      "21",
+      "22",
+      "33",
+      "34",
+      "41",
+      "42"
+     ]
+    ],
+    [
+     "1-12188-133",
+     "43S-305",
+     "11",
+     [
+      "13",
+      "14",
+      "21",
+      "22",
+      "33",
+      "34",
+      "41",
+      "42"
+     ]
+    ],
+    [
+     "1-12188-133",
+     "43S-306",
+     "12",
+     [
+      "13",
+      "14",
+      "21",
+      "22",
+      "33",
+      "34",
+      "41",
+      "42"
+     ]
+    ],
+    [
+     "1-12188-133",
+     "43S-306",
+     "11",
+     [
+      "13",
+      "14",
+      "21",
+      "22",
+      "33",
+      "34",
+      "41",
+      "42"
+     ]
+    ]
+   ]
+  },
+  "52Y|b接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 4,
+   "mism_ex": []
+  },
+  "52STX|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 12,
+   "mism_ex": []
+  },
+  "TX|b接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 4,
+   "mism_ex": []
+  },
+  "CX|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 4,
+   "mism_ex": []
+  },
+  "52B|b接点": {
+   "match": 4,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "TH|a接点": {
+   "match": 0,
+   "mismatch": 4,
+   "unseen": 0,
+   "mism_ex": [
+    [
+     "1-12188-133",
+     "TH-305",
+     "14",
+     [
+      "meter"
+     ]
+    ],
+    [
+     "1-12188-133",
+     "TH-305",
+     "13",
+     [
+      "meter"
+     ]
+    ],
+    [
+     "5-26002-013",
+     "TH-1",
+     "14",
+     [
+      "meter"
+     ]
+    ],
+    [
+     "5-26002-013",
+     "TH-1",
+     "13",
+     [
+      "meter"
+     ]
+    ]
+   ]
+  },
+  "FAN|極性": {
+   "match": 0,
+   "mismatch": 4,
+   "unseen": 0,
+   "mism_ex": [
+    [
+     "1-12188-133",
+     "FAN-305",
+     "+",
+     [
+      "earth"
+     ]
+    ],
+    [
+     "1-12188-133",
+     "FAN-305",
+     "-",
+     [
+      "earth"
+     ]
+    ],
+    [
+     "5-26002-013",
+     "FAN-1",
+     "+",
+     [
+      "earth"
+     ]
+    ],
+    [
+     "5-26002-013",
+     "FAN-1",
+     "-",
+     [
+      "earth"
+     ]
+    ]
+   ]
+  },
+  "DRS|b接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 4,
+   "mism_ex": []
+  },
+  "LED|極性": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 2,
+   "mism_ex": []
+  },
+  "27X|b接点": {
+   "match": 4,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "27X|a接点": {
+   "match": 12,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "DTX|b接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 16,
+   "mism_ex": []
+  },
+  "DTAL|b接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 8,
+   "mism_ex": []
+  },
+  "27T|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 8,
+   "mism_ex": []
+  },
+  "RST|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 8,
+   "mism_ex": []
+  },
+  "RS|a接点": {
+   "match": 8,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "DTX|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 24,
+   "mism_ex": []
+  },
+  "WL|極性": {
+   "match": 16,
+   "mismatch": 0,
+   "unseen": 0,
+   "mism_ex": []
+  },
+  "DTX|コイルA": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 12,
+   "mism_ex": []
+  },
+  "ALX|a接点": {
+   "match": 0,
+   "mismatch": 0,
+   "unseen": 8,
+   "mism_ex": []
+  },
+  "WHM|a接点": {
+   "match": 0,
+   "mismatch": 6,
+   "unseen": 0,
+   "mism_ex": [
+    [
+     "5-21094-047",
+     "WHM-1",
+     "13",
+     [
+      "meter"
+     ]
+    ],
+    [
+     "5-21094-047",
+     "WHM-1",
+     "14",
+     [
+      "meter"
+     ]
+    ],
+    [
+     "5-21094-047",
+     "WHM-2",
+     "13",
+     [
+      "meter"
+     ]
+    ],
+    [
+     "5-21094-047",
+     "WHM-2",
+     "14",
+     [
+      "meter"
+     ]
+    ],
+    [
+     "5-21094-047",
+     "WHM-3",
+     "13",
+     [
+      "meter"
+     ]
+    ]
+   ]
+  }
+ }
+}

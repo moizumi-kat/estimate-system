@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ハーネス製作支援</title>
+<style>
+:root{
+  --bg:#eef2f5; --panel:#ffffff; --ink:#12324e; --sub:#5b7186; --line:#d3dde5;
+  --accent:#1f74c4; --ok:#0f9488; --warn:#d1453b; --amber:#e0820a; --chip:#eaf2fb;
+}
+:root:not([data-theme="light"]) @media (prefers-color-scheme: dark){}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1720; --panel:#16212c; --ink:#e6eef5; --sub:#9fb3c4; --line:#26343f;
+  --accent:#4ea3ee; --chip:#1b2a3a;}}
+:root[data-theme="dark"]{--bg:#0f1720; --panel:#16212c; --ink:#e6eef5; --sub:#9fb3c4;
+  --line:#26343f; --accent:#4ea3ee; --chip:#1b2a3a;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Yu Gothic',Meiryo,'Hiragino Kaku Gothic ProN',system-ui,sans-serif;}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 16px;
+  position:sticky;top:0;z-index:5}
+h1{font-size:17px;margin:0 0 4px}
+.meta{font-size:13px;color:var(--sub)}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card .k{font-size:12px;color:var(--sub)}
+.card .v{font-size:22px;font-weight:700;margin-top:2px}
+.card .u{font-size:12px;color:var(--sub);margin-left:3px;font-weight:400}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:6px 0}
+.seg button{border:0;background:var(--panel);color:var(--ink);padding:8px 14px;font-size:13px;cursor:pointer}
+.seg button.on{background:var(--accent);color:#fff}
+.tabs{display:flex;gap:6px;margin:14px 0 8px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:var(--panel);color:var(--sub);
+  padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer}
+.tabs button.on{color:var(--ink);border-color:var(--accent);font-weight:700}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px 0;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:var(--chip);color:var(--sub);font-weight:600;position:sticky;top:0;cursor:pointer}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{max-height:60vh;overflow:auto}
+.prov{color:var(--amber);font-weight:700}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px}
+.pill.ok{background:rgba(15,148,136,.15);color:var(--ok)}
+.pill.warn{background:rgba(209,69,59,.15);color:var(--warn)}
+.decision{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+.opt{border:1px solid var(--line);border-radius:10px;padding:14px}
+.opt h3{margin:0 0 8px;font-size:14px}
+.opt .big{font-size:20px;font-weight:700}
+.opt.pick{border-color:var(--accent);box-shadow:0 0 0 2px rgba(31,116,196,.15)}
+.note{font-size:12px;color:var(--sub);margin:8px 2px}
+.filter{margin:8px 10px}
+.filter input{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);
+  color:var(--ink);width:min(260px,60vw)}
+@media(max-width:640px){.decision{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>ハーネス製作支援 <span style="font-weight:400;font-size:13px;color:var(--sub)">— 図面のみで生成（モデル不要）</span></h1>
+  <div class="meta" id="meta"></div>
+</header>
+<div class="wrap">
+  <div>
+    <span class="note">渡り（ルート）の優先度：</span>
+    <div class="seg" id="prio">
+      <button data-p="connection" class="on">繋ぎ込み最小（作業性）</button>
+      <button data-p="length">総配線長最小</button>
+    </div>
+  </div>
+  <div class="cards" id="cards"></div>
+
+  <div class="tabs" id="tabs">
+    <button data-t="wires" class="on">ハーネス一覧（1本ずつ）</button>
+    <button data-t="defects">不備・修正案</button>
+    <button data-t="duct">ダクト判断</button>
+  </div>
+  <div id="content"></div>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+const DATA = JSON.parse(document.getElementById('data').textContent);
+let P = DATA.panels[0];        // 表示中の盤
+let prio = 'connection';
+let tab = 'wires';
+const $ = s => document.querySelector(s);
+
+function meta(){
+  $('#meta').textContent =
+    `製番 ${P.seiban}／${P.kind}／標準ダクト ${P.duct_type}（占有率32%基準）`;
+}
+function cards(){
+  const st = P.priority_stats[prio];
+  const dec = P.duct_decision;
+  const fit = dec.fits;
+  const c = [
+    ['電線数', P.wire_count, '本'],
+    ['総配線長', P.total_length.toLocaleString(), 'mm'],
+    ['平均繋ぎ込み', st['平均繋ぎ込み'], '本/端子'],
+    ['最大繋ぎ込み', st['最大繋ぎ込み'], '本'],
+    ['端子台番号 未記入', P.defect_count, '件'],
+    ['ダクト適合', fit?'適合':'超過', fit?'≤32%':'>32%'],
+  ];
+  $('#cards').innerHTML = c.map(([k,v,u])=>
+    `<div class="card"><div class="k">${k}</div><div class="v">${v}<span class="u">${u}</span></div></div>`).join('');
+}
+function esc(s){return String(s??'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))}
+
+let sortKey='g', sortAsc=true;
+function wiresPane(){
+  const rows = P.wires.slice();
+  rows.sort((a,b)=>{let x=a[sortKey],y=b[sortKey];
+    if(typeof x==='number'&&typeof y==='number')return sortAsc?x-y:y-x;
+    return sortAsc?String(x).localeCompare(y,'ja'):String(y).localeCompare(x,'ja');});
+  const th=(k,l)=>`<th data-k="${k}">${l}${sortKey===k?(sortAsc?' ▲':' ▼'):''}</th>`;
+  return `<div class="pane">
+    <div class="filter"><input id="q" placeholder="号線・機器で絞り込み"></div>
+    <div class="scroll"><table><thead><tr>
+      ${th('g','号線')}${th('sz','サイズ')}${th('f','From（機器-番号:端子）')}
+      ${th('t','To（機器-番号:端子）')}${th('len','測長(mm)')}${th('route','ルート節点')}
+    </tr></thead><tbody id="tb">
+      ${rows.map(w=>`<tr><td>${esc(w.g)}</td><td>${esc(w.sz)}</td><td>${esc(w.f)}</td>
+        <td>${esc(w.t)}</td><td class="num">${w.len.toLocaleString()}</td>
+        <td class="num">${w.route}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+function defectsPane(){
+  if(!P.defects.length) return `<div class="pane"><div class="note" style="padding:14px">不備なし。</div></div>`;
+  return `<div class="pane"><div class="note" style="padding:10px 14px">
+    端子台の番号未記入は繋ぎ込み数を増やし作業性を下げます。位置で個別化し仮番号(仮N)を割当済み（要確認）。設計図に端子番号を記入してください。</div>
+    <div class="scroll"><table><thead><tr>
+      <th>仮番号</th><th>位置(x,y)</th><th>接続号線</th><th>修正案</th></tr></thead><tbody>
+      ${P.defects.map(d=>`<tr><td class="prov">${esc(d.prov)}</td>
+        <td>(${d.pos.x}, ${d.pos.y})</td><td>${esc((d.gousen||[]).join('／'))}</td>
+        <td style="white-space:normal">${esc(d.fix)}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+function ductCard(title, o, pick){
+  if(!o) return `<div class="opt"><h3>${title}</h3><div class="note">該当なし</div></div>`;
+  return `<div class="opt ${pick?'pick':''}"><h3>${title}</h3>${o}</div>`;
+}
+function ductPane(){
+  const d = P.duct_decision, demo = P.duct_demo;
+  let head;
+  if(d.fits){
+    head = `<div class="pane" style="padding:14px">
+      <span class="pill ok">標準ダクト ${d.duct_type} で基準内</span>
+      <div class="note">最大占有率 ${(d.standard['最大占有率']*100).toFixed(0)}% ≤ 32%枠。変更不要。総配線長 ${d.standard['総配線長'].toLocaleString()}mm。</div></div>`;
+  } else { head=''; }
+  // 過密デモ（標準ダクトに収まらない場合の2択）
+  const det = demo.option_detour, up = demo.option_upsize;
+  const detOK = det && det['基準内'];
+  const detHtml = det ? `
+    <div class="big">総長 +${det['総長増分'].toLocaleString()} <span class="u" style="font-size:13px;color:var(--sub)">(+${det['総長増加率%']}%)</span></div>
+    <div class="note">${det['総配線長(標準最短)'].toLocaleString()} → ${det['総配線長(迂回後)'].toLocaleString()} mm<br>
+    最大占有率 ${(det['最大占有率']*100).toFixed(0)}%（${detOK?'基準内に収まる':'基準内に収まらない'}）<br>ダクトは標準 ${det['型式']} のまま</div>` : null;
+  const upHtml = up ? `
+    <div class="big">${up['型式']} <span class="u" style="font-size:13px;color:var(--sub)">${up['断面']}</span></div>
+    <div class="note">総配線長は最短のまま ${up['総配線長'].toLocaleString()}mm<br>
+    最大占有率 ${(up['最大占有率']*100).toFixed(0)}%（基準内）<br>ダクトを一回り大きく</div>` : null;
+  const demoBox = `<div class="pane" style="padding:14px">
+    <div style="font-size:14px;font-weight:700">過密時の判断（例：標準ダクトに収まらない場合）</div>
+    <div class="note">${esc(demo.recommend)}</div>
+    <div class="decision">
+      ${ductCard('① 迂回（総長を伸ばす）', detHtml, detOK)}
+      ${ductCard('② ダクト昇格（一回り大きく）', upHtml, !detOK)}
+    </div>
+    <div class="note">※ どちらを採るかはユーザ判断。迂回＝総長増、昇格＝ダクト大型化のトレードオフ。</div></div>`;
+  return head + demoBox;
+}
+function render(){
+  meta(); cards();
+  $('#content').innerHTML = tab==='wires'?wiresPane():tab==='defects'?defectsPane():ductPane();
+  if(tab==='wires'){
+    document.querySelectorAll('#content th').forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k; if(k===sortKey)sortAsc=!sortAsc;else{sortKey=k;sortAsc=true;} render();});
+    const q=$('#q'); if(q){q.oninput=()=>{const v=q.value.trim();
+      document.querySelectorAll('#tb tr').forEach(tr=>{
+        tr.style.display = !v||tr.textContent.includes(v)?'':'none';});};}
+  }
+}
+$('#prio').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+  prio=b.dataset.p;document.querySelectorAll('#prio button').forEach(x=>x.classList.toggle('on',x===b));render();};
+$('#tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+  tab=b.dataset.t;document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));render();};
+render();
+</script>
+</body>
+</html>

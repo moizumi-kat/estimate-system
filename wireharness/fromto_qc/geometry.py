@@ -31,6 +31,17 @@ WIRE_LAYERS = {'L_CONTROL', 'L_CONTROL_H', 'L_MAIN', 'L_OUTSIDE', 'L_EARTH', 'DE
 POINT_TOL = 5          # 同一節点判定
 TERMINAL_TOL = 15      # 端子台_LU*の中継結合
 SENBAN_SEG_MAXDIST = 250   # 線番→配線の割当
+FOOT_MARGIN = 0        # 機器外形枠の距離マージン（人の「端点と部品の距離」判断に対応。調整可）
+MUTUAL_NEAREST = False  # 相互最近傍で結線判定。全製番で効果なし＋一部を悪化(成分の誤併合)のため既定OFF。実装は保持
+MUTUAL_MAXDIST = 120   # 相互最近傍を認める最大距離（これ以上離れていれば結線しない）
+# 端子台DEVICE1が「未入力」とみなす値（設計が番号を入れていないプレースホルダ）
+UNFILLED_DEVICE1 = {'*', '＊', '?', '？', '-', 'ー', '−', '‐'}
+
+
+def _mk_sym(dev, d1):
+    """機器記号を生成。DEVICE1が未入力('*'等)なら番号なし（総称化）。"""
+    d1 = (d1 or '').strip()
+    return f"{dev}-{d1}" if d1 and d1 not in UNFILLED_DEVICE1 else dev
 # 端子/機器としてカウントしない付属・銘板系
 SKIP_DEVICES = {'銘板', '端子ｶﾊﾞｰ', 'TB取付金具', 'ﾊﾝﾄﾞﾙ', '系統情報',
                 'CABLE', 'CABLE1', 'CABLE2', 'CH', 'CP', 'CPMAIN1', '補助接点ﾕﾆｯﾄ',
@@ -40,6 +51,13 @@ SKIP_DEVICES = {'銘板', '端子ｶﾊﾞｰ', 'TB取付金具', 'ﾊﾝﾄﾞ�
 def norm(s):
     """機器記号の正規化キー（比較・突合用）。"""
     return re.sub(r'[-_\s()（）]', '', str(s or '')).upper()
+
+
+def gousen_norm(s):
+    """号線(線番)ラベルの正規化キー。機器記号と違い末尾の極性(+/-)は意味を持ち、
+    2DI1+ と 2DI1- は別ノード(DI接点の±)なので保持する(図面・手本とも号線のハイフンは
+    末尾極性のみ=全数確認)。アンダースコア・空白・括弧のみ除去し、ハイフン/プラスは残す。"""
+    return re.sub(r'[_\s()（）]', '', str(s or '')).upper()
 
 
 def _nums(s):
@@ -61,6 +79,76 @@ def pt_seg_dist(px, py, ax, ay, bx, by):
     t = ((px - ax) * dx + (py - ay) * dy) / L2
     tc = max(0.0, min(1.0, t))
     return math.hypot(px - (ax + tc * dx), py - (ay + tc * dy)), t
+
+
+# 設計が結線を TEMPLATE レイヤに描くことがある（例 5-21071 の DTX11/DTX21 →母線、号線213）。
+# TEMPLATE は機器記号の内部作図にも使われるため、無条件では拾わない。
+# 「実配線」と確実に言えるトップレベル線＝下記のいずれかを満たすものだけ昇格する:
+#   (a) 号線ラベル(V/H_SENBAN の『線番』)が線上に載っている
+#   (b) 端点が接続点ドット(_crossPoint1)に一致
+#   (c) 端点が実電線レイヤの線の端点に一致
+# 機器記号の作図は INSERT 内部(virtual)なのでトップレベル走査には現れず、混入しない。
+def promote_template_segments(msp, wire_layers, join_tol=20, label_tol=90):
+    """TEMPLATE レイヤのトップレベル線のうち、実配線と判定できるものを返す。
+    戻り: [((x1,y1),(x2,y2)), ...]（丸め済み）"""
+    # 参照点を収集
+    sb_pts = []          # 号線ラベル位置
+    dot_pts = []         # 接続点ドット位置
+    real_ends = []       # 実電線の端点
+    cand = []            # TEMPLATE 候補線分
+    for e in msp:
+        t = e.dxftype()
+        if t == 'INSERT':
+            nm = (e.dxf.name or '')
+            if nm.upper() == '_CROSSPOINT1':
+                dot_pts.append((e.dxf.insert.x, e.dxf.insert.y))
+            elif nm in ('V_SENBAN', 'H_SENBAN') and e.attribs:
+                a = {at.dxf.tag: at.dxf.text for at in e.attribs}
+                if (a.get('線番', '') or '').strip():
+                    sb_pts.append((e.dxf.insert.x, e.dxf.insert.y))
+        elif t in ('LINE', 'LWPOLYLINE'):
+            lay = e.dxf.layer
+            if lay in wire_layers:
+                if t == 'LINE':
+                    real_ends.append((e.dxf.start.x, e.dxf.start.y))
+                    real_ends.append((e.dxf.end.x, e.dxf.end.y))
+                else:
+                    pts = [(x, y) for x, y, *_ in e.get_points()]
+                    if pts:
+                        real_ends.append(pts[0])
+                        real_ends.append(pts[-1])
+            elif lay == 'TEMPLATE':
+                if t == 'LINE':
+                    cand.append([(e.dxf.start.x, e.dxf.start.y),
+                                 (e.dxf.end.x, e.dxf.end.y)])
+                else:
+                    pts = [(x, y) for x, y, *_ in e.get_points()]
+                    for p, q in zip(pts, pts[1:]):
+                        cand.append([p, q])
+
+    def near_any(p, pts, tol):
+        return any(math.hypot(p[0] - qx, p[1] - qy) < tol for qx, qy in pts)
+
+    out = []
+    for (a, b) in cand:
+        promote = False
+        # (a) 号線ラベルが線上に載る
+        for sx, sy in sb_pts:
+            d, tpos = pt_seg_dist(sx, sy, a[0], a[1], b[0], b[1])
+            if d < label_tol and -0.05 <= tpos <= 1.05:
+                promote = True
+                break
+        # (b)(c) 端点が接続点ドット／実電線端点に一致
+        if not promote:
+            for p in (a, b):
+                if near_any(p, dot_pts, join_tol) or near_any(p, real_ends, join_tol):
+                    promote = True
+                    break
+        if promote:
+            s = ((round(a[0], 1), round(a[1], 1)), (round(b[0], 1), round(b[1], 1)))
+            if s[0] != s[1]:
+                out.append(s)
+    return out
 
 
 class UF:
@@ -110,13 +198,15 @@ class DrawingModel:
         self.msp = self.doc.modelspace()
         self.terminals = self._terminals()
         self.devices = self._devices()
-        self.segments = self._wire_segments()
+        self.termblocks = self._term_blocks()
+        self.wire_layers = self._decide_wire_layers()
         raw_sb = self._senban()
         # senban は (号線, x, y) の3要素で公開（後方互換）。kind は並行リストで保持。
         #   kind='ctrl' … SENBANブロックの『線番』（制御号線）
         #   kind='main' … SOU属性（スケルトンの相/主回路ラベル）
         self.senban = [(v, x, y) for v, x, y, _ in raw_sb]
         self.senban_kind = [k for *_, k in raw_sb]
+        self.segments = self._wire_segments()
         self.nets = self._build_nets()
 
     # ---- 端子ピン ----
@@ -129,7 +219,7 @@ class DrawingModel:
             dev = a.get('DEVICE', '')
             if not dev or dev in SKIP_DEVICES:
                 continue
-            sym = f"{dev}-{a.get('DEVICE1','')}" if a.get('DEVICE1') else dev
+            sym = _mk_sym(dev, a.get('DEVICE1',''))
             ins = e.dxf.insert
             deg = e.dxf.rotation or 0
             names = []
@@ -169,7 +259,7 @@ class DrawingModel:
             dev = a.get('DEVICE', '')
             if not dev or dev in SKIP_DEVICES:
                 continue
-            sym = f"{dev}-{a.get('DEVICE1','')}" if a.get('DEVICE1') else dev
+            sym = _mk_sym(dev, a.get('DEVICE1',''))
             ins = e.dxf.insert
             deg = e.dxf.rotation or 0
             box = None
@@ -184,6 +274,49 @@ class DrawingModel:
             devs.append(Device(sym, ins.x, ins.y, box))
         return devs
 
+    # ---- 端子台（_LU, DEVICE空欄も接続先として拾う）----
+    def _term_blocks(self):
+        """端子台ブロック(_LU*)を接続先として収集。DEVICE属性が空の端子台も拾う。
+        ラベルあり(_terminals/_devicesで既に拾える)は除外。
+        戻り: [(sym, x, y, box), ...]  sym は 'TB-<番号>'（DEVICE1があれば）または 'TB'。
+        """
+        out = []
+        for e in self.msp:
+            if e.dxftype() != 'INSERT' or not e.dxf.name.startswith('_LU'):
+                continue
+            a = {at.dxf.tag: at.dxf.text for at in e.attribs} if e.attribs else {}
+            dev = (a.get('DEVICE', '') or '').strip()
+            if dev and dev not in SKIP_DEVICES:
+                continue                      # ラベル済み端子台は既存処理で拾う
+            d1 = (a.get('DEVICE1', '') or '').strip()
+            # 空欄・プレースホルダ('*'等)は「番号未入力」とみなし総称TB（→ P1で設計へ提案）
+            sym = f"TB-{d1}" if d1 and d1 not in UNFILLED_DEVICE1 else 'TB'
+            ins = e.dxf.insert
+            deg = e.dxf.rotation or 0
+            try:
+                l, t, r, b = [float(x) for x in a.get('PMT', '').split(',')[:4]]
+                cs = [_rot(l, t, deg), _rot(r, t, deg), _rot(l, b, deg), _rot(r, b, deg)]
+                xs = [ins.x + c[0] for c in cs]
+                ys = [ins.y + c[1] for c in cs]
+                box = (min(xs) - 5, min(ys) - 5, max(xs) + 5, max(ys) + 5)
+            except Exception:
+                box = (ins.x - 15, ins.y - 15, ins.x + 15, ins.y + 15)
+            out.append((sym, ins.x, ins.y, box))
+        return out
+
+    def _decide_wire_layers(self):
+        """このシートで結線に使う電線レイヤを決める。
+        制御シート(L_CONTROLが主体)では L_MAIN は端子ストリップ/母線であり、別号線を橋渡し
+        して号線を潰す（実データ 5-21071 で確認）。よって“制御が主体のシート”では L_MAIN を除外。
+        スケルトン(主回路)は主回路導体が L_MAIN に乗る（L_MAINが主体）ので含める。
+        判定は本数の多寡で行う（L_CONTROL が数本あるだけのスケルトンを誤除外しないため）。"""
+        n_ctrl = sum(1 for e in self.msp if e.dxftype() in ('LINE', 'LWPOLYLINE')
+                     and e.dxf.layer in ('L_CONTROL', 'L_CONTROL_H'))
+        n_main = sum(1 for e in self.msp if e.dxftype() in ('LINE', 'LWPOLYLINE')
+                     and e.dxf.layer == 'L_MAIN')
+        ctrl_dominant = n_ctrl > n_main
+        return (WIRE_LAYERS - {'L_MAIN'}) if ctrl_dominant else set(WIRE_LAYERS)
+
     # ---- 電線（直接 + ブロック展開）----
     def _wire_segments(self):
         segs = []
@@ -197,16 +330,19 @@ class DrawingModel:
                 for p, q in zip(pts, pts[1:]):
                     segs.append((p, q))
         for e in self.msp:
-            if e.dxftype() in ('LINE', 'LWPOLYLINE') and e.dxf.layer in WIRE_LAYERS:
+            if e.dxftype() in ('LINE', 'LWPOLYLINE') and e.dxf.layer in self.wire_layers:
                 add(e)
             elif e.dxftype() == 'INSERT':
                 try:
                     for ve in e.virtual_entities():
-                        if ve.dxftype() in ('LINE', 'LWPOLYLINE') and ve.dxf.layer in WIRE_LAYERS:
+                        if ve.dxftype() in ('LINE', 'LWPOLYLINE') and ve.dxf.layer in self.wire_layers:
                             add(ve)
                 except Exception:
                     pass
-        return [s for s in segs if s[0] != s[1]]
+        segs = [s for s in segs if s[0] != s[1]]
+        # TEMPLATE レイヤに描かれた実配線（号線ラベル付き／端点が接続点）を昇格して追加
+        segs += promote_template_segments(self.msp, self.wire_layers)
+        return segs
 
     def _senban(self):
         """号線(線番)ラベルを収集。図面により2系統あり、種別(kind)を付ける:
@@ -220,7 +356,11 @@ class DrawingModel:
             if e.dxftype() != 'INSERT' or not e.attribs:
                 continue
             a = {at.dxf.tag: at.dxf.text for at in e.attribs}
-            if e.dxf.layer == 'SENBAN' and a.get('線番', '').strip():
+            # 号線ラベルは通常 SENBAN レイヤ。ただし設計が TEMPLATE レイヤに描く号線もある
+            # （例 5-21071 の号線213＝DTX21→母線）。ブロック名(V/H_SENBAN)で確実に判定して拾う。
+            is_senban = (e.dxf.layer == 'SENBAN'
+                         or (e.dxf.name in ('V_SENBAN', 'H_SENBAN') and e.dxf.layer == 'TEMPLATE'))
+            if is_senban and a.get('線番', '').strip():
                 out.append((a['線番'].strip(), e.dxf.insert.x, e.dxf.insert.y, 'ctrl'))
             for j, k in enumerate(('SOU1', 'SOU2', 'SOU3')):
                 v = a.get(k, '').strip()
@@ -295,14 +435,28 @@ class DrawingModel:
             for p in near[1:]:
                 uf.union(qn(near[0]), qn(p))
 
-        # 号線ラベル → ラベル位置に最も近い電線端点の成分root（＋種別）
+        # 号線ラベル → ラベルに最も近い『電線セグメント(垂線)』の成分root（＋種別）
+        # 【重要】端点最寄りではなくセグメント最寄り（仕様: SENBAN_SEG_MAXDIST）。
+        # 線の途中に置かれた号線を、遠い別線の端点ではなく“乗っている線”へ正しく割り当てる。
         node_list = list(nodes_all)
+
+        def _label_root(x, y):
+            best_root = None
+            bd = SENBAN_SEG_MAXDIST
+            for a, b in segs:
+                d, _t = pt_seg_dist(x, y, a[0], a[1], b[0], b[1])
+                if d < bd:
+                    bd = d
+                    best_root = uf.find(qn(a))
+            if best_root is None and node_list:
+                best_root = uf.find(qn(_nearest_node(x, y, node_list)))
+            return best_root
+
         label_root = {}    # root -> [(号線, kind), ...]
         for (v, x, y), k in zip(self.senban, self.senban_kind):
-            if not node_list:
-                break
-            nn = _nearest_node(x, y, node_list)
-            label_root.setdefault(uf.find(qn(nn)), []).append((v, k))
+            r = _label_root(x, y)
+            if r is not None:
+                label_root.setdefault(r, []).append((v, k))
 
         # 同じ号線名を持つ成分同士を連結（スナップ隙間の橋渡し）
         id_first_root = {}
@@ -322,7 +476,10 @@ class DrawingModel:
             if abs(nn[0] - tm.x) + abs(nn[1] - tm.y) <= tol * 3:
                 comp_terms[uf.find(qn(nn))].append(tm)
 
-        # 端子を持たない機器(スケルトンのMCCB等) → 外形枠に電線端点が入る成分へ
+        # 端子を持たない機器(スケルトンのMCCB等) → 外形枠に電線端点が入る成分へ。
+        # 人は「線の末端と部品の距離」で結線判断するため、枠を FOOT_MARGIN だけ広げて
+        # 枠のわずか外にある電線端点も接続とみなす（取りこぼし=未結線Aの主因を回収）。
+        M = FOOT_MARGIN
         no_term = {t.device for t in self.terminals}
         comp_footdev = collections.defaultdict(set)
         for dv in self.devices:
@@ -330,16 +487,60 @@ class DrawingModel:
                 continue
             x0, y0, x1, y1 = dv.box
             for nd in node_list:
-                if x0 <= nd[0] <= x1 and y0 <= nd[1] <= y1:
+                if x0 - M <= nd[0] <= x1 + M and y0 - M <= nd[1] <= y1 + M:
                     comp_footdev[uf.find(qn(nd))].add(dv.sym)
 
+        # 端子台(_LU, DEVICE空欄含む) → ボックスに電線端点が入る成分へ 'TB' を接続先付与。
+        # これで内部L_CONTROLと外部L_OUTSIDEの境界にある端子台が接続先として数えられ、
+        # 43-102 のような1機器ネットが {43-102, TB} になって形成される。
+        for sym, tx, ty, (bx0, by0, bx1, by1) in getattr(self, 'termblocks', []):
+            for nd in node_list:
+                if bx0 - M <= nd[0] <= bx1 + M and by0 - M <= nd[1] <= by1 + M:
+                    comp_footdev[uf.find(qn(nd))].add(sym)
+
+        # 相互最近傍による結線（茂泉様提案）: 枠内包含で拾えない端点を、
+        # 「線端の最近傍機器」と「機器の最近傍線端」が一致するペアだけ結線する。
+        # 固定公差に頼らず誤結線を避ける。端子を持たない機器の外形枠に対して適用。
+        if MUTUAL_NEAREST and node_list:
+            def pt_box_dist(px, py, box):
+                x0, y0, x1, y1 = box
+                dx = max(x0 - px, 0, px - x1)
+                dy = max(y0 - py, 0, py - y1)
+                return (dx * dx + dy * dy) ** 0.5
+            foot = [dv for dv in self.devices if dv.sym not in no_term]
+            if foot:
+                # 機器→最近傍線端
+                dev_near = {}
+                for dv in foot:
+                    best = None
+                    bd = MUTUAL_MAXDIST
+                    for nd in node_list:
+                        d = pt_box_dist(nd[0], nd[1], dv.box)
+                        if d < bd:
+                            bd = d
+                            best = nd
+                    if best is not None:
+                        dev_near[dv.sym] = best
+                # 線端→最近傍機器
+                for nd in node_list:
+                    best = None
+                    bd = MUTUAL_MAXDIST
+                    for dv in foot:
+                        d = pt_box_dist(nd[0], nd[1], dv.box)
+                        if d < bd:
+                            bd = d
+                            best = dv.sym
+                    # 相互一致（機器の最近傍線端＝この線端）なら結線
+                    if best is not None and dev_near.get(best) == nd:
+                        comp_footdev[uf.find(qn(nd))].add(best)
+
         # 成分ごとの号線ラベル（連結後のrootで引き直す。連結でrootがずれるため）
+        # ここも端点最寄りではなくセグメント最寄りで割当（_label_root と同一基準）。
         root_labels = collections.defaultdict(list)
         for (v, x, y), k in zip(self.senban, self.senban_kind):
-            if not node_list:
-                break
-            nn = _nearest_node(x, y, node_list)
-            root_labels[uf.find(qn(nn))].append((v, k))
+            r = _label_root(x, y)
+            if r is not None:
+                root_labels[uf.find(r)].append((v, k))
 
         nets = []
         seen_roots = set(comp_terms) | set(comp_footdev) | set(root_labels)
@@ -353,7 +554,9 @@ class DrawingModel:
             cnt = collections.Counter(v for v, _ in labs)
             sid = cnt.most_common(1)[0][0]
             kind = dict((v, k) for v, k in labs).get(sid, 'ctrl')
-            if len(devs) < 2 and len(terms) < 2:
+            # 1機器の成分も残す（渡り/別シートで同一号線が1機器ずつ出る場合、
+            # ここで捨てると harness.fuse の号線マージができない）。空だけ除外。
+            if not devs and not terms:
                 continue
             nodes = [(t.x, t.y) for t in terms] or [(0, 0)]
             nets.append({'id': sid, 'kind': kind, 'terminals': terms,

@@ -1,0 +1,216 @@
+{
+  "_about": "部品カテゴリ(PARTS)別の端子トポロジDB。主回路のノード分割（直列素子で線側/負荷側を別ノードに分ける）と端子番号付与に使う。role=端子の役割, side=シンボル上の位置(top/bottom/left/right), split_series=導体を線側/負荷側で分断するか。標準(IEC/JIS)配列。型式固有の補助接点番号は必要時に datasheet で上書き。",
+  "_version": "0.2",
+  "_models_note": "型式固有の多端子モジュール。categories で表せない計測/通信/制御ユニット。source に取得元カタログ/マニュアルを記録。",
+  "models": {
+    "EMU4-BM": {
+      "desc": "三菱 EcoMonitorPlus 基本ユニット(電力計測経済品)。接続構成例より。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ y07521512.pdf 接続構成例",
+      "terminals": [
+        {"role": "voltage_input", "names": ["P1", "P2", "P3"]},
+        {"role": "aux_power", "names": ["MA", "MB"]},
+        {"role": "ct_secondary", "names": ["1K", "1L", "2K", "2L", "3K", "3L"]},
+        {"role": "comms_rs485", "names": ["485+", "485-", "SLD", "Ter"]},
+        {"role": "earth", "names": ["NC", "E"]}
+      ]
+    },
+    "EMU4-HM": {
+      "desc": "三菱 EcoMonitorPlus 基本ユニット(電力計測高機能品)。BMに外部入出力(接点/パルス/警報)を追加。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ y07521512.pdf",
+      "terminals": [
+        {"role": "voltage_input", "names": ["P1", "P2", "P3"]},
+        {"role": "aux_power", "names": ["MA", "MB"]},
+        {"role": "ct_secondary", "names": ["1K", "1L", "2K", "2L", "3K", "3L"]},
+        {"role": "comms_rs485", "names": ["485+", "485-", "SLD", "Ter"]},
+        {"role": "ext_io", "names": ["X1", "Y1", "Y2", "COM"]},
+        {"role": "earth", "names": ["NC", "E"]}
+      ]
+    },
+    "EMU4-A2": {
+      "desc": "三菱 EcoMonitorPlus 計測増設ユニット(同電圧系増設)。CT入力を増設。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ y07521512.pdf",
+      "terminals": [
+        {"role": "ct_secondary", "names": ["1K", "1L", "2K", "2L", "3K", "3L"]}
+      ]
+    },
+    "EMU2-D65": {
+      "desc": "三菱 表示ユニット。本体とは専用ケーブル接続（電力線ではない）。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ", "terminals": []
+    },
+    "EMU4-D65": {
+      "desc": "三菱 小形表示ユニット。本体と専用ケーブル接続。",
+      "maker": "三菱", "parts": "電力監視機器",
+      "source": "三菱FA EcoMonitorPlusカタログ", "terminals": []
+    },
+    "EMU-CT": {
+      "desc": "三菱 分割形電流センサ(EMU-CT50/100/250/400/600-A)。1次は主線を貫通、2次kl→本体nK/nL。",
+      "maker": "三菱", "parts": "電流センサ",
+      "source": "三菱FA EcoMonitorPlusカタログ y07521512.pdf 接続構成例",
+      "split_series": false,
+      "terminals": [
+        {"role": "primary", "side": "through", "names": ["K", "L"]},
+        {"role": "secondary", "names": ["k", "l"]}
+      ]
+    },
+    "WR3400": {
+      "desc": "パナソニック フル2線式リモコン リレー制御用T/U(4回路)。伝送信号線＋4回路のリレー制御出力。",
+      "maker": "ﾊﾟﾅｿﾆｯｸ", "parts": "T/U",
+      "source": "Panasonic FAQ J233_086884_1.pdf (負荷ナンバー1-4固定)",
+      "terminals": [
+        {"role": "comms_signal", "names": ["信号", "シロ"]},
+        {"role": "relay_ctrl", "names": ["負荷1", "負荷2", "負荷3", "負荷4"]}
+      ]
+    },
+    "WR34169": {
+      "desc": "パナソニック フル2線式リモコン T/U付6Aリレーユニット(4回路)。伝送信号線＋4回路の6Aリレー開閉。",
+      "maker": "ﾊﾟﾅｿﾆｯｸ", "parts": "T/U付6Aﾘﾚｰﾕﾆｯﾄ",
+      "source": "Panasonic FAQ J233_086884_1.pdf",
+      "terminals": [
+        {"role": "comms_signal", "names": ["信号", "シロ"]},
+        {"role": "relay_load", "names": ["負荷1", "負荷2", "負荷3", "負荷4"]}
+      ]
+    },
+    "WR6166": {
+      "desc": "パナソニック 20Aフルパワーリモコンリレー(両切)。負荷開閉(両切)＋伝送信号線。端子番号は施工説明書要確認。",
+      "maker": "ﾊﾟﾅｿﾆｯｸ", "parts": "ﾘﾓｺﾝﾘﾚｰ",
+      "source": "Panasonic Vカタ/施工説明(役割レベル)",
+      "terminals": [
+        {"role": "load", "side": "both", "names": ["負荷1", "負荷2"]},
+        {"role": "comms_signal", "names": ["信号", "シロ"]}
+      ]
+    },
+    "WR6165": {
+      "desc": "パナソニック フルパワーリモコンリレー(WR6166系)。負荷開閉＋伝送信号線。",
+      "maker": "ﾊﾟﾅｿﾆｯｸ", "parts": "ﾘﾓｺﾝﾘﾚｰ",
+      "source": "Panasonic Vカタ(役割レベル)",
+      "terminals": [
+        {"role": "load", "side": "both", "names": ["負荷1", "負荷2"]},
+        {"role": "comms_signal", "names": ["信号", "シロ"]}
+      ]
+    },
+    "M8FM": {
+      "desc": "三菱 電子式電力量計 M8FMシリーズ（B/NET伝送機能付, 単相3線/三相3線）。カタログ結線図より。",
+      "maker": "三菱", "parts": "WHM",
+      "source": "三菱FA カタログ y0801_2204.pdf 結線図(表示例)",
+      "terminals": [
+        {"role": "voltage_input", "names": ["P1", "P2", "P3"]},
+        {"role": "ct_secondary", "names": ["1S", "1L", "3S", "3L"]},
+        {"role": "comms_bnet", "names": ["B/NET+", "B/NET-"]}
+      ]
+    }
+  },
+  "categories": {
+    "MCCB": {
+      "desc": "配線用遮断器（寺崎/三菱等）。単線図では線側(上)1/3/5→負荷側(下)2/4/6。警報ALa/ALc。",
+      "split_series": true,
+      "poles": 3,
+      "terminals": [
+        {"role": "line", "side": "top", "names_3p": ["1", "3", "5"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4", "6"]},
+        {"role": "aux", "side": "side", "names": ["ALa", "ALc"]}
+      ]
+    },
+    "ELCB": {
+      "desc": "漏電遮断器。MCCBと同配列。線側1/3/5→負荷側2/4/6。",
+      "split_series": true, "poles": 3,
+      "terminals": [
+        {"role": "line", "side": "top", "names_3p": ["1", "3", "5"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4", "6"]},
+        {"role": "aux", "side": "side", "names": ["ALa", "ALc"]}
+      ]
+    },
+    "MC": {
+      "desc": "電磁接触器（富士SC-N/三菱S-T等）。主回路は線側1/3/5→負荷側2/4/6。コイルA1/A2。補助13-14(NO)等。",
+      "split_series": true, "poles": 3,
+      "terminals": [
+        {"role": "line", "side": "top", "names_3p": ["1", "3", "5"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4", "6"]},
+        {"role": "coil", "side": "side", "names": ["A1", "A2"]},
+        {"role": "aux_no", "side": "side", "names": ["13", "14"]},
+        {"role": "aux_nc", "side": "side", "names": ["21", "22"]}
+      ]
+    },
+    "MS": {
+      "desc": "電磁開閉器（接触器＋サーマル一体）。MC相当。",
+      "split_series": true, "poles": 3,
+      "terminals": [
+        {"role": "line", "side": "top", "names_3p": ["1", "3", "5"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4", "6"]},
+        {"role": "coil", "side": "side", "names": ["A1", "A2"]}
+      ]
+    },
+    "2ER": {
+      "desc": "サーマルリレー2E（富士TK-N等）。主回路は接触器負荷側→モータ。補助95-96(NC),97-98(NO)。",
+      "split_series": true, "poles": 3,
+      "terminals": [
+        {"role": "line", "side": "top", "names_3p": ["1", "3", "5"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4", "6"]},
+        {"role": "aux_nc", "side": "side", "names": ["95", "96"]},
+        {"role": "aux_no", "side": "side", "names": ["97", "98"]}
+      ]
+    },
+    "1ER": {
+      "desc": "サーマルリレー1E。2E相当（補助接点数のみ差）。",
+      "split_series": true, "poles": 3,
+      "terminals": [
+        {"role": "line", "side": "top", "names_3p": ["1", "3", "5"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4", "6"]},
+        {"role": "aux_nc", "side": "side", "names": ["95", "96"]}
+      ]
+    },
+    "OL": {
+      "desc": "表示灯（橙ランプ等, 富士DR22/DR30系, 記号LO_PL）。端子は+/-の2端子のみで、図面のTB属性と記号からreview_viewerが付与する。主回路(1-6)・熱動補助(95-98)は持たない。過負荷継電器(サーマル)はPARTS=1ER/2ERで別管理。",
+      "split_series": false, "poles": 1,
+      "terminals": []
+    },
+    "CT": {
+      "desc": "変流器（三菱CW等）。1次K-Lは主導体を貫通（直列・分断しない）、2次k-lは計器へ分岐。",
+      "split_series": false, "poles": 1,
+      "terminals": [
+        {"role": "primary", "side": "through", "names": ["K", "L"]},
+        {"role": "secondary", "side": "bottom", "names": ["k", "l"]}
+      ]
+    },
+    "AM": {
+      "desc": "電流計（三菱YS等）。CT2次に接続（2端子 1/2）。",
+      "split_series": false, "poles": 1,
+      "terminals": [
+        {"role": "meter", "side": "any", "names": ["1", "2"]}
+      ]
+    },
+    "VM": {
+      "desc": "電圧計。2端子（相間/相中性 1/2）。",
+      "split_series": false, "poles": 1,
+      "terminals": [
+        {"role": "meter", "side": "any", "names": ["1", "2"]}
+      ]
+    },
+    "F": {
+      "desc": "ヒューズ。2端子（線側/負荷側）。",
+      "split_series": true, "poles": 1,
+      "terminals": [
+        {"role": "line", "side": "top", "names": ["1"]},
+        {"role": "load", "side": "bottom", "names": ["2"]}
+      ]
+    },
+    "C": {
+      "desc": "コンデンサ（進相/サージ用, ニチコンBY等）。線間接続（2〜3端子）。",
+      "split_series": false, "poles": 3,
+      "terminals": [
+        {"role": "line", "side": "top", "names_3p": ["U", "V", "W"]}
+      ]
+    },
+    "SPD": {
+      "desc": "避雷器/サージ防護。線と接地間。",
+      "split_series": false, "poles": 3,
+      "terminals": [
+        {"role": "line", "side": "top", "names_3p": ["R", "S", "T"]},
+        {"role": "earth", "side": "bottom", "names": ["E"]}
+      ]
+    }
+  }
+}
