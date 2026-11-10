@@ -3,7 +3,16 @@
 稼働中の EC2（estimate 等が動作中）へ **相乗り** で追加する。別プロセス・別ポート(8100)・別データなので既存アプリに影響しない。
 
 ## 画面フロー
-設計DXFを選択 → ロケーター生成・保存 → 端子番号割付（図面を見て確認・修正） → 保存（サーバ保存＋学習に蓄積） → 端子番号入り図面をPDF印刷。
+設計図（DXF/DWG）を選択 → ロケーター生成・保存 → 端子番号割付（図面を見て確認・修正） → 保存（サーバ保存＋学習に蓄積） → 端子番号入り図面をPDF印刷。
+
+## DWG対応（任意・現場がDWGを扱う場合）
+アップロードで **DWG** を選ぶと、サーバ内で **DWG→DXF 自動変換**（外部送信なし）してから解析する。
+変換器 `dwg2dxf`(LibreDWG) が必要。未導入だとDWGはエラー表示（DXFはそのまま使える）。
+導入（EC2・1回だけ）:
+```bash
+cd {APP_DIR} && bash deploy/install-libredwg.sh && sudo systemctl restart terminal-system
+```
+（パッケージが無い環境ではソースから自動ビルド。導入後 `dwg2dxf --version` で確認。）
 
 ## 構成
 - アプリ: `wireharness/terminal_app.py`（`wireharness.terminal_app:app`）

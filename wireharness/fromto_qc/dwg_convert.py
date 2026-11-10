@@ -35,9 +35,21 @@ class ConverterNotFound(RuntimeError):
     pass
 
 
-def convert(dwg_path, out_dxf=None, overwrite=True):
+def _sanitize_dxf(dxf_path):
+    """変換直後のDXFを ezdxf.recover で読み直して正規化保存する。
+    dwg2dxf はハンドル重複や ENDBLK 欠落等の非致命的な綻びを出すことがあり、
+    そのままだと素の ezdxf.readfile が落ちる図面がある(例: 配置図D001)。recover で
+    吸収して保存し直し、解析側(tracer/stage)が readfile で安全に読めるようにする。
+    読めなければ例外(壊れた変換を握りつぶさない=◎誤答ゼロ)。"""
+    from ezdxf import recover
+    doc, _auditor = recover.readfile(dxf_path)
+    doc.saveas(dxf_path)
+
+
+def convert(dwg_path, out_dxf=None, overwrite=True, sanitize=False):
     """1つの DWG を DXF に変換し、出力パスを返す。
-    out_dxf 省略時は同じ場所に拡張子 .dxf で出力。変換器が無ければ ConverterNotFound。"""
+    out_dxf 省略時は同じ場所に拡張子 .dxf で出力。変換器が無ければ ConverterNotFound。
+    sanitize=True で変換後に ezdxf.recover 正規化(素の readfile で読めるようにする)。"""
     conv = find_converter()
     if not conv:
         raise ConverterNotFound(
@@ -52,10 +64,19 @@ def convert(dwg_path, out_dxf=None, overwrite=True):
     # dwg2dxf はプレビュー節のスキップ等を stderr に出すが、DXF が生成されれば成功とみなす
     if not (os.path.exists(out_dxf) and os.path.getsize(out_dxf) > 0):
         raise RuntimeError(f'DWG変換失敗: {dwg_path}\n{r.stderr[:500]}')
+    if sanitize:
+        try:
+            _sanitize_dxf(out_dxf)
+        except Exception as e:  # noqa: BLE001
+            try:
+                os.remove(out_dxf)
+            except Exception:  # noqa: BLE001
+                pass
+            raise RuntimeError(f'変換DXFが読めません(正規化失敗): {dwg_path}\n{e}')
     return out_dxf
 
 
-def ensure_dxf(path, overwrite=False):
+def ensure_dxf(path, overwrite=False, sanitize=False):
     """DWG なら変換して DXF パスを返す。DXF ならそのまま返す。
     既に横に .dxf があればそれを返す(overwrite=False 時)。変換器が無く DWG の場合は例外。"""
     if path.lower().endswith('.dxf'):
@@ -64,11 +85,11 @@ def ensure_dxf(path, overwrite=False):
         cand = os.path.splitext(path)[0] + '.dxf'
         if os.path.exists(cand) and not overwrite:
             return cand
-        return convert(path, cand, overwrite=overwrite)
+        return convert(path, cand, overwrite=overwrite, sanitize=sanitize)
     return path
 
 
-def convert_dir(directory, overwrite=False):
+def convert_dir(directory, overwrite=False, sanitize=False):
     """ディレクトリ配下(再帰)の全 DWG を横に DXF 変換する。戻り: [(dwg, dxf|None, error)]。"""
     results = []
     for root, _dirs, files in os.walk(directory):
@@ -76,7 +97,7 @@ def convert_dir(directory, overwrite=False):
             if fn.lower().endswith('.dwg'):
                 src = os.path.join(root, fn)
                 try:
-                    results.append((src, ensure_dxf(src, overwrite=overwrite), None))
-                except Exception as e:
+                    results.append((src, ensure_dxf(src, overwrite=overwrite, sanitize=sanitize), None))
+                except Exception as e:  # noqa: BLE001
                     results.append((src, None, str(e)))
     return results
