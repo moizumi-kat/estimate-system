@@ -12,7 +12,8 @@
 ```bash
 cd {APP_DIR} && bash deploy/install-libredwg.sh && sudo systemctl restart terminal-system
 ```
-（パッケージが無い環境ではソースから自動ビルド。導入後 `dwg2dxf --version` で確認。）
+（**同梱の静的バイナリ**をそのまま設置＝ビルド不要・小さいEC2でもOK。
+無い環境のみパッケージ→ソースビルドへフォールバック。導入後 `dwg2dxf --version` で確認。）
 
 ## 構成
 - アプリ: `wireharness/terminal_app.py`（`wireharness.terminal_app:app`）
