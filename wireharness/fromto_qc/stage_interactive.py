@@ -901,12 +901,19 @@ function dispNum(si,j){{const tr=document.querySelector(`section[data-sheet="${{
  let v=tr?tr.querySelector('.tn').value:((DATA[si][j].num)||'');v=(v||'').trim();return (v&&v!=='?')?v:'';}}
 function esc(s){{return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}}
 // シーケンス図に端子番号を青字で描画。選択端子は赤・拡大。丸と番号はクリック可能。
-function drawSheet(si){{const sel=SEL[si];let s='';DATA[si].forEach((t,j)=>{{const on=j===sel;
+function drawSheet(si){{const sel=SEL[si];let s='';
+ // 近接端子(例 避雷器SPD R/S/T)の番号が重ならないよう、同一位置グループ内で縦に段積みする。
+ const grp={{}};
+ DATA[si].forEach((t,j)=>{{const k=Math.round(t.px/8)+'_'+Math.round(t.py/8);(grp[k]=grp[k]||[]).push(j);}});
+ const goff={{}};
+ Object.keys(grp).forEach(k=>{{let idx=0;grp[k].forEach(j=>{{goff[j]=dispNum(si,j)?idx++:0;}});}});
+ DATA[si].forEach((t,j)=>{{const on=j===sel;
  const num=dispNum(si,j);const c=on?'#ff2d00':col(t);
+ const lh=on?22:15;const dy=-5-goff[j]*lh;   // 段積みの縦オフセット(同位置の2個目以降を上へ)
  s+=`<g data-i="${{j}}" style="cursor:pointer;pointer-events:all">`;
  s+=`<circle cx="${{t.px}}" cy="${{t.py}}" r="16" fill="#fff" fill-opacity="0.01"/>`;   // クリック用(不可視)
  s+=`<circle cx="${{t.px}}" cy="${{t.py}}" r="${{on?8:2.6}}" fill="none" stroke="${{c}}" stroke-width="${{on?2.5:1}}"/>`;   // 位置の丸は小さく(番号主役)
- if(num)s+=`<text x="${{t.px+7}}" y="${{t.py-5}}" fill="${{on?'#ff2d00':'#1565c0'}}" font-size="${{on?24:16}}" font-weight="bold" paint-order="stroke" stroke="#fff" stroke-width="${{on?5:3.5}}">${{esc(num)}}</text>`;
+ if(num)s+=`<text x="${{t.px+7}}" y="${{t.py+dy}}" fill="${{on?'#ff2d00':'#1565c0'}}" font-size="${{on?24:16}}" font-weight="bold" paint-order="stroke" stroke="#fff" stroke-width="${{on?5:3.5}}">${{esc(num)}}</text>`;
  s+=`</g>`;}});
  ov(si).innerHTML=s;}}
 // 端子を選択。fromDraw=図の番号クリック→表の行へスクロール、=false(行クリック)→図の番号へスクロール。
