@@ -18,7 +18,9 @@ def test_stage3_fromto_html():
         d = tempfile.mkdtemp()
         out = os.path.join(d, 't.html')
         st = SV.stage3_fromto(['F001.DXF'], [], 'TEST', out)
-        assert st == {'gousen': 2, 'wires': 2, 'ctrl': 1, 'main': 1, 'sheets': 1}, st
+        assert {k: st[k] for k in ('gousen', 'wires', 'ctrl', 'main', 'sheets')} == {
+            'gousen': 2, 'wires': 2, 'ctrl': 1, 'main': 1, 'sheets': 1}, st
+        assert st.get('rows') == rows      # 呼び出し側CSV化のため生の行も返す
         doc = open(out, encoding='utf-8').read()
         assert '101C1' in doc and 'CT101 :K' in doc and 'CT101 :L' in doc
         assert 'ELCB101 :ALa' in doc and '30X1A' in doc

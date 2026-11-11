@@ -71,6 +71,9 @@ def stage3_fromto(seq_paths, skel_paths, seiban, out_html, tmp_dir=None, term_ov
     n_main = sum(1 for g in by_g if kind_of[g] == 'main')
     stats = {'gousen': len(by_g), 'wires': len(rows), 'ctrl': n_ctrl, 'main': n_main,
              'sheets': len(seq_paths)}
+    # 呼び出し側が From-To データをCSV化できるよう、生の行も返す
+    # ([号線,種別,From機,From番,From端,To機,To番,To端]・UIのstats数値には影響しない追加キー)。
+    stats['rows'] = rows
 
     def esc(x):
         return _html.escape(str(x))

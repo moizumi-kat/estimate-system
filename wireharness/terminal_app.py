@@ -51,9 +51,14 @@ WORK = os.environ.get('TERMINAL_WORK', os.path.join(HERE, 'terminal_work'))
 os.makedirs(WORK, exist_ok=True)
 PASSWORD = os.environ.get('TERMINAL_PASSWORD', '')
 USER = os.environ.get('TERMINAL_USER', '')
-# 1人目(太物工程)・3人目(ハーネス工程)の表示。まずは2人目のみリリースするため既定OFF。
-# 環境変数 TERMINAL_STAGE13=1 で有効化(2人目の確認中に追加予定)。
-ENABLE_STAGE13 = os.environ.get('TERMINAL_STAGE13', '') == '1'
+# 3人目(ハーネス工程=From-To)を2人目アプリに組込(既定ON)。TERMINAL_FROMTO=0 で無効化。
+ENABLE_FROMTO = os.environ.get('TERMINAL_FROMTO', '1') != '0'
+# 1人目(太物工程)の表示(既定OFF・別途リリース)。TERMINAL_FUTOMONO=1 で有効化。
+ENABLE_FUTOMONO = os.environ.get('TERMINAL_FUTOMONO', '') == '1'
+# 後方互換: 旧 TERMINAL_STAGE13=1 なら両方ON。
+if os.environ.get('TERMINAL_STAGE13', '') == '1':
+    ENABLE_FROMTO = True
+    ENABLE_FUTOMONO = True
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('TERMINAL_SECRET', secrets.token_hex(16))
@@ -361,7 +366,7 @@ def create():
     except Exception:
         app.logger.exception('assign failed %s', safe)
         meta['assign_error'] = traceback.format_exc()
-    if ENABLE_STAGE13:
+    if ENABLE_FUTOMONO:
         # 1人目 太物工程(太物配線)
         try:
             wire_html = os.path.join(outdir, f'{safe}_太物工程.html')
@@ -370,6 +375,7 @@ def create():
         except Exception:
             app.logger.exception('wire failed %s', safe)
             meta['wire_error'] = traceback.format_exc()
+    if ENABLE_FROMTO:
         # 3人目 ハーネス工程(From-To)。2人目の確定端子(自動)で補正(保存後は手修正値で再生成)。
         try:
             _gen_fromto(safe, seq, skel, _term_override_auto(seq, skel), outdir, meta)
@@ -388,12 +394,24 @@ def _term_override_auto(seq, skel):
 
 
 def _gen_fromto(safe, seq, skel, term_ov, outdir, meta):
-    """From-To UI を生成し meta を更新。term_ov=2人目の確定端子(自動 or 保存値)。"""
+    """From-To UI を生成し meta を更新。term_ov=2人目の確定端子(自動 or 保存値)。
+    併せて From-To(ハーネスデータ)を CSV として即時出力する(保存前でもDL可・ダクト工程の素データ)。"""
     ft_html = os.path.join(outdir, f'{safe}_ハーネス工程.html')
     st = SV.stage3_fromto(seq, skel, safe, ft_html, term_override=term_ov,
                           save_url=f'/p/{safe}/save-fromto')
     meta['ft_html'] = os.path.basename(ft_html)
     meta['gousen'] = st.get('gousen', 0)
+    # 画面の保存と同じ4列(号線,種別,From,To)・cp932で From-To CSV を出力。
+    try:
+        ft_rows = [['号線', '種別', 'From', 'To']]
+        for r in st.get('rows', []):
+            frm = f'{r[2]}{r[3]}' + (f' :{r[4]}' if len(r) > 4 and r[4] else '')
+            to = f'{r[5]}{r[6]}' + (f' :{r[7]}' if len(r) > 7 and r[7] else '')
+            ft_rows.append([r[0], r[1], frm, to])
+        _write_csv(os.path.join(outdir, f'{safe}_ハーネス工程FromTo.csv'), ft_rows)
+        meta['ft_wires'] = len(ft_rows) - 1
+    except Exception:
+        app.logger.exception('fromto csv failed %s', safe)
     return st
 
 
@@ -639,25 +657,34 @@ def project(seiban):
              f'<div class=muted style="margin-top:6px">押すと割付を実行し、割付表と端子番号入り図面を表示します。'
              f'確認後 ④の「保存」で割付表と割付図面を保存します。</div></div>')
 
-    # 1人目/3人目(確認期間は既定OFF)
+    # 1人目(太物工程・既定OFF) / 3人目(ハーネス工程=From-To・既定ON)
     stage13 = ''
-    if ENABLE_STAGE13:
+    if ENABLE_FUTOMONO:
         wire_btn = (f'<a class="btn o" href="/p/{safe}/wire">太物配線を開く ▶</a> '
                     f'<a class="btn g" href="/p/{safe}/wire.pdf" target=_blank>太物図面(PDF)</a>'
                     if meta.get('wire_html') else '<span class=err>太物UIの生成に失敗しました。</span>')
         wire_out = (f' <a class="btn g" href="/p/{safe}/file/{safe}_太物工程ハーネス.csv">太物ハーネス(CSV)</a>'
                     if meta.get('wire_saved') else '')
-        ft_hint = '' if saved else '<div class=muted>※ 先に2人目を保存すると、確定端子がFrom-Toに反映されます。</div>'
+        stage13 += (
+            f'<div class=card><h2>1人目：太物工程（太物配線 ≥8sq）</h2>{wire_btn}{wire_out}'
+            f'<div class=muted style="margin-top:6px">配線を確認・修正し「保存」。</div></div>')
+    if ENABLE_FROMTO:
+        ft_hint = ('' if saved else
+                   '<div class=muted>※ 先に③を保存すると、確定端子がFrom-Toに反映されます'
+                   '（未保存時は自動の仮番号で生成）。</div>')
+        ft_state = ('<span class=ok>保存済み ✓</span>' if meta.get('ft_saved')
+                    else (f'<span class=muted>自動生成済み（{meta.get("ft_wires","?")}本）・未保存</span>'
+                          if meta.get('ft_html') else ''))
         ft_btn = (f'<a class="btn o" href="/p/{safe}/fromto">From-Toを開く ▶</a> '
                   f'<a class="btn g" href="/p/{safe}/fromto.pdf" target=_blank>From-To図面(PDF)</a>'
                   if meta.get('ft_html') else '<span class=err>From-To UIの生成に失敗しました。</span>')
         ft_out = (f' <a class="btn g" href="/p/{safe}/file/{safe}_ハーネス工程FromTo.csv">From-To(CSV)</a>'
-                  if meta.get('ft_saved') else '')
-        stage13 = (
-            f'<div class=card><h2>1人目：太物工程（太物配線 ≥8sq）</h2>{wire_btn}{wire_out}'
-            f'<div class=muted style="margin-top:6px">配線を確認・修正し「保存」。</div></div>'
-            f'<div class=card><h2>3人目：ハーネス工程（From-To ≤5.5sq）</h2>{ft_hint}{ft_btn}{ft_out}'
-            f'<div class=muted style="margin-top:6px">From-Toを確認・修正し「保存」。2人目の確定端子を反映します。</div></div>')
+                  if meta.get('ft_html') else '')
+        stage13 += (
+            f'<div class=card><h2>④ ハーネス工程（From-To ≤5.5sq）</h2>{ft_hint}{ft_btn}{ft_out}'
+            f'<div style="margin:6px 0">{ft_state}</div>'
+            f'<div class=muted style="margin-top:6px">From-To（ハーネスデータ）を確認・修正し「保存」。'
+            f'③の確定端子を反映します。配線ルート確定後、ダクト作図(DCT)に進みます。</div></div>')
 
     # 生成ファイルは「保存先を選んで端末(PC/スマホ)へ保存」する共通関数。
     # PCは showSaveFilePicker(名前を付けて保存)、iPhone等は通常DL(共有シート「ファイルに保存」)。
@@ -819,7 +846,7 @@ def save(seiban):
                  'checked': checked, 'diffs': summary.get('差異(修正)', 0),
                  'total': (len(final) - 1) if final else meta.get('total', 0)})
     # 3人目(From-To)を、保存された2人目の確定端子から再生成(工場の流れ: 2人目→3人目)。
-    if ENABLE_STAGE13:
+    if ENABLE_FROMTO:
         try:
             indir = os.path.join(d, 'in')
             outdir = os.path.join(d, 'out')
