@@ -194,32 +194,9 @@ def _list_projects():
     return rows
 
 
-# ---------- 1. ホーム ----------
-@app.route('/')
-def index():
-    rows = _list_projects()
-    if rows:
-        trs = ''.join(
-            f'<tr><td><b>{_esc(m.get("seiban"))}</b></td>'
-            f'<td class=muted>{_esc(m.get("updated",""))[:16].replace("T"," ")}</td>'
-            f'<td>{"保存済" if m.get("saved") else ("割付中" if m.get("assigned") else "生成のみ")}'
-            f'（確認 {m.get("checked",0)}/{m.get("total",0)}）</td>'
-            f'<td><a class="btn" href="/p/{_safe(m.get("seiban"))}">開く ▶</a></td></tr>'
-            for m in rows)
-        table = f'<table><tr><th>製番</th><th>更新</th><th>状態</th><th></th></tr>{trs}</table>'
-    else:
-        table = '<p class=muted>まだ製番がありません。「新しい製番」から設計DXFを登録してください。</p>'
-    body = (f'<div class=card><h2>製番一覧</h2>{table}'
-            f'<div style="margin-top:14px"><a class="btn o" href="/new">＋ 新しい製番（設計DXFを登録）</a></div></div>'
-            f'<div class=card muted>流れ: ①設計DXFを選択 → ②ロケーター生成・保存 → ③端子番号割付 → ④保存 → ⑤PDF印刷。'
-            f'　保存結果と修正差分はサーバに蓄積され、学習に使えます。</div>')
-    return _page(body)
-
-
-# ---------- 2. 新規（アップロード） ----------
-@app.route('/new')
-def new():
-    body = ('<div class=card><h2>① 新しい製番：図面をアップロード</h2>'
+# ---------- 1. ホーム＝1製番のアップロード（一覧は持たない：一回に1製番を扱う） ----------
+def _upload_body():
+    return ('<div class=card><h2>① 図面をアップロード（1製番）</h2>'
             '<form method=post action="/create" enctype="multipart/form-data">'
             '<p>製番（整番） <input type=text name=seiban placeholder="例 1-12188-132" required '
             'style="padding:8px;border:1px solid #ccd;border-radius:6px"></p>'
@@ -230,8 +207,20 @@ def new():
             '<input type=file name=files multiple accept=".dxf,.DXF,.dwg,.DWG" style="margin-top:10px"></div>'
             '<p style="margin-top:12px"><button class="btn o" type=submit>アップロード ▶</button> '
             '<span class=muted>この後：②ロケーター生成→③端子番号割付→④保存</span></p>'
-            '</form></div><div class=card><a class="btn g" href="/">← ホーム</a></div>')
-    return _page(body, '新しい製番')
+            '</form></div>'
+            '<div class=card muted>一回に1製番を扱います。アップロード→②→③→④と進み、'
+            '保存すると結果と修正差分がサーバに蓄積され学習に使われます。</div>')
+
+
+@app.route('/')
+def index():
+    return _page(_upload_body(), '端子番号割付')
+
+
+# /new は従来のリンク互換のためホームへ
+@app.route('/new')
+def new():
+    return redirect('/')
 
 
 @app.route('/create', methods=['POST'])
