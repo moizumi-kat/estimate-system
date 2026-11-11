@@ -539,9 +539,10 @@ def project(seiban):
     loc_saved = meta.get('locator_saved')
     if loc.get('generated') and loc.get('dxf'):
         dxf_label = 'ロケーター図面＝機器相番号(DXF)' if loc.get('source') == 'dct' else 'ロケーター付図面(DXF)'
-        loc_links = (f'<a class="btn g" href="/p/{safe}/file/{_esc(loc["dxf"])}">{dxf_label}</a> '
-                     f'<a class="btn g" href="/p/{safe}/locator.pdf" target=_blank>ロケーター図(PDF)</a> '
-                     + (f'<a class="btn g" href="/p/{safe}/file/{_esc(loc.get("csv",""))}">対応表(CSV)</a>'
+        loc_links = (f'<a class="btn g" href="/p/{safe}/locator.pdf" target=_blank>ロケーター図(PDF)を表示</a> '
+                     f'<button class="btn o" onclick="saveAs(\'/p/{safe}/locator.pdf\',\'{safe}_ロケーター図.pdf\')">ロケーター図(PDF)を保存</button> '
+                     f'<button class="btn g" onclick="saveAs(\'/p/{safe}/file/{_esc(loc["dxf"])}\',\'{_esc(loc["dxf"])}\')">{dxf_label}を保存</button> '
+                     + (f'<button class="btn g" onclick="saveAs(\'/p/{safe}/file/{_esc(loc.get("csv",""))}\',\'{_esc(loc.get("csv",""))}\')">対応表(CSV)を保存</button>'
                         if loc.get('csv') else ''))
         regen = (f'<form method=post action="/p/{safe}/locator/generate" style="display:inline">'
                  f'<button class="btn g" type=submit>再生成</button></form>')
@@ -571,24 +572,15 @@ def project(seiban):
     saved = meta.get('saved')
     two_out = ''
     if saved:
-        _savejs = ('<script>async function saveAs(u,f){try{const r=await fetch(u);'
-                   'if(!r.ok){alert("取得に失敗: "+r.status);return;}const b=await r.blob();'
-                   'if(window.showSaveFilePicker){try{const h=await showSaveFilePicker({suggestedName:f});'
-                   'const w=await h.createWritable();await w.write(b);await w.close();return;}'
-                   'catch(e){if(e&&e.name==="AbortError")return;}}'
-                   'const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=f;'
-                   'document.body.appendChild(a);a.click();a.remove();'
-                   'setTimeout(()=>URL.revokeObjectURL(a.href),1500);}catch(e){alert("保存に失敗: "+e);}}</script>')
         two_out = (
             f'<div class=ok style="margin:8px 0">確認 {meta.get("checked",0)}/{meta.get("total",0)}・'
-            f'修正 {meta.get("diffs",0)} 件・保存 {_esc(meta.get("saved",""))[:16].replace("T"," ")}</div>'
-            '<div class=muted style="margin-bottom:6px">④ 保存先を選んで手元に保存'
-            '（PCは「名前を付けて保存」、iPhoneは共有シート「ファイルに保存」で保存先を選べます）</div>'
+            f'修正 {meta.get("diffs",0)} 件・保存 {_esc(meta.get("saved",""))[:16].replace("T"," ")}'
+            '（学習用の差分はサーバに蓄積済み）</div>'
+            '<div class=muted style="margin-bottom:6px">④ 成果物を保存先を選んで端末(PC/スマホ)へ保存'
+            '（PCは「名前を付けて保存」、iPhoneは共有シート「ファイルに保存」）</div>'
             f'<button class="btn o" onclick="saveAs(\'/p/{safe}/print\',\'{safe}_端子番号記入図.pdf\')">端子番号入り図面(PDF)を保存</button> '
             f'<button class="btn g" onclick="saveAs(\'/p/{safe}/file/{safe}_端子番号リスト.csv\',\'{safe}_端子番号リスト.csv\')">最終リスト(CSV)を保存</button> '
-            f'<button class="btn g" onclick="saveAs(\'/p/{safe}/numbered.dxf\',\'{safe}_端子番号入りCAD.dxf\')">端子番号入りCAD(DXF)を保存</button> '
-            f'<button class="btn g" onclick="saveAs(\'/p/{safe}/file/{safe}_端子番号_学習用.csv\',\'{safe}_端子番号_学習用.csv\')">学習用(CSV)を保存</button>'
-            + _savejs)
+            f'<button class="btn g" onclick="saveAs(\'/p/{safe}/numbered.dxf\',\'{safe}_端子番号入りCAD.dxf\')">端子番号入りCAD(DXF)を保存</button>')
     if not meta.get('assign_html'):
         assign_area = '<span class=err>割付UIの生成に失敗しました。</span>'
     elif ready:
@@ -622,11 +614,22 @@ def project(seiban):
             f'<div class=card><h2>3人目：ハーネス工程（From-To ≤5.5sq）</h2>{ft_hint}{ft_btn}{ft_out}'
             f'<div class=muted style="margin-top:6px">From-Toを確認・修正し「保存」。2人目の確定端子を反映します。</div></div>')
 
+    # 生成ファイルは「保存先を選んで端末(PC/スマホ)へ保存」する共通関数。
+    # PCは showSaveFilePicker(名前を付けて保存)、iPhone等は通常DL(共有シート「ファイルに保存」)。
+    savejs = ('<script>async function saveAs(u,f){try{const r=await fetch(u);'
+              'if(!r.ok){alert("取得に失敗: "+r.status);return;}const b=await r.blob();'
+              'if(window.showSaveFilePicker){try{const h=await showSaveFilePicker({suggestedName:f});'
+              'const w=await h.createWritable();await w.write(b);await w.close();return;}'
+              'catch(e){if(e&&e.name==="AbortError")return;}}'
+              'const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=f;'
+              'document.body.appendChild(a);a.click();a.remove();'
+              'setTimeout(()=>URL.revokeObjectURL(a.href),1500);}catch(e){alert("保存に失敗: "+e);}}</script>')
     body = (
         f'<div class=card><h2>製番 {_esc(safe)}</h2>'
-        f'<p class=muted>流れ：①アップロード → ②ロケーター生成・保存 → ③端子番号割付 → ④保存</p></div>'
+        f'<p class=muted>流れ：①アップロード → ②ロケーター生成・保存 → ③端子番号割付 → ④保存'
+        f'<br>生成ファイルは端末(PC/スマホ)へ保存、学習用の差分はサーバに蓄積します。</p></div>'
         f'{step1}{step2}{step3}{stage13}'
-        f'<div class=card><a class="btn g" href="/">← ホーム</a></div>')
+        f'<div class=card><a class="btn g" href="/">← ホーム</a></div>{savejs}')
     return _page(body, f'製番 {safe}')
 
 
