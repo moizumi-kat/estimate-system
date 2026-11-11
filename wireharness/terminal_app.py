@@ -442,7 +442,8 @@ def _generate_locator(safe, meta):
                            'csv': os.path.basename(loc_csv) if layout else '',
                            'count': n_loc, 'generated': True}
     elif layout:
-        loc_dxf = os.path.join(outdir, f'{safe}_ロケーター付図面.dxf')
+        # ファイル名末尾を DCT.dxf に(手本と同じ=次工程がロケーターとして扱えるように)。
+        loc_dxf = os.path.join(outdir, f'{safe}_ロケーター_DCT.dxf')
         LAP.write_dxf(layout, loc_dxf, basis_of=basis, dct_paths=dct)
         meta['locator'] = {'dxf': os.path.basename(loc_dxf), 'source': 'gen',
                            'csv': os.path.basename(loc_csv), 'count': n_loc, 'generated': True}
@@ -570,11 +571,24 @@ def project(seiban):
     saved = meta.get('saved')
     two_out = ''
     if saved:
-        two_out = (f'<div class=ok style="margin:8px 0">確認 {meta.get("checked",0)}/{meta.get("total",0)}・'
-                   f'修正 {meta.get("diffs",0)} 件・保存 {_esc(meta.get("saved",""))[:16].replace("T"," ")}</div>'
-                   f'<a class="btn g" href="/p/{safe}/file/{safe}_端子番号リスト.csv">最終リスト(CSV)</a> '
-                   f'<a class="btn g" href="/p/{safe}/file/{safe}_端子番号_学習用.csv">学習用(CSV)</a> '
-                   f'<a class="btn o" href="/p/{safe}/print" target=_blank>端子番号入り図面(PDF) ▶</a>')
+        _savejs = ('<script>async function saveAs(u,f){try{const r=await fetch(u);'
+                   'if(!r.ok){alert("取得に失敗: "+r.status);return;}const b=await r.blob();'
+                   'if(window.showSaveFilePicker){try{const h=await showSaveFilePicker({suggestedName:f});'
+                   'const w=await h.createWritable();await w.write(b);await w.close();return;}'
+                   'catch(e){if(e&&e.name==="AbortError")return;}}'
+                   'const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=f;'
+                   'document.body.appendChild(a);a.click();a.remove();'
+                   'setTimeout(()=>URL.revokeObjectURL(a.href),1500);}catch(e){alert("保存に失敗: "+e);}}</script>')
+        two_out = (
+            f'<div class=ok style="margin:8px 0">確認 {meta.get("checked",0)}/{meta.get("total",0)}・'
+            f'修正 {meta.get("diffs",0)} 件・保存 {_esc(meta.get("saved",""))[:16].replace("T"," ")}</div>'
+            '<div class=muted style="margin-bottom:6px">④ 保存先を選んで手元に保存'
+            '（PCは「名前を付けて保存」、iPhoneは共有シート「ファイルに保存」で保存先を選べます）</div>'
+            f'<button class="btn o" onclick="saveAs(\'/p/{safe}/print\',\'{safe}_端子番号記入図.pdf\')">端子番号入り図面(PDF)を保存</button> '
+            f'<button class="btn g" onclick="saveAs(\'/p/{safe}/file/{safe}_端子番号リスト.csv\',\'{safe}_端子番号リスト.csv\')">最終リスト(CSV)を保存</button> '
+            f'<button class="btn g" onclick="saveAs(\'/p/{safe}/numbered.dxf\',\'{safe}_端子番号入りCAD.dxf\')">端子番号入りCAD(DXF)を保存</button> '
+            f'<button class="btn g" onclick="saveAs(\'/p/{safe}/file/{safe}_端子番号_学習用.csv\',\'{safe}_端子番号_学習用.csv\')">学習用(CSV)を保存</button>'
+            + _savejs)
     if not meta.get('assign_html'):
         assign_area = '<span class=err>割付UIの生成に失敗しました。</span>'
     elif ready:
@@ -796,6 +810,40 @@ def print_pdf(seiban):
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
     return send_file(pdf, mimetype='application/pdf',
                      as_attachment=False, download_name=f'{safe}_端子番号記入図.pdf')
+
+
+@app.route('/p/<seiban>/numbered.dxf')
+def numbered_dxf(seiban):
+    """端子番号入りCAD(DXF)を生成して返す。保存済みの最終端子番号を反映。
+    制御シートが複数ある場合はまとめてZIPで返す。"""
+    safe = _safe(seiban)
+    d, _ = _dir(safe)
+    indir = os.path.join(d, 'in')
+    outdir = os.path.join(d, 'out')
+    seq, skel, _layout, _dct = _classify_inputs(indir)
+    if not seq:
+        return _page('<div class=card err>制御シート(F＊)が無いためCAD(DXF)を出力できません。</div>'
+                     f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
+    numbers = _saved_numbers(safe)
+    try:
+        files, _counts = SI.write_all_terminals_dxf(seq, skel, safe, outdir, numbers=numbers)
+    except Exception:
+        app.logger.exception('numbered dxf failed %s', safe)
+        return _page(f'<div class=card err>DXF生成でエラー:\n{_esc(traceback.format_exc())}</div>'
+                     f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
+    if not files:
+        return _page('<div class=card err>出力する図面がありません。</div>'
+                     f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
+    if len(files) == 1:
+        return send_file(files[0], mimetype='image/vnd.dxf', as_attachment=True,
+                         download_name=f'{safe}_端子番号入りCAD.dxf')
+    import zipfile
+    zpath = os.path.join(outdir, f'{safe}_端子番号入りCAD.zip')
+    with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as z:
+        for f in files:
+            z.write(f, arcname=os.path.basename(f))
+    return send_file(zpath, mimetype='application/zip', as_attachment=True,
+                     download_name=f'{safe}_端子番号入りCAD.zip')
 
 
 @app.route('/p/<seiban>/locator.pdf')

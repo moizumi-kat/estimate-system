@@ -541,16 +541,23 @@ def _blacken(doc):
 
 
 def write_all_terminals_dxf(seq_paths, skel_paths, seiban, out_dir,
-                            height=20.0, dx=12.0, dy=10.0, black_base=True):
+                            height=20.0, dx=12.0, dy=10.0, black_base=True, numbers=None):
     """シーケンス図へ全端子の端子番号を色分けで記入したDXFを出力する。
       青(ACI5) = 確定(図面記載 drawn)
       赤(ACI1) = 要確認(記号推論 inferred / 制御端子の割付)
     元図の線・文字は黒(確認用,black_base)。端子位置の少し右上に記入。
     戻り: (出力パス一覧, {シート名: 件数})。"""
     import os
+    numbers = numbers or {}
     out_files, counts = [], {}
     os.makedirs(out_dir, exist_ok=True)
     for p, items in _all_terminals_by_sheet(seq_paths, skel_paths):
+        name = os.path.basename(p)
+        if numbers:                            # 保存済みの最終端子番号があれば位置キーで差し替え
+            for it in items:
+                ov = numbers.get((name, round(it['x']), round(it['y'])))
+                if ov is not None:
+                    it['num'] = ov
         doc = ezdxf.readfile(p)
         msp = doc.modelspace()
         if black_base:
