@@ -975,7 +975,7 @@ function save(){{
     body:JSON.stringify({{seiban:SEIBAN,final:fin,diff:dif}})}})
    .then(r=>r.json()).then(j=>{{if(btn){{btn.disabled=false;btn.textContent='保存';}}
     if(j.ok)clearDraft();
-    alert(j.ok?('サーバに保存しました。'+(j.message||'')):'保存に失敗: '+(j.error||''));}})
+    alert(j.ok?('学習用の差分をサーバに保存しました。'+(j.message||'')+'\\n成果物(図面・リスト・CAD)は製番ページの「保存」ボタンから端末(PC/スマホ)へ保存してください。'):'保存に失敗: '+(j.error||''));}})
    .catch(e=>{{if(btn){{btn.disabled=false;btn.textContent='保存';}}alert('保存に失敗: '+e);}});
  }}else{{
   csvdl(SEIBAN+'_端子番号リスト.csv',fin);
