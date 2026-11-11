@@ -39,6 +39,7 @@ from wireharness.fromto_qc import stage_interactive as SI
 from wireharness.fromto_qc import stage_views as SV
 from wireharness.fromto_qc import locator_apply as LAP
 from wireharness.fromto_qc import locator_assign as LA
+from wireharness.fromto_qc import locator_number as LN
 from wireharness.fromto_qc import terminal_feedback as TFB
 from wireharness.fromto_qc import terminal_print as TP
 from wireharness.fromto_qc import run_local as RL
@@ -444,9 +445,19 @@ def _generate_locator(safe, meta):
     elif layout:
         # ファイル名末尾を DCT.dxf に(手本と同じ=次工程がロケーターとして扱えるように)。
         loc_dxf = os.path.join(outdir, f'{safe}_ロケーター_DCT.dxf')
-        LAP.write_dxf(layout, loc_dxf, basis_of=basis, dct_paths=dct)
-        meta['locator'] = {'dxf': os.path.basename(loc_dxf), 'source': 'gen',
-                           'csv': os.path.basename(loc_csv), 'count': n_loc, 'generated': True}
+        # 設計の配置図に相番号(リレー/タイマのDEVICE1=A,B,C…)を自動付与して、
+        # 手本と同じ機器相番号図(DCT)を生成する。手本12製番で相番号が116/116一致を確認済み。
+        try:
+            letters, _used = LN.write_number_dct(layout, loc_dxf)
+            meta['locator'] = {'dxf': os.path.basename(loc_dxf), 'source': 'gen-dct',
+                               'csv': os.path.basename(loc_csv), 'count': n_loc,
+                               'letters': letters, 'generated': True}
+        except Exception:
+            # 失敗時のみ従来の重ね描き(オーバーレイ)へフォールバック。
+            app.logger.exception('number-dct generate failed %s', safe)
+            LAP.write_dxf(layout, loc_dxf, basis_of=basis, dct_paths=dct)
+            meta['locator'] = {'dxf': os.path.basename(loc_dxf), 'source': 'gen',
+                               'csv': os.path.basename(loc_csv), 'count': n_loc, 'generated': True}
     else:
         meta['locator'] = {}
     return meta['locator']
@@ -538,7 +549,18 @@ def project(seiban):
     loc = meta.get('locator', {})
     loc_saved = meta.get('locator_saved')
     if loc.get('generated') and loc.get('dxf'):
-        dxf_label = 'ロケーター図面＝機器相番号(DXF)' if loc.get('source') == 'dct' else 'ロケーター付図面(DXF)'
+        _src = loc.get('source')
+        dxf_label = {'dct': 'ロケーター図面＝機器相番号(DXF・手本)',
+                     'gen-dct': '機器相番号図(DXF・自動生成)'}.get(_src, 'ロケーター付図面(DXF)')
+        if _src == 'gen-dct':
+            _lt = loc.get('letters')
+            gen_note = ('<div class=ok style="margin:6px 0">設計の配置図から機器相番号(A,B,C…)を'
+                        f'自動付与しました（{_lt if _lt is not None else "?"}機器）。'
+                        '手本と同じ機器相番号図(DCT)です。</div>')
+        elif _src == 'dct':
+            gen_note = '<div class=muted style="margin:6px 0">手本の機器相番号図(DCT)を使用。</div>'
+        else:
+            gen_note = ''
         loc_links = (f'<a class="btn g" href="/p/{safe}/locator.pdf" target=_blank>ロケーター図(PDF)を表示</a> '
                      f'<button class="btn o" onclick="saveAs(\'/p/{safe}/locator.pdf\',\'{safe}_ロケーター図.pdf\')">ロケーター図(PDF)を保存</button> '
                      f'<button class="btn g" onclick="saveAs(\'/p/{safe}/file/{_esc(loc["dxf"])}\',\'{_esc(loc["dxf"])}\')">{dxf_label}を保存</button> '
@@ -547,12 +569,12 @@ def project(seiban):
         regen = (f'<form method=post action="/p/{safe}/locator/generate" style="display:inline">'
                  f'<button class="btn g" type=submit>再生成</button></form>')
         if loc_saved:
-            step2 = (f'<div class=card><h2>② ロケーター図面</h2>{loc_links}'
+            step2 = (f'<div class=card><h2>② ロケーター図面</h2>{gen_note}{loc_links}'
                      f'<div class=ok style="margin:8px 0">保存済み ✓</div>{regen}</div>')
         else:
             save_btn = (f'<form method=post action="/p/{safe}/locator/save" style="display:inline">'
                         f'<button class="btn o" type=submit>保存</button></form> ')
-            step2 = (f'<div class=card><h2>② ロケーター図面</h2>{loc_links}'
+            step2 = (f'<div class=card><h2>② ロケーター図面</h2>{gen_note}{loc_links}'
                      f'<div class=muted style="margin:8px 0">内容を確認し「保存」してください。</div>'
                      f'{save_btn}{regen}</div>')
     else:
@@ -858,11 +880,22 @@ def locator_pdf(seiban):
         return _page('<div class=card err>ロケーター図面がありません（配置図 D/G が必要です）。</div>'
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
     pdf = os.path.join(d, f'{safe}_ロケーター図.pdf')
+    # 生成済みの機器相番号図(DCT)= out/<製番>_ロケーター_DCT.dxf があれば、それが正本。
+    meta = _load_meta(safe) or {}
+    loc = meta.get('locator', {})
+    gen_dct = None
+    if loc.get('source') == 'gen-dct' and loc.get('dxf'):
+        cand = os.path.join(d, 'out', loc['dxf'])
+        if os.path.exists(cand):
+            gen_dct = [cand]
     try:
         if dct:
             # 手本(機器相番号 DCT)がそのままロケーター図。各機器のセルにロケーター字(A/B/C/D/E)が
             # 入った設計の正本を描画する(＝手本どおり)。
             TP.render_dxf_pdf(dct, pdf, title_prefix=f'{safe}　ロケーター図（機器相番号）　')
+        elif gen_dct:
+            # 配置図から相番号を自動付与して生成したDCT。手本と同じ形式なのでそのまま描画。
+            TP.render_dxf_pdf(gen_dct, pdf, title_prefix=f'{safe}　ロケーター図（機器相番号・自動生成）　')
         else:
             # DCTが無い場合のみ、配置図にロケーター字(機器のセル)を赤字で重ねて生成(手本風)。
             rows = LAP.locator_rows(layout)

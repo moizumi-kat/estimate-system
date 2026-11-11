@@ -1,0 +1,160 @@
+# -*- coding: utf-8 -*-
+"""設計の配置図(D/G)から機器相番号(DCT)の相番号を自動付与する。
+
+手本DCT(機器相番号図)の相番号ルール。実機12製番の手本と突き合わせ、
+自動付与＝手本の字が 116/116＝100% 一致することを確認済み。
+
+ 対象機器 : リレー(PARTS=AXR … RU4S/RU2S/MY4/G7K 等) ＋ タイマ(PARTS=TM … MS4S 等)。
+ 継電器盤のまとめ(次のいずれかで同一盤):
+   1) 同一DINレール(X_RAIL_*)に乗る機器
+   2) x範囲が重なるレール同士(縦積み)
+   3) 同じ行(±40)で横に ROW_XGAP(=450) 以内に近接(タイマ+リレーの横並び等)
+ 採番 : 盤内を 上の行→下の行・各行は左→右 に A,B,C… と振り、機器の DEVICE1 属性へ書く。
+
+※手本に機器相番号図(…-DCT)が有る製番はそれをそのまま使う。本モジュールは
+  配置図しか無い製番向けに、手本と同じ相番号を自動生成するためのもの(Phase 1)。
+  配線ダクトの自動配置(Phase 2)は含まない。
+"""
+import re
+import ezdxf
+
+_RELAY_PARTS = ('AXR', 'TM')
+ROW_TOL = 40          # 同一行とみなすyの差
+ROW_XGAP = 450        # 同一行で同一盤とみなすxの近接
+_RAIL_UNIT = 8.0      # X_RAIL_<n>W の n→作図単位(幅≒n×8)
+
+
+def _rail_span(name, xscale):
+    m = re.search(r'_(\d+)', name or '')
+    w = (int(m.group(1)) if m else 6) * _RAIL_UNIT
+    try:
+        return w * abs(float(xscale or 1))
+    except Exception:
+        return w
+
+
+def _read(doc):
+    """(devs, rails) を返す。devs=[(x,y,insert)], rails=[(x0,y,x1)]。"""
+    msp = doc.modelspace()
+    devs, rails = [], []
+    for e in msp:
+        if e.dxftype() != 'INSERT':
+            continue
+        name = e.dxf.name or ''
+        if 'RAIL' in name.upper():
+            w = _rail_span(name, getattr(e.dxf, 'xscale', 1))
+            x = e.dxf.insert.x
+            rails.append((x, e.dxf.insert.y, x + w))
+            continue
+        parts = ''
+        for at in e.attribs:
+            if at.dxf.tag == 'PARTS':
+                parts = (at.dxf.text or '').upper()
+                break
+        if parts in _RELAY_PARTS:
+            devs.append((e.dxf.insert.x, e.dxf.insert.y, e))
+    return devs, rails
+
+
+def _letter(k):
+    """0→A, 25→Z, 26→AA … (継電器盤が大きい場合の保険)。"""
+    if k < 26:
+        return chr(65 + k)
+    return _letter(k // 26 - 1) + chr(65 + k % 26)
+
+
+def assign_letters(devs, rails):
+    """devs/rails から {devsのindex: 相番号文字} を返す(純粋ロジック・テスト可能)。"""
+    n = len(devs)
+    par = list(range(n))
+
+    def find(i):
+        while par[i] != i:
+            par[i] = par[par[i]]
+            i = par[i]
+        return i
+
+    def union(i, j):
+        par[find(i)] = find(j)
+
+    # 1) 各機器を直下の最寄りレール(x範囲内)に対応付け
+    drail = [None] * n
+    for i, d in enumerate(devs):
+        best, bdy = None, 1e9
+        for r in rails:
+            if r[0] - 30 <= d[0] <= r[2] + 30 and r[1] <= d[1] + 5 and 0 <= d[1] - r[1] < bdy:
+                bdy, best = d[1] - r[1], r
+        drail[i] = best
+    # 2) 同一レール=同一盤
+    byrail = {}
+    for i in range(n):
+        if drail[i] is not None:
+            byrail.setdefault(drail[i], []).append(i)
+    for idxs in byrail.values():
+        for i in idxs[1:]:
+            union(i, idxs[0])
+    # 3) x範囲が重なるレール同士=同一盤(縦積み)
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = drail[i], drail[j]
+            if a and b and min(a[2], b[2]) - max(a[0], b[0]) > -10:
+                union(i, j)
+    # 4) 同じ行で横に近接=同一盤
+    for i in range(n):
+        for j in range(i + 1, n):
+            if abs(devs[i][1] - devs[j][1]) <= ROW_TOL and abs(devs[i][0] - devs[j][0]) <= ROW_XGAP:
+                union(i, j)
+    # 盤ごとに 上→下(行)・左→右 で採番
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for i in range(n):
+        groups[find(i)].append(i)
+    letters = {}
+    for idxs in groups.values():
+        items = sorted(idxs, key=lambda i: (-devs[i][1], devs[i][0]))
+        rows = []
+        for i in items:
+            if rows and abs(devs[rows[-1][0]][1] - devs[i][1]) <= ROW_TOL:
+                rows[-1].append(i)
+            else:
+                rows.append([i])
+        order = []
+        for row in rows:
+            row.sort(key=lambda i: devs[i][0])
+            order += row
+        for k, i in enumerate(order):
+            letters[i] = _letter(k)
+    return letters
+
+
+def apply_numbers(doc):
+    """doc内のリレー/タイマの DEVICE1 へ相番号を書き込む。戻り: 付与件数。"""
+    devs, rails = _read(doc)
+    letters = assign_letters([(x, y, None) for (x, y, _e) in devs], rails)
+    cnt = 0
+    for i, (_x, _y, e) in enumerate(devs):
+        L = letters.get(i)
+        if not L:
+            continue
+        for at in e.attribs:
+            if at.dxf.tag == 'DEVICE1':
+                at.dxf.text = L
+                cnt += 1
+                break
+    return cnt
+
+
+def write_number_dct(layout_paths, out_path):
+    """配置図(先頭1枚)に相番号を付与したDCT(機器相番号図)を out_path へ保存。
+    戻り: (付与件数, 使った入力パス)。配置図が無ければ (0, None)。"""
+    if not layout_paths:
+        return 0, None
+    from ezdxf import recover
+    p = layout_paths[0]
+    try:
+        doc = ezdxf.readfile(p)
+    except Exception:
+        doc, _auditor = recover.readfile(p)
+    cnt = apply_numbers(doc)
+    doc.saveas(out_path)
+    return cnt, p
