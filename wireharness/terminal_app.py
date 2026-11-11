@@ -219,15 +219,17 @@ def index():
 # ---------- 2. 新規（アップロード） ----------
 @app.route('/new')
 def new():
-    body = ('<div class=card><h2>新しい製番：設計DXFを登録</h2>'
+    body = ('<div class=card><h2>① 新しい製番：図面をアップロード</h2>'
             '<form method=post action="/create" enctype="multipart/form-data">'
-            '<p>製番 <input type=text name=seiban placeholder="例 1-12188-132" required '
+            '<p>製番（整番） <input type=text name=seiban placeholder="例 1-12188-132" required '
             'style="padding:8px;border:1px solid #ccd;border-radius:6px"></p>'
-            '<div class=drop>設計図一式を選択（制御シートF＊・スケルトンE＊・配置図D/G＊・機器相番号＊-DCT）<br>'
-            '<span class=muted>DXF・DWG どちらでも可（DWGはサーバ内でDXFへ自動変換）</span><br>'
+            '<div class=drop>設計図一式を選択してください<br>'
+            '<b>必要な図面</b>：シーケンス（F＊）・スケルトン（E＊）・内部配置図（D＊）<br>'
+            '<span class=muted>＋機器相番号（＊-DCT）が有ればロケーターの手本に使用。'
+            'DXF・DWG どちらでも可（DWGはサーバ内でDXFへ自動変換）</span><br>'
             '<input type=file name=files multiple accept=".dxf,.DXF,.dwg,.DWG" style="margin-top:10px"></div>'
-            '<p style="margin-top:12px"><button class="btn o" type=submit>登録してロケーター生成 ▶</button> '
-            '<span class=muted>アップロード→ロケーター生成→端子番号割付へ</span></p>'
+            '<p style="margin-top:12px"><button class="btn o" type=submit>アップロード ▶</button> '
+            '<span class=muted>この後：②ロケーター生成→③端子番号割付→④保存</span></p>'
             '</form></div><div class=card><a class="btn g" href="/">← ホーム</a></div>')
     return _page(body, '新しい製番')
 
@@ -272,29 +274,12 @@ def create():
                     safe, len(saved), len(seq), len(skel), len(layout), len(dct))
     meta = {'seiban': safe, 'updated': _now(), 'counts': {
         'seq': len(seq), 'skel': len(skel), 'layout': len(layout), 'dct': len(dct)}}
-    # 2. ロケーター生成・保存。手本(機器相番号 DCT)が有ればそれが正本＝そのまま使う。
-    try:
-        basis = LA.basis_from_dct(dct) if dct else None
-        loc_csv = os.path.join(outdir, f'{safe}_ロケーター対応表.csv')
-        if layout:
-            LAP.write_table_csv(layout, loc_csv, basis_of=basis, dct_paths=dct)
-        n_loc = len(LAP.locator_rows(layout, basis_of=basis, dct_paths=dct)) if layout else 0
-        if dct:
-            # 手本の機器相番号(各機器のセルにロケーター字)をロケーター図面とする。
-            meta['locator'] = {'dxf': os.path.basename(dct[0]), 'source': 'dct',
-                               'csv': os.path.basename(loc_csv) if layout else '', 'count': n_loc}
-        elif layout:
-            # DCTが無い場合のみ、配置図にロケーター字を重ねたDXFを生成(手本風の代替)。
-            loc_dxf = os.path.join(outdir, f'{safe}_ロケーター付図面.dxf')
-            LAP.write_dxf(layout, loc_dxf, basis_of=basis, dct_paths=dct)
-            meta['locator'] = {'dxf': os.path.basename(loc_dxf), 'source': 'gen',
-                               'csv': os.path.basename(loc_csv), 'count': n_loc}
-        else:
-            meta['locator'] = {}
-    except Exception:
-        app.logger.exception('locator failed %s', safe)
-        meta['locator_error'] = traceback.format_exc()
-    # 3. 端子番号割付UI(サーバ保存)
+    # 2. ロケーターはこの時点では作らない。製番ページの「ロケーター図面を生成」ボタンで生成し、
+    #    「保存」ボタンで確定する(段階を踏むワークフロー)。
+    meta['locator'] = {}
+    meta['locator_saved'] = False
+    # 3. 端子番号割付UI(サーバ保存)。ボタンは4種(シーケンス/スケルトン/内部配置図/ロケーター)が
+    #    揃うまで製番ページ側で無効化する。
     try:
         assign_html = os.path.join(outdir, f'{safe}_端子番号割付.html')
         n_term = SI.stage2_terminal_assign(seq, skel, safe, assign_html,
@@ -377,6 +362,64 @@ def _term_override_from_saved(safe):
     return ov or None
 
 
+def _generate_locator(safe, meta):
+    """配置図(D/G)または機器相番号(DCT)からロケーターを生成し meta['locator'] を更新。
+    DCTが有れば手本(機器相番号)をそのまま採用、無ければ配置図に重ねて生成。戻り: meta['locator']。"""
+    d, _ = _dir(safe)
+    indir = os.path.join(d, 'in')
+    outdir = os.path.join(d, 'out')
+    os.makedirs(outdir, exist_ok=True)
+    seq, skel, layout, dct = RL.collect_inputs(indir, safe)
+    basis = LA.basis_from_dct(dct) if dct else None
+    loc_csv = os.path.join(outdir, f'{safe}_ロケーター対応表.csv')
+    if layout:
+        LAP.write_table_csv(layout, loc_csv, basis_of=basis, dct_paths=dct)
+    n_loc = len(LAP.locator_rows(layout, basis_of=basis, dct_paths=dct)) if layout else 0
+    if dct:
+        meta['locator'] = {'dxf': os.path.basename(dct[0]), 'source': 'dct',
+                           'csv': os.path.basename(loc_csv) if layout else '',
+                           'count': n_loc, 'generated': True}
+    elif layout:
+        loc_dxf = os.path.join(outdir, f'{safe}_ロケーター付図面.dxf')
+        LAP.write_dxf(layout, loc_dxf, basis_of=basis, dct_paths=dct)
+        meta['locator'] = {'dxf': os.path.basename(loc_dxf), 'source': 'gen',
+                           'csv': os.path.basename(loc_csv), 'count': n_loc, 'generated': True}
+    else:
+        meta['locator'] = {}
+    return meta['locator']
+
+
+@app.route('/p/<seiban>/locator/generate', methods=['POST'])
+def locator_generate(seiban):
+    safe = _safe(seiban)
+    meta = _load_meta(safe)
+    if not meta:
+        return redirect(f'/p/{safe}')
+    try:
+        _generate_locator(safe, meta)
+        meta.pop('locator_error', None)
+    except Exception:
+        app.logger.exception('locator generate failed %s', safe)
+        meta['locator_error'] = traceback.format_exc()
+    meta['locator_saved'] = False       # 生成し直したら未保存に戻す
+    meta['updated'] = _now()
+    _save_meta(safe, meta)
+    return redirect(f'/p/{safe}')
+
+
+@app.route('/p/<seiban>/locator/save', methods=['POST'])
+def locator_save(seiban):
+    safe = _safe(seiban)
+    meta = _load_meta(safe)
+    if not meta:
+        return redirect(f'/p/{safe}')
+    if meta.get('locator', {}).get('generated'):
+        meta['locator_saved'] = True
+        meta['updated'] = _now()
+        _save_meta(safe, meta)
+    return redirect(f'/p/{safe}')
+
+
 def _now():
     import time
     return time.strftime('%Y-%m-%dT%H:%M:%S')
@@ -390,20 +433,71 @@ def project(seiban):
     if not meta:
         return _page('<div class=card err>製番が見つかりません。</div>'
                      '<div class=card><a class="btn g" href="/">← ホーム</a></div>')
-    c = meta.get('counts', {})
+    d, _ = _dir(safe)
+    indir = os.path.join(d, 'in')
+    try:
+        seqs, skels, layouts, dcts = RL.collect_inputs(indir, safe)
+    except Exception:
+        seqs = skels = layouts = dcts = []
+
+    def _names(paths):
+        return '、'.join(sorted(_esc(os.path.basename(p)) for p in paths)) if paths else '—'
+
+    def _row(label, paths, need):
+        n = len(paths)
+        mark = ('<span class=ok>✓</span>' if n
+                else ('<span class=err>未</span>' if need else '<span class=muted>—</span>'))
+        return (f'<tr><td>{label}</td><td style="text-align:center">{mark} {n}</td>'
+                f'<td class=muted style="font-size:12px">{_names(paths)}</td></tr>')
+
+    # ① アップロード状況(ファイル名を種類別に表示)
+    up_tbl = ('<table><tr><th>種類</th><th>数</th><th>ファイル名</th></tr>'
+              + _row('シーケンス（F＊）', seqs, True)
+              + _row('スケルトン（E＊）', skels, True)
+              + _row('内部配置図（D＊）', layouts, True)
+              + _row('機器相番号（＊-DCT／手本）', dcts, False)
+              + '</table>')
+    have_uploads = bool(seqs and skels and layouts)
+    up_note = ('' if have_uploads else
+               '<div class=err style="margin-top:6px">必要な図面（シーケンス・スケルトン・内部配置図）が'
+               '揃っていません。「新しい製番」から不足分を含めて登録し直してください。</div>')
+    step1 = f'<div class=card><h2>① 図面アップロード</h2>{up_tbl}{up_note}</div>'
+
+    # ② ロケーター図面(生成→保存)
     loc = meta.get('locator', {})
-    loc_links = ''
-    if loc.get('dxf'):
+    loc_saved = meta.get('locator_saved')
+    if loc.get('generated') and loc.get('dxf'):
         dxf_label = 'ロケーター図面＝機器相番号(DXF)' if loc.get('source') == 'dct' else 'ロケーター付図面(DXF)'
         loc_links = (f'<a class="btn g" href="/p/{safe}/file/{_esc(loc["dxf"])}">{dxf_label}</a> '
                      f'<a class="btn g" href="/p/{safe}/locator.pdf" target=_blank>ロケーター図(PDF)</a> '
-                     f'<a class="btn g" href="/p/{safe}/file/{_esc(loc.get("csv",""))}">対応表(CSV)</a>')
+                     + (f'<a class="btn g" href="/p/{safe}/file/{_esc(loc.get("csv",""))}">対応表(CSV)</a>'
+                        if loc.get('csv') else ''))
+        regen = (f'<form method=post action="/p/{safe}/locator/generate" style="display:inline">'
+                 f'<button class="btn g" type=submit>再生成</button></form>')
+        if loc_saved:
+            step2 = (f'<div class=card><h2>② ロケーター図面</h2>{loc_links}'
+                     f'<div class=ok style="margin:8px 0">保存済み ✓</div>{regen}</div>')
+        else:
+            save_btn = (f'<form method=post action="/p/{safe}/locator/save" style="display:inline">'
+                        f'<button class="btn o" type=submit>保存</button></form> ')
+            step2 = (f'<div class=card><h2>② ロケーター図面</h2>{loc_links}'
+                     f'<div class=muted style="margin:8px 0">内容を確認し「保存」してください。</div>'
+                     f'{save_btn}{regen}</div>')
     else:
-        loc_links = '<span class=muted>配置図(D/G)が無いためロケーターは生成されていません。</span>'
-    assign_btn = (f'<a class="btn o" href="/p/{safe}/assign">端子番号割付を開く ▶</a>'
-                  if meta.get('assign_html') else '<span class=err>割付UIの生成に失敗しました。</span>')
+        can_gen = bool(layouts or dcts)
+        errnote = ('<div class=err style="margin-top:6px">前回の生成でエラーが出ました。</div>'
+                   if meta.get('locator_error') else '')
+        gen_btn = (f'<form method=post action="/p/{safe}/locator/generate" style="display:inline">'
+                   f'<button class="btn o" type=submit>ロケーター図面を生成</button></form>'
+                   if can_gen else
+                   '<span class=err>内部配置図（D＊）か機器相番号（DCT）が無いため生成できません。</span>')
+        step2 = (f'<div class=card><h2>② ロケーター図面</h2>'
+                 f'<div class=muted style="margin-bottom:6px">配置図（またはDCT手本）からロケーターを生成します。</div>'
+                 f'{gen_btn}{errnote}</div>')
+
+    # ③ 端子番号割付(4種=シーケンス/スケルトン/内部配置図/ロケーター が揃って有効化)
+    ready = bool(have_uploads and loc_saved)
     saved = meta.get('saved')
-    # 2人目 出力(保存後)
     two_out = ''
     if saved:
         two_out = (f'<div class=ok style="margin:8px 0">確認 {meta.get("checked",0)}/{meta.get("total",0)}・'
@@ -411,34 +505,43 @@ def project(seiban):
                    f'<a class="btn g" href="/p/{safe}/file/{safe}_端子番号リスト.csv">最終リスト(CSV)</a> '
                    f'<a class="btn g" href="/p/{safe}/file/{safe}_端子番号_学習用.csv">学習用(CSV)</a> '
                    f'<a class="btn o" href="/p/{safe}/print" target=_blank>端子番号入り図面(PDF) ▶</a>')
-    assign_btn = (f'<a class="btn o" href="/p/{safe}/assign">端子番号割付を開く ▶</a>'
-                  if meta.get('assign_html') else '<span class=err>割付UIの生成に失敗しました。</span>')
-    # 1人目 太物
-    wire_btn = (f'<a class="btn o" href="/p/{safe}/wire">太物配線を開く ▶</a> '
-                f'<a class="btn g" href="/p/{safe}/wire.pdf" target=_blank>太物図面(PDF)</a>'
-                if meta.get('wire_html') else '<span class=err>太物UIの生成に失敗しました。</span>')
-    wire_out = (f' <a class="btn g" href="/p/{safe}/file/{safe}_太物工程ハーネス.csv">太物ハーネス(CSV)</a>'
-                if meta.get('wire_saved') else '')
-    # 3人目 From-To
-    ft_hint = '' if saved else '<div class=muted>※ 先に2人目を保存すると、確定端子がFrom-Toに反映されます。</div>'
-    ft_btn = (f'<a class="btn o" href="/p/{safe}/fromto">From-Toを開く ▶</a> '
-              f'<a class="btn g" href="/p/{safe}/fromto.pdf" target=_blank>From-To図面(PDF)</a>'
-              if meta.get('ft_html') else '<span class=err>From-To UIの生成に失敗しました。</span>')
-    ft_out = (f' <a class="btn g" href="/p/{safe}/file/{safe}_ハーネス工程FromTo.csv">From-To(CSV)</a>'
-              if meta.get('ft_saved') else '')
+    if not meta.get('assign_html'):
+        assign_area = '<span class=err>割付UIの生成に失敗しました。</span>'
+    elif ready:
+        assign_area = f'<a class="btn o" href="/p/{safe}/assign">端子番号割付を開く ▶</a>'
+    else:
+        miss = ([] if have_uploads else ['図面アップロード']) + ([] if loc_saved else ['ロケーターの保存'])
+        assign_area = ('<button class="btn" type=button disabled '
+                       'style="opacity:.45;cursor:not-allowed">端子番号割付（未解放）</button>'
+                       f'<div class=muted style="margin-top:6px">先に完了してください：{"・".join(miss)}</div>')
+    step3 = (f'<div class=card><h2>③ 端子番号割付</h2>{assign_area}{two_out}'
+             f'<div class=muted style="margin-top:6px">押すと割付を実行し、割付表と端子番号入り図面を表示します。'
+             f'確認後 ④の「保存」で割付表と割付図面を保存します。</div></div>')
+
+    # 1人目/3人目(確認期間は既定OFF)
     stage13 = ''
     if ENABLE_STAGE13:
+        wire_btn = (f'<a class="btn o" href="/p/{safe}/wire">太物配線を開く ▶</a> '
+                    f'<a class="btn g" href="/p/{safe}/wire.pdf" target=_blank>太物図面(PDF)</a>'
+                    if meta.get('wire_html') else '<span class=err>太物UIの生成に失敗しました。</span>')
+        wire_out = (f' <a class="btn g" href="/p/{safe}/file/{safe}_太物工程ハーネス.csv">太物ハーネス(CSV)</a>'
+                    if meta.get('wire_saved') else '')
+        ft_hint = '' if saved else '<div class=muted>※ 先に2人目を保存すると、確定端子がFrom-Toに反映されます。</div>'
+        ft_btn = (f'<a class="btn o" href="/p/{safe}/fromto">From-Toを開く ▶</a> '
+                  f'<a class="btn g" href="/p/{safe}/fromto.pdf" target=_blank>From-To図面(PDF)</a>'
+                  if meta.get('ft_html') else '<span class=err>From-To UIの生成に失敗しました。</span>')
+        ft_out = (f' <a class="btn g" href="/p/{safe}/file/{safe}_ハーネス工程FromTo.csv">From-To(CSV)</a>'
+                  if meta.get('ft_saved') else '')
         stage13 = (
             f'<div class=card><h2>1人目：太物工程（太物配線 ≥8sq）</h2>{wire_btn}{wire_out}'
             f'<div class=muted style="margin-top:6px">配線を確認・修正し「保存」。</div></div>'
             f'<div class=card><h2>3人目：ハーネス工程（From-To ≤5.5sq）</h2>{ft_hint}{ft_btn}{ft_out}'
             f'<div class=muted style="margin-top:6px">From-Toを確認・修正し「保存」。2人目の確定端子を反映します。</div></div>')
+
     body = (
         f'<div class=card><h2>製番 {_esc(safe)}</h2>'
-        f'<p class=muted>制御シート{c.get("seq",0)}・スケルトン{c.get("skel",0)}・配置図{c.get("layout",0)}・機器相番号{c.get("dct",0)}</p>'
-        f'<b>ロケーター</b>　{loc_links}</div>'
-        f'<div class=card><h2>端子番号割付</h2>{assign_btn}{two_out}</div>'
-        f'{stage13}'
+        f'<p class=muted>流れ：①アップロード → ②ロケーター生成・保存 → ③端子番号割付 → ④保存</p></div>'
+        f'{step1}{step2}{step3}{stage13}'
         f'<div class=card><a class="btn g" href="/">← ホーム</a></div>')
     return _page(body, f'製番 {safe}')
 
