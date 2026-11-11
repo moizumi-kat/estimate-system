@@ -939,10 +939,16 @@ document.querySelectorAll('section[data-sheet]').forEach(se=>{{
  const si=+se.dataset.sheet;SEL[si]=-1;drawSheet(si);
  ov(si).addEventListener('click',ev=>{{const g=ev.target.closest('[data-i]');if(g)selectTerm(si,+g.dataset.i,true);}});
  se.querySelectorAll('tbody tr').forEach(tr=>{{
-  tr.querySelector('.tn').addEventListener('input',()=>{{refreshChg();drawSheet(si);}});
-  tr.querySelector('.ck').addEventListener('change',refreshOk);
+  tr.querySelector('.tn').addEventListener('input',()=>{{refreshChg();drawSheet(si);saveDraft();}});
+  tr.querySelector('.ck').addEventListener('change',()=>{{refreshOk();saveDraft();}});
   tr.onclick=ev=>{{if(ev.target.tagName==='INPUT')return;selectTerm(si,+tr.dataset.i,false);}};}});}});
-refreshChg();refreshOk();
+// 入力途中の端子番号・確認を端末内(localStorage)に自動保存し、再読込時に復元する。
+// スマホで別アプリへ移動→戻ってページが再読込されても、途中の作業が消えないようにする。
+const DRAFT_KEY='term_draft_'+SEIBAN;
+function saveDraft(){{try{{const d={{}};document.querySelectorAll('section[data-sheet]').forEach(se=>{{const si=+se.dataset.sheet;se.querySelectorAll('tbody tr').forEach(tr=>{{const i=+tr.dataset.i;const v=tr.querySelector('.tn').value;const ck=tr.querySelector('.ck').checked;const t=DATA[si][i];if((v||'')!==(t.orig||'')||ck)d[si+'_'+i]={{v:v,ck:ck}};}});}});localStorage.setItem(DRAFT_KEY,JSON.stringify(d));}}catch(e){{}}}}
+function loadDraft(){{try{{const raw=localStorage.getItem(DRAFT_KEY);if(!raw)return;const d=JSON.parse(raw);document.querySelectorAll('section[data-sheet]').forEach(se=>{{const si=+se.dataset.sheet;se.querySelectorAll('tbody tr').forEach(tr=>{{const i=+tr.dataset.i;const o=d[si+'_'+i];if(!o)return;if(o.v!=null)tr.querySelector('.tn').value=o.v;if(o.ck)tr.querySelector('.ck').checked=true;}});}});refreshChg();refreshOk();document.querySelectorAll('section[data-sheet]').forEach(se=>drawSheet(+se.dataset.sheet));}}catch(e){{}}}}
+function clearDraft(){{try{{localStorage.removeItem(DRAFT_KEY);}}catch(e){{}}}}
+refreshChg();refreshOk();loadDraft();
 function csvdl(name,arr){{const csv='\\ufeff'+arr.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
  const b=new Blob([csv],{{type:'text/csv'}});const a=document.createElement('a');
  a.href=URL.createObjectURL(b);a.download=name;a.click();}}
@@ -961,11 +967,13 @@ function save(){{
   fetch(SAVE_URL,{{method:'POST',headers:{{'Content-Type':'application/json'}},
     body:JSON.stringify({{seiban:SEIBAN,final:fin,diff:dif}})}})
    .then(r=>r.json()).then(j=>{{if(btn){{btn.disabled=false;btn.textContent='保存';}}
+    if(j.ok)clearDraft();
     alert(j.ok?('サーバに保存しました。'+(j.message||'')):'保存に失敗: '+(j.error||''));}})
    .catch(e=>{{if(btn){{btn.disabled=false;btn.textContent='保存';}}alert('保存に失敗: '+e);}});
  }}else{{
   csvdl(SEIBAN+'_端子番号リスト.csv',fin);
   setTimeout(()=>csvdl(SEIBAN+'_端子番号_学習用.csv',dif),500);
+  clearDraft();
  }}}}
 </script></body></html>"""
     with open(out_html, 'w', encoding='utf-8') as f:
