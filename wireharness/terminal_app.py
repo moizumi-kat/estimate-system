@@ -57,6 +57,15 @@ ENABLE_STAGE13 = os.environ.get('TERMINAL_STAGE13', '') == '1'
 app = Flask(__name__)
 app.secret_key = os.environ.get('TERMINAL_SECRET', secrets.token_hex(16))
 app.config['MAX_CONTENT_LENGTH'] = 300 * 1024 * 1024        # DXF一式(最大300MB)
+# スマホで別アプリへ移動→戻ると初期画面(ログイン)に戻る問題対策:
+# セッションクッキーを永続化(30日)。estimateアプリと同じ方針。Cloudflare経由HTTPS前提。
+import datetime as _dt
+app.config.update(
+    PERMANENT_SESSION_LIFETIME=_dt.timedelta(days=30),
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,
+)
 
 _h = RotatingFileHandler(os.path.join(WORK, 'terminal_app.log'),
                          maxBytes=1_000_000, backupCount=5, encoding='utf-8')
@@ -158,6 +167,7 @@ def login():
         ok = hmac.compare_digest(request.form.get('pw', ''), PASSWORD) and (
             not USER or hmac.compare_digest(request.form.get('user', ''), USER))
         if ok:
+            session.permanent = True        # 永続クッキー化(30日)=別アプリから戻っても再ログイン不要
             session['auth'] = True
             session['user'] = request.form.get('user', '') or 'user'
             return redirect('/')
