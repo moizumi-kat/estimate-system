@@ -198,18 +198,41 @@ def _list_projects():
 def _upload_body():
     return ('<div class=card><h2>① 図面をアップロード（1製番）</h2>'
             '<form method=post action="/create" enctype="multipart/form-data">'
-            '<p>製番（整番） <input type=text name=seiban placeholder="例 1-12188-132" required '
-            'style="padding:8px;border:1px solid #ccd;border-radius:6px"></p>'
+            # 1) 先に図面を選ぶ
             '<div class=drop>設計図一式を選択してください<br>'
             '<b>必要な図面</b>：シーケンス（F＊）・スケルトン（E＊）・内部配置図（D＊）<br>'
             '<span class=muted>＋機器相番号（＊-DCT）が有ればロケーターの手本に使用。'
             'DXF・DWG どちらでも可（DWGはサーバ内でDXFへ自動変換）</span><br>'
-            '<input type=file name=files multiple accept=".dxf,.DXF,.dwg,.DWG" style="margin-top:10px"></div>'
+            '<input id=fileinput type=file name=files multiple accept=".dxf,.DXF,.dwg,.DWG" '
+            'style="margin-top:10px"></div>'
+            # 2) 選んだファイル名を表示(これを見て製番を入力)
+            '<div id=filelist class=muted style="margin:10px 0"></div>'
+            # 3) ファイル名を見ながら製番を入力
+            '<p>製番（整番） <input id=seiban type=text name=seiban placeholder="例 4-21088_029" required '
+            'style="padding:8px;border:1px solid #ccd;border-radius:6px">'
+            ' <button type=button id=guessbtn class="btn g" style="display:none">ファイル名から候補</button></p>'
             '<p style="margin-top:12px"><button class="btn o" type=submit>アップロード ▶</button> '
             '<span class=muted>この後：②ロケーター生成→③端子番号割付→④保存</span></p>'
             '</form></div>'
             '<div class=card muted>一回に1製番を扱います。アップロード→②→③→④と進み、'
-            '保存すると結果と修正差分がサーバに蓄積され学習に使われます。</div>')
+            '保存すると結果と修正差分がサーバに蓄積され学習に使われます。</div>'
+            '<script>(function(){'
+            'var fi=document.getElementById("fileinput"),fl=document.getElementById("filelist"),'
+            'sb=document.getElementById("seiban"),gb=document.getElementById("guessbtn");'
+            'function esc(s){return s.replace(/[<>&]/g,function(c){return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c];});}'
+            # ファイル名の共通接頭辞から製番候補を作る(末尾の -F001 等シート部を除く)
+            'function guess(names){if(!names.length)return "";var p=names[0];'
+            'for(var i=1;i<names.length;i++){var q=names[i];var j=0;while(j<p.length&&j<q.length&&p[j]===q[j])j++;p=p.slice(0,j);}'
+            'p=p.replace(/\\.[^.]*$/,"");p=p.replace(/[-_\\s]*(F|E|D|G|H)?\\d*$/i,"");p=p.replace(/[-_\\s]+$/,"");return p;}'
+            'fi.addEventListener("change",function(){'
+            'var names=Array.from(fi.files).map(function(f){return f.name;}).sort();'
+            'if(!names.length){fl.innerHTML="";gb.style.display="none";return;}'
+            'fl.innerHTML="<b>選択されたファイル（"+names.length+"件）</b><ul style=\\"margin:6px 0 0;padding-left:18px\\">"'
+            '+names.map(function(n){return "<li>"+esc(n)+"</li>";}).join("")+"</ul>";'
+            'var g=guess(names);if(g){gb.textContent="候補: "+g;gb.style.display="";gb.onclick=function(){sb.value=g;sb.focus();};}'
+            'else{gb.style.display="none";}'
+            '});'
+            '})();</script>')
 
 
 @app.route('/')
