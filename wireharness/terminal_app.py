@@ -95,19 +95,28 @@ def _classify_inputs(indir):
             continue
         seen.add(key)
         up = base.upper()
-        if 'DCT' in up:
+        # 機器相番号(手本)。記号DCT か 日本語「相番号」。
+        if 'DCT' in up or '相番号' in base:
             dct.append(p)
             continue
-        stem = up.rsplit('.', 1)[0]          # 拡張子除去
-        token = stem.rsplit('-', 1)[-1]       # 末尾のシート記号(例 F001, D001)
+        # 1) シート記号で分類: …-F/E/D/G<数字>(例 …-F001, …-D001)
+        stem = up.rsplit('.', 1)[0]           # 拡張子除去
+        token = stem.rsplit('-', 1)[-1]        # 末尾のシート記号
         lt = token[:1] if token else ''
-        if lt == 'F':
+        if lt == 'F' and token[1:2].isdigit():
+            seq.append(p); continue
+        if lt == 'E' and token[1:2].isdigit():
+            skel.append(p); continue
+        if lt in ('D', 'G') and token[1:2].isdigit():
+            layout.append(p); continue
+        # 2) 日本語の種類名で分類(例 …_シーケンス.dxf, …_外形図と内部配置図.dxf)
+        if 'シーケンス' in base or 'ｼｰｹﾝｽ' in base:
             seq.append(p)
-        elif lt == 'E':
+        elif 'スケルトン' in base or 'ｽｹﾙﾄﾝ' in base:
             skel.append(p)
-        elif lt in ('D', 'G'):
+        elif '配置' in base or '外形' in base:
             layout.append(p)
-        # 上記以外(H 等)はこの工程では未使用
+        # 上記いずれにも該当しない(H 等)はこの工程では未使用
     return sorted(seq), sorted(skel), sorted(layout), sorted(dct)
 
 
