@@ -80,6 +80,37 @@ def _dir(seiban):
     return d, _safe(seiban)
 
 
+def _classify_inputs(indir):
+    """アップロード済みDXFを種類別に分類する: (seq, skel, layout, dct)。
+    1製番運用=このフォルダの全DXFがこの製番のものなので、製番の綴り(区切り文字の違い等)に
+    依存せず、ファイル名末尾のシート記号で分類する(例 …-F001→シーケンス, …-D001-DCT→手本)。
+    ・末尾の -F/E/D/G<数字> で判定(F=シーケンス, E=スケルトン, D/G=内部配置図)
+    ・名前に DCT を含むものは機器相番号(手本)として dct に入れ、配置図からは除外。"""
+    seq, skel, layout, dct = [], [], [], []
+    seen = set()
+    for p in sorted(glob.glob(os.path.join(indir, '*.dxf')) + glob.glob(os.path.join(indir, '*.DXF'))):
+        base = os.path.basename(p)
+        key = base.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        up = base.upper()
+        if 'DCT' in up:
+            dct.append(p)
+            continue
+        stem = up.rsplit('.', 1)[0]          # 拡張子除去
+        token = stem.rsplit('-', 1)[-1]       # 末尾のシート記号(例 F001, D001)
+        lt = token[:1] if token else ''
+        if lt == 'F':
+            seq.append(p)
+        elif lt == 'E':
+            skel.append(p)
+        elif lt in ('D', 'G'):
+            layout.append(p)
+        # 上記以外(H 等)はこの工程では未使用
+    return sorted(seq), sorted(skel), sorted(layout), sorted(dct)
+
+
 # ---------- 認証 ----------
 _LOGIN = '''<!doctype html><meta charset=utf-8><title>端子番号割付システム</title>
 <style>body{font-family:sans-serif;background:#eef2f8;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
@@ -281,7 +312,7 @@ def create():
                      f'<ul>{rows}</ul></div>'
                      '<div class=card><a class="btn g" href="/new">← 戻る</a></div>')
     # 製番でDXFを分類(制御F/スケルトンE/配置D,G/機器相番号DCT)
-    seq, skel, layout, dct = RL.collect_inputs(indir, safe)
+    seq, skel, layout, dct = _classify_inputs(indir)
     app.logger.info('create seiban=%s files=%d seq=%d skel=%d layout=%d dct=%d',
                     safe, len(saved), len(seq), len(skel), len(layout), len(dct))
     meta = {'seiban': safe, 'updated': _now(), 'counts': {
@@ -381,7 +412,7 @@ def _generate_locator(safe, meta):
     indir = os.path.join(d, 'in')
     outdir = os.path.join(d, 'out')
     os.makedirs(outdir, exist_ok=True)
-    seq, skel, layout, dct = RL.collect_inputs(indir, safe)
+    seq, skel, layout, dct = _classify_inputs(indir)
     basis = LA.basis_from_dct(dct) if dct else None
     loc_csv = os.path.join(outdir, f'{safe}_ロケーター対応表.csv')
     if layout:
@@ -448,7 +479,7 @@ def project(seiban):
     d, _ = _dir(safe)
     indir = os.path.join(d, 'in')
     try:
-        seqs, skels, layouts, dcts = RL.collect_inputs(indir, safe)
+        seqs, skels, layouts, dcts = _classify_inputs(indir)
     except Exception:
         seqs = skels = layouts = dcts = []
 
@@ -470,9 +501,17 @@ def project(seiban):
               + _row('機器相番号（＊-DCT／手本）', dcts, False)
               + '</table>')
     have_uploads = bool(seqs and skels and layouts)
-    up_note = ('' if have_uploads else
-               '<div class=err style="margin-top:6px">必要な図面（シーケンス・スケルトン・内部配置図）が'
-               '揃っていません。「新しい製番」から不足分を含めて登録し直してください。</div>')
+    up_note = ''
+    if not have_uploads:
+        # 切り分け用に、実際にアップロードされたファイルをそのまま列挙する。
+        raw = sorted(os.path.basename(p) for p in
+                     glob.glob(os.path.join(indir, '*')) if os.path.isfile(p))
+        raw_html = ('<div class=muted style="margin-top:6px">アップロードされたファイル：'
+                    + (('<br>' + '、'.join(_esc(n) for n in raw)) if raw else 'なし')
+                    + '</div>')
+        up_note = ('<div class=err style="margin-top:6px">必要な図面（シーケンス・スケルトン・内部配置図）が'
+                   '揃っていません。ファイル名が「…-F001」「…-E001」「…-D001」の形か確認し、'
+                   '不足分を含めて登録し直してください。</div>' + raw_html)
     step1 = f'<div class=card><h2>① 図面アップロード</h2>{up_tbl}{up_note}</div>'
 
     # ② ロケーター図面(生成→保存)
@@ -625,7 +664,7 @@ def _save_stage(seiban, fname, flag, label):
 def wire_pdf(seiban):
     safe = _safe(seiban)
     d, _ = _dir(safe)
-    seq, skel, _l, _dct = RL.collect_inputs(os.path.join(d, 'in'), safe)
+    seq, skel, _l, _dct = _classify_inputs(os.path.join(d, 'in'))
     if not skel:
         return _page('<div class=card err>スケルトン(E＊)が無いため太物図面を出力できません。</div>'
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
@@ -643,7 +682,7 @@ def wire_pdf(seiban):
 def fromto_pdf(seiban):
     safe = _safe(seiban)
     d, _ = _dir(safe)
-    seq, skel, _l, _dct = RL.collect_inputs(os.path.join(d, 'in'), safe)
+    seq, skel, _l, _dct = _classify_inputs(os.path.join(d, 'in'))
     if not seq:
         return _page('<div class=card err>制御シート(F＊)が無いためFrom-To図面を出力できません。</div>'
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
@@ -703,7 +742,7 @@ def save(seiban):
         try:
             indir = os.path.join(d, 'in')
             outdir = os.path.join(d, 'out')
-            seq, skel, _l, _dct = RL.collect_inputs(indir, safe)
+            seq, skel, _l, _dct = _classify_inputs(indir)
             _gen_fromto(safe, seq, skel, _term_override_from_saved(safe), outdir, meta)
         except Exception:
             app.logger.exception('fromto regen failed %s', safe)
@@ -724,7 +763,7 @@ def print_pdf(seiban):
     safe = _safe(seiban)
     d, _ = _dir(safe)
     indir = os.path.join(d, 'in')
-    seq, skel, _layout, _dct = RL.collect_inputs(indir, safe)
+    seq, skel, _layout, _dct = _classify_inputs(indir)
     if not seq:
         return _page('<div class=card err>制御シート(F＊)が無いため図面を出力できません。</div>'
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
@@ -768,7 +807,7 @@ def locator_pdf(seiban):
 
 def _layout_and_dct(safe):
     d, _ = _dir(safe)
-    seq, skel, layout, dct = RL.collect_inputs(os.path.join(d, 'in'), safe)
+    seq, skel, layout, dct = _classify_inputs(os.path.join(d, 'in'))
     return layout, dct
 
 
