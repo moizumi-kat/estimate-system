@@ -39,24 +39,30 @@ def seibans_in(folder):
 
 
 def _find(folder, seiban, letters, exclude_dct=True):
-    """<製番>-<letter>*.DXF/.dxf を集める(letters 例: ['F'])。DCTは除外可。"""
+    """<製番>-<letter>*.DXF/.dxf を集める(letters 例: ['F'])。
+    exclude_dct=True で相番号図(LCT=ダクト前/DCT=完成形)をレイアウト等から除外。"""
     files = []
     for ext in ('DXF', 'dxf'):
         for lt in letters:
             files += glob.glob(os.path.join(folder, f'{seiban}-{lt}*.{ext}'))
     files = sorted(set(files))
     if exclude_dct:
-        files = [f for f in files if 'DCT' not in os.path.basename(f).upper()]
+        files = [f for f in files
+                 if 'DCT' not in os.path.basename(f).upper()
+                 and 'LCT' not in os.path.basename(f).upper()]
     return files
 
 
 def collect_inputs(folder, seiban):
-    """製番の入力ファイル一式を返す: (seq, skel, layout, dct)。"""
+    """製番の入力ファイル一式を返す: (seq, skel, layout, dct)。
+    相番号図は 完成形(DCT) と ダクト前(LCT) のどちらも 相番号源(dct) として扱う。"""
     seq = _find(folder, seiban, ['F'])
     skel = _find(folder, seiban, ['E'])
     layout = _find(folder, seiban, ['D', 'G'])
     dct = sorted(glob.glob(os.path.join(folder, f'{seiban}-*-DCT.dxf')) +
-                 glob.glob(os.path.join(folder, f'{seiban}-*-DCT.DXF')))
+                 glob.glob(os.path.join(folder, f'{seiban}-*-DCT.DXF')) +
+                 glob.glob(os.path.join(folder, f'{seiban}-*-LCT.dxf')) +
+                 glob.glob(os.path.join(folder, f'{seiban}-*-LCT.DXF')))
     return seq, skel, layout, dct
 
 

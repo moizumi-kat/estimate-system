@@ -91,12 +91,14 @@ def _dir(seiban):
 
 
 def _classify_inputs(indir):
-    """アップロード済みDXFを種類別に分類する: (seq, skel, layout, dct)。
+    """アップロード済みDXFを種類別に分類する: (seq, skel, layout, lct, dct)。
     1製番運用=このフォルダの全DXFがこの製番のものなので、製番の綴り(区切り文字の違い等)に
     依存せず、ファイル名末尾のシート記号で分類する(例 …-F001→シーケンス, …-D001-DCT→手本)。
     ・末尾の -F/E/D/G<数字> で判定(F=シーケンス, E=スケルトン, D/G=内部配置図)
-    ・名前に DCT を含むものは機器相番号(手本)として dct に入れ、配置図からは除外。"""
-    seq, skel, layout, dct = [], [], [], []
+    ・名前に LCT を含むものは相番号図(ダクト前の中間成果)として lct に入れる。
+    ・名前に DCT を含む/「相番号」は機器相番号図(完成形=ダクト入り/手本)として dct に入れ、配置図から除外。
+    図面の流れ: 配置図(D/G) →[相番号自動付与]→ LCT →[配線ダクト作図]→ DCT(完成形)。"""
+    seq, skel, layout, lct, dct = [], [], [], [], []
     seen = set()
     for p in sorted(glob.glob(os.path.join(indir, '*.dxf')) + glob.glob(os.path.join(indir, '*.DXF'))):
         base = os.path.basename(p)
@@ -105,7 +107,11 @@ def _classify_inputs(indir):
             continue
         seen.add(key)
         up = base.upper()
-        # 機器相番号(手本)。記号DCT か 日本語「相番号」。
+        # 相番号図(ダクト前の中間 LCT)。完成形 DCT より先に判定。
+        if 'LCT' in up:
+            lct.append(p)
+            continue
+        # 機器相番号図(完成形=ダクト入り/手本)。記号DCT か 日本語「相番号」。
         if 'DCT' in up or '相番号' in base:
             dct.append(p)
             continue
@@ -127,7 +133,7 @@ def _classify_inputs(indir):
         elif '配置' in base or '外形' in base:
             layout.append(p)
         # 上記いずれにも該当しない(H 等)はこの工程では未使用
-    return sorted(seq), sorted(skel), sorted(layout), sorted(dct)
+    return sorted(seq), sorted(skel), sorted(layout), sorted(lct), sorted(dct)
 
 
 # ---------- 認証 ----------
@@ -252,7 +258,8 @@ def _upload_body():
             # 1) 先に図面を選ぶ
             '<div class=drop>設計図一式を選択してください<br>'
             '<b>必要な図面</b>：シーケンス（F＊）・スケルトン（E＊）・内部配置図（D＊）<br>'
-            '<span class=muted>＋機器相番号（＊-DCT）が有ればロケーターの手本に使用。'
+            '<span class=muted>＋相番号図（＊-LCT）／機器相番号図（＊-DCT）が有ればロケーターに使用。'
+            'LCTもDCTも無ければ配置図から相番号を自動付与します。'
             'DXF・DWG どちらでも可（DWGはサーバ内でDXFへ自動変換）</span><br>'
             '<input id=fileinput type=file name=files multiple accept=".dxf,.DXF,.dwg,.DWG" '
             'style="margin-top:10px"></div>'
@@ -331,12 +338,13 @@ def create():
                      'その図面はDXFで保存して再アップロードしてください。'
                      f'<ul>{rows}</ul></div>'
                      '<div class=card><a class="btn g" href="/new">← 戻る</a></div>')
-    # 製番でDXFを分類(制御F/スケルトンE/配置D,G/機器相番号DCT)
-    seq, skel, layout, dct = _classify_inputs(indir)
-    app.logger.info('create seiban=%s files=%d seq=%d skel=%d layout=%d dct=%d',
-                    safe, len(saved), len(seq), len(skel), len(layout), len(dct))
+    # 製番でDXFを分類(制御F/スケルトンE/配置D,G/相番号LCT/機器相番号DCT)
+    seq, skel, layout, lct, dct = _classify_inputs(indir)
+    app.logger.info('create seiban=%s files=%d seq=%d skel=%d layout=%d lct=%d dct=%d',
+                    safe, len(saved), len(seq), len(skel), len(layout), len(lct), len(dct))
     meta = {'seiban': safe, 'updated': _now(), 'counts': {
-        'seq': len(seq), 'skel': len(skel), 'layout': len(layout), 'dct': len(dct)}}
+        'seq': len(seq), 'skel': len(skel), 'layout': len(layout),
+        'lct': len(lct), 'dct': len(dct)}}
     # 2. ロケーターはこの時点では作らない。製番ページの「ロケーター図面を生成」ボタンで生成し、
     #    「保存」ボタンで確定する(段階を踏むワークフロー)。
     meta['locator'] = {}
@@ -426,38 +434,47 @@ def _term_override_from_saved(safe):
 
 
 def _generate_locator(safe, meta):
-    """配置図(D/G)または機器相番号(DCT)からロケーターを生成し meta['locator'] を更新。
-    DCTが有れば手本(機器相番号)をそのまま採用、無ければ配置図に重ねて生成。戻り: meta['locator']。"""
+    """ロケーター(機器相番号図)を用意し meta['locator'] を更新。戻り: meta['locator']。
+    図面の流れ: 配置図(D/G) →[相番号自動付与]→ LCT →[配線ダクト作図]→ DCT(完成形)。
+    優先: DCT(完成形)が有ればそのまま採用 → 次に LCT(相番号済み)をそのまま採用 →
+          どちらも無ければ配置図に相番号を自動付与して LCT を生成。"""
     d, _ = _dir(safe)
     indir = os.path.join(d, 'in')
     outdir = os.path.join(d, 'out')
     os.makedirs(outdir, exist_ok=True)
-    seq, skel, layout, dct = _classify_inputs(indir)
-    basis = LA.basis_from_dct(dct) if dct else None
+    seq, skel, layout, lct, dct = _classify_inputs(indir)
+    # 相番号の基(対応表CSV)は、完成形DCT→中間LCTの順に、有る相番号図から読む。
+    basis_src = dct or lct
+    basis = LA.basis_from_dct(basis_src) if basis_src else None
     loc_csv = os.path.join(outdir, f'{safe}_ロケーター対応表.csv')
     if layout:
-        LAP.write_table_csv(layout, loc_csv, basis_of=basis, dct_paths=dct)
-    n_loc = len(LAP.locator_rows(layout, basis_of=basis, dct_paths=dct)) if layout else 0
+        LAP.write_table_csv(layout, loc_csv, basis_of=basis, dct_paths=basis_src)
+    n_loc = len(LAP.locator_rows(layout, basis_of=basis, dct_paths=basis_src)) if layout else 0
+    csv_name = os.path.basename(loc_csv) if layout else ''
     if dct:
+        # 完成形(ダクト入り/手本)の機器相番号図。そのままロケーターとして採用。
         meta['locator'] = {'dxf': os.path.basename(dct[0]), 'source': 'dct',
-                           'csv': os.path.basename(loc_csv) if layout else '',
-                           'count': n_loc, 'generated': True}
+                           'csv': csv_name, 'count': n_loc, 'generated': True}
+    elif lct:
+        # 相番号済み(ダクト前)の中間図 LCT。そのまま採用(ダクト作図はこの後の工程)。
+        meta['locator'] = {'dxf': os.path.basename(lct[0]), 'source': 'lct',
+                           'csv': csv_name, 'count': n_loc, 'generated': True}
     elif layout:
-        # ファイル名末尾を DCT.dxf に(手本と同じ=次工程がロケーターとして扱えるように)。
-        loc_dxf = os.path.join(outdir, f'{safe}_ロケーター_DCT.dxf')
-        # 設計の配置図に相番号(リレー/タイマのDEVICE1=A,B,C…)を自動付与して、
-        # 手本と同じ機器相番号図(DCT)を生成する。手本12製番で相番号が116/116一致を確認済み。
+        # LCTもDCTも無い → 配置図に相番号(リレー/タイマのDEVICE1=A,B,C…)を自動付与して
+        # LCT(相番号図・ダクト前)を生成する。手本12製番で相番号が116/116一致を確認済み。
+        # ファイル名末尾を LCT.dxf に(ダクト作図後に DCT.dxf へ)。
+        loc_dxf = os.path.join(outdir, f'{safe}_ロケーター_LCT.dxf')
         try:
             letters, _used = LN.write_number_dct(layout, loc_dxf)
-            meta['locator'] = {'dxf': os.path.basename(loc_dxf), 'source': 'gen-dct',
-                               'csv': os.path.basename(loc_csv), 'count': n_loc,
+            meta['locator'] = {'dxf': os.path.basename(loc_dxf), 'source': 'gen-lct',
+                               'csv': csv_name, 'count': n_loc,
                                'letters': letters, 'generated': True}
         except Exception:
             # 失敗時のみ従来の重ね描き(オーバーレイ)へフォールバック。
-            app.logger.exception('number-dct generate failed %s', safe)
-            LAP.write_dxf(layout, loc_dxf, basis_of=basis, dct_paths=dct)
+            app.logger.exception('number-lct generate failed %s', safe)
+            LAP.write_dxf(layout, loc_dxf, basis_of=basis, dct_paths=basis_src)
             meta['locator'] = {'dxf': os.path.basename(loc_dxf), 'source': 'gen',
-                               'csv': os.path.basename(loc_csv), 'count': n_loc, 'generated': True}
+                               'csv': csv_name, 'count': n_loc, 'generated': True}
     else:
         meta['locator'] = {}
     return meta['locator']
@@ -510,9 +527,9 @@ def project(seiban):
     d, _ = _dir(safe)
     indir = os.path.join(d, 'in')
     try:
-        seqs, skels, layouts, dcts = _classify_inputs(indir)
+        seqs, skels, layouts, lcts, dcts = _classify_inputs(indir)
     except Exception:
-        seqs = skels = layouts = dcts = []
+        seqs = skels = layouts = lcts = dcts = []
 
     def _names(paths):
         return '、'.join(sorted(_esc(os.path.basename(p)) for p in paths)) if paths else '—'
@@ -529,7 +546,8 @@ def project(seiban):
               + _row('シーケンス（F＊）', seqs, True)
               + _row('スケルトン（E＊）', skels, True)
               + _row('内部配置図（D＊）', layouts, True)
-              + _row('機器相番号（＊-DCT／手本）', dcts, False)
+              + _row('相番号図（＊-LCT／ダクト前）', lcts, False)
+              + _row('機器相番号図（＊-DCT／完成形・手本）', dcts, False)
               + '</table>')
     have_uploads = bool(seqs and skels and layouts)
     up_note = ''
@@ -550,15 +568,19 @@ def project(seiban):
     loc_saved = meta.get('locator_saved')
     if loc.get('generated') and loc.get('dxf'):
         _src = loc.get('source')
-        dxf_label = {'dct': 'ロケーター図面＝機器相番号(DXF・手本)',
-                     'gen-dct': '機器相番号図(DXF・自動生成)'}.get(_src, 'ロケーター付図面(DXF)')
-        if _src == 'gen-dct':
+        dxf_label = {'dct': '機器相番号図(DXF・完成形/手本)',
+                     'lct': '相番号図(DXF・ダクト前)',
+                     'gen-lct': '相番号図(DXF・自動生成/ダクト前)'}.get(_src, 'ロケーター付図面(DXF)')
+        if _src == 'gen-lct':
             _lt = loc.get('letters')
             gen_note = ('<div class=ok style="margin:6px 0">設計の配置図から機器相番号(A,B,C…)を'
-                        f'自動付与しました（{_lt if _lt is not None else "?"}機器）。'
-                        '手本と同じ機器相番号図(DCT)です。</div>')
+                        f'自動付与しました（{_lt if _lt is not None else "?"}機器）＝相番号図(LCT)。'
+                        '配線ダクトを作図して完成形(DCT)にする工程はこの後です。</div>')
+        elif _src == 'lct':
+            gen_note = ('<div class=muted style="margin:6px 0">相番号済みの図(LCT)を使用'
+                        '（配線ダクトはこの後の工程）。</div>')
         elif _src == 'dct':
-            gen_note = '<div class=muted style="margin:6px 0">手本の機器相番号図(DCT)を使用。</div>'
+            gen_note = '<div class=muted style="margin:6px 0">完成形の機器相番号図(DCT)を使用。</div>'
         else:
             gen_note = ''
         loc_links = (f'<a class="btn g" href="/p/{safe}/locator.pdf" target=_blank>ロケーター図(PDF)を表示</a> '
@@ -578,15 +600,16 @@ def project(seiban):
                      f'<div class=muted style="margin:8px 0">内容を確認し「保存」してください。</div>'
                      f'{save_btn}{regen}</div>')
     else:
-        can_gen = bool(layouts or dcts)
+        can_gen = bool(layouts or lcts or dcts)
         errnote = ('<div class=err style="margin-top:6px">前回の生成でエラーが出ました。</div>'
                    if meta.get('locator_error') else '')
         gen_btn = (f'<form method=post action="/p/{safe}/locator/generate" style="display:inline">'
                    f'<button class="btn o" type=submit>ロケーター図面を生成</button></form>'
                    if can_gen else
-                   '<span class=err>内部配置図（D＊）か機器相番号（DCT）が無いため生成できません。</span>')
+                   '<span class=err>内部配置図（D＊）・相番号図（LCT）・機器相番号図（DCT）のいずれも無いため生成できません。</span>')
         step2 = (f'<div class=card><h2>② ロケーター図面</h2>'
-                 f'<div class=muted style="margin-bottom:6px">配置図（またはDCT手本）からロケーターを生成します。</div>'
+                 f'<div class=muted style="margin-bottom:6px">LCT/DCTが有ればそれを使用、無ければ配置図から'
+                 f'相番号を自動付与して相番号図(LCT)を生成します。</div>'
                  f'{gen_btn}{errnote}</div>')
 
     # ③ 端子番号割付(4種=シーケンス/スケルトン/内部配置図/ロケーター が揃って有効化)
@@ -722,7 +745,7 @@ def _save_stage(seiban, fname, flag, label):
 def wire_pdf(seiban):
     safe = _safe(seiban)
     d, _ = _dir(safe)
-    seq, skel, _l, _dct = _classify_inputs(os.path.join(d, 'in'))
+    seq, skel, _l, _lct, _dct = _classify_inputs(os.path.join(d, 'in'))
     if not skel:
         return _page('<div class=card err>スケルトン(E＊)が無いため太物図面を出力できません。</div>'
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
@@ -740,7 +763,7 @@ def wire_pdf(seiban):
 def fromto_pdf(seiban):
     safe = _safe(seiban)
     d, _ = _dir(safe)
-    seq, skel, _l, _dct = _classify_inputs(os.path.join(d, 'in'))
+    seq, skel, _l, _lct, _dct = _classify_inputs(os.path.join(d, 'in'))
     if not seq:
         return _page('<div class=card err>制御シート(F＊)が無いためFrom-To図面を出力できません。</div>'
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
@@ -800,7 +823,7 @@ def save(seiban):
         try:
             indir = os.path.join(d, 'in')
             outdir = os.path.join(d, 'out')
-            seq, skel, _l, _dct = _classify_inputs(indir)
+            seq, skel, _l, _lct, _dct = _classify_inputs(indir)
             _gen_fromto(safe, seq, skel, _term_override_from_saved(safe), outdir, meta)
         except Exception:
             app.logger.exception('fromto regen failed %s', safe)
@@ -821,7 +844,7 @@ def print_pdf(seiban):
     safe = _safe(seiban)
     d, _ = _dir(safe)
     indir = os.path.join(d, 'in')
-    seq, skel, _layout, _dct = _classify_inputs(indir)
+    seq, skel, _layout, _lct, _dct = _classify_inputs(indir)
     if not seq:
         return _page('<div class=card err>制御シート(F＊)が無いため図面を出力できません。</div>'
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
@@ -845,7 +868,7 @@ def numbered_dxf(seiban):
     d, _ = _dir(safe)
     indir = os.path.join(d, 'in')
     outdir = os.path.join(d, 'out')
-    seq, skel, _layout, _dct = _classify_inputs(indir)
+    seq, skel, _layout, _lct, _dct = _classify_inputs(indir)
     if not seq:
         return _page('<div class=card err>制御シート(F＊)が無いためCAD(DXF)を出力できません。</div>'
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
@@ -875,31 +898,36 @@ def numbered_dxf(seiban):
 def locator_pdf(seiban):
     safe = _safe(seiban)
     d, _ = _dir(safe)
-    layout, dct = _layout_and_dct(safe)
-    if not layout:
-        return _page('<div class=card err>ロケーター図面がありません（配置図 D/G が必要です）。</div>'
+    layout, lct, dct = _layout_and_dct(safe)
+    if not (layout or lct or dct):
+        return _page('<div class=card err>ロケーター図面がありません（配置図 D/G か LCT/DCT が必要です）。</div>'
                      f'<div class=card><a class="btn g" href="/p/{safe}">← 戻る</a></div>')
     pdf = os.path.join(d, f'{safe}_ロケーター図.pdf')
-    # 生成済みの機器相番号図(DCT)= out/<製番>_ロケーター_DCT.dxf があれば、それが正本。
+    # 自動生成した相番号図(LCT)= out/<製番>_ロケーター_LCT.dxf があれば、それが正本。
     meta = _load_meta(safe) or {}
     loc = meta.get('locator', {})
-    gen_dct = None
-    if loc.get('source') == 'gen-dct' and loc.get('dxf'):
+    gen_loc = None
+    if loc.get('source') in ('gen-lct', 'gen-dct') and loc.get('dxf'):
         cand = os.path.join(d, 'out', loc['dxf'])
         if os.path.exists(cand):
-            gen_dct = [cand]
+            gen_loc = [cand]
     try:
         if dct:
-            # 手本(機器相番号 DCT)がそのままロケーター図。各機器のセルにロケーター字(A/B/C/D/E)が
-            # 入った設計の正本を描画する(＝手本どおり)。
-            TP.render_dxf_pdf(dct, pdf, title_prefix=f'{safe}　ロケーター図（機器相番号）　')
-        elif gen_dct:
-            # 配置図から相番号を自動付与して生成したDCT。手本と同じ形式なのでそのまま描画。
-            TP.render_dxf_pdf(gen_dct, pdf, title_prefix=f'{safe}　ロケーター図（機器相番号・自動生成）　')
-        else:
-            # DCTが無い場合のみ、配置図にロケーター字(機器のセル)を赤字で重ねて生成(手本風)。
+            # 完成形(機器相番号 DCT)がそのままロケーター図。各機器のセルに相番号(A/B/C…)が
+            # 入った正本を描画する。
+            TP.render_dxf_pdf(dct, pdf, title_prefix=f'{safe}　ロケーター図（機器相番号・完成形）　')
+        elif lct:
+            # 相番号済みの中間図(LCT)をそのまま描画(配線ダクト前)。
+            TP.render_dxf_pdf(lct, pdf, title_prefix=f'{safe}　ロケーター図（機器相番号・ダクト前）　')
+        elif gen_loc:
+            # 配置図から相番号を自動付与して生成したLCT。手本と同じ形式なのでそのまま描画。
+            TP.render_dxf_pdf(gen_loc, pdf, title_prefix=f'{safe}　ロケーター図（機器相番号・自動生成）　')
+        elif layout:
+            # いずれも無い場合のみ、配置図にロケーター字(機器のセル)を赤字で重ねて生成(手本風)。
             rows = LAP.locator_rows(layout)
             TP.render_locator_pdf(layout, pdf, rows, title_prefix=f'{safe}　ロケーター図　')
+        else:
+            raise RuntimeError('描画対象がありません')
     except Exception:
         app.logger.exception('locator pdf failed %s', safe)
         return _page(f'<div class=card err>PDF生成でエラー:\n{_esc(traceback.format_exc())}</div>'
@@ -910,8 +938,8 @@ def locator_pdf(seiban):
 
 def _layout_and_dct(safe):
     d, _ = _dir(safe)
-    seq, skel, layout, dct = _classify_inputs(os.path.join(d, 'in'))
-    return layout, dct
+    seq, skel, layout, lct, dct = _classify_inputs(os.path.join(d, 'in'))
+    return layout, lct, dct
 
 
 @app.route('/p/<seiban>/file/<path:name>')
