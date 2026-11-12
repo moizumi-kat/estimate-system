@@ -46,12 +46,16 @@ def _fromto_rows(seq_paths, skel_paths, seiban, tmp_dir, term_override=None):
 
 
 def stage3_fromto(seq_paths, skel_paths, seiban, out_html, tmp_dir=None, term_override=None,
-                  save_url=None):
+                  save_url=None, rows=None):
     """ハーネス工程 From-To の確認UI(自己完結HTML)を out_html に書く。戻り: 統計 dict。
     term_override: 2人目(端子番号割付)の確定端子で From-To の端子を補正する。
-    save_url: 指定するとUIの「保存」はそのURLへJSON POST(サーバ保存)。未指定はCSVダウンロード。"""
+    save_url: 指定するとUIの「保存」はそのURLへJSON POST(サーバ保存)。未指定はCSVダウンロード。
+    rows: 事前計算済み From-To 行([号線,種別,From機,From番,From端,To機,To番,To端])を渡すと、
+          内部の再計算(_fromto_rows)を行わずそれを使う(完全版=相番号置換済みの行を描画するため)。
+          既定 None=従来どおり内部計算(回帰ゼロ)。"""
     tmp_dir = tmp_dir or os.path.join(os.path.dirname(os.path.abspath(out_html)), '_tmp')
-    rows = _fromto_rows(seq_paths, skel_paths, seiban, tmp_dir, term_override=term_override)
+    if rows is None:
+        rows = _fromto_rows(seq_paths, skel_paths, seiban, tmp_dir, term_override=term_override)
     # 結線検査図(Fシートごと)
     imgs = []
     for p in seq_paths:
