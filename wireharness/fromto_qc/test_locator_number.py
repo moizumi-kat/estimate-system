@@ -63,3 +63,35 @@ def test_rail_span_from_name():
     # X_RAIL_<n>W の幅 ≒ n×8。
     assert LN._rail_span('X_RAIL_25W', 1) == 25 * 8.0
     assert LN._rail_span('X_RAIL_10W', 2) == 10 * 8.0 * 2
+
+
+def _locators(devs, rails):
+    return LN.assign_locators([(x, y, None) for (x, y) in devs], rails)
+
+
+def test_locators_single_panel_bare():
+    # 単盤(1本レール)は盤番号を付けない=素の文字 A,B,C(手本ハーネス同様)。
+    rail = (0.0, 100.0, 300.0)
+    devs = [(50.0, 120.0), (150.0, 120.0), (250.0, 120.0)]
+    L = _locators(devs, [rail])
+    assert [L[i] for i in range(3)] == ['A', 'B', 'C'], L
+
+
+def test_locators_multi_panel_prefixed_left_to_right():
+    # 複数盤は手本DCTどおり盤番号を前置。盤は左→右に 1,2,…。
+    r1 = (0.0, 100.0, 100.0)
+    r2 = (2000.0, 100.0, 2100.0)        # 遠い別盤(右)
+    devs = [(50.0, 120.0), (2050.0, 120.0)]
+    L = _locators(devs, [r1, r2])
+    assert L[0] == '1-A' and L[1] == '2-A', L     # 左盤=1-A, 右盤=2-A
+
+
+def test_locators_multi_panel_letters_within_panel():
+    # 盤内は 上→下・左→右 で A,B…、盤番号は盤ごと。
+    r1 = (0.0, 100.0, 300.0)
+    r2 = (2000.0, 100.0, 2300.0)
+    devs = [(50.0, 120.0), (150.0, 120.0),          # 左盤 1-A,1-B
+            (2050.0, 120.0), (2150.0, 120.0)]       # 右盤 2-A,2-B
+    L = _locators(devs, [r1, r2])
+    assert L[0] == '1-A' and L[1] == '1-B', L
+    assert L[2] == '2-A' and L[3] == '2-B', L

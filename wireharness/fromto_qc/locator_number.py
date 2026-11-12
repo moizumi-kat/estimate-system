@@ -64,8 +64,9 @@ def _letter(k):
     return _letter(k // 26 - 1) + chr(65 + k % 26)
 
 
-def assign_letters(devs, rails):
-    """devs/rails から {devsのindex: 相番号文字} を返す(純粋ロジック・テスト可能)。"""
+def _group_indices(devs, rails):
+    """devs/rails を盤(継電器盤)ごとに束ねる。戻り: [[index,...], ...]（各盤の機器index群）。
+    盤まとめ規則: 1)同一レール 2)x範囲が重なるレール(縦積み) 3)同じ行で横に近接。"""
     n = len(devs)
     par = list(range(n))
 
@@ -105,36 +106,65 @@ def assign_letters(devs, rails):
         for j in range(i + 1, n):
             if abs(devs[i][1] - devs[j][1]) <= ROW_TOL and abs(devs[i][0] - devs[j][0]) <= ROW_XGAP:
                 union(i, j)
-    # 盤ごとに 上→下(行)・左→右 で採番
     from collections import defaultdict
     groups = defaultdict(list)
     for i in range(n):
         groups[find(i)].append(i)
+    return list(groups.values())
+
+
+def _order_in_group(idxs, devs):
+    """盤内を 上→下(行まとめ)・各行 左→右 の読み順に並べた index 列を返す。"""
+    items = sorted(idxs, key=lambda i: (-devs[i][1], devs[i][0]))
+    rows = []
+    for i in items:
+        if rows and abs(devs[rows[-1][0]][1] - devs[i][1]) <= ROW_TOL:
+            rows[-1].append(i)
+        else:
+            rows.append([i])
+    order = []
+    for row in rows:
+        row.sort(key=lambda i: devs[i][0])
+        order += row
+    return order
+
+
+def assign_letters(devs, rails):
+    """devs/rails から {devsのindex: 相番号文字} を返す(純粋ロジック・テスト可能)。
+    盤ごとに 上→下・左→右 で A,B,C…(盤番号は付けない=素の文字)。"""
     letters = {}
-    for idxs in groups.values():
-        items = sorted(idxs, key=lambda i: (-devs[i][1], devs[i][0]))
-        rows = []
-        for i in items:
-            if rows and abs(devs[rows[-1][0]][1] - devs[i][1]) <= ROW_TOL:
-                rows[-1].append(i)
-            else:
-                rows.append([i])
-        order = []
-        for row in rows:
-            row.sort(key=lambda i: devs[i][0])
-            order += row
-        for k, i in enumerate(order):
+    for idxs in _group_indices(devs, rails):
+        for k, i in enumerate(_order_in_group(idxs, devs)):
             letters[i] = _letter(k)
     return letters
 
 
+def assign_locators(devs, rails):
+    """devs/rails から {index: ロケーター} を返す。**手本DCT(機器相番号図)の体裁に合わせ、
+    盤が複数あるときは盤番号を前置する(例 '1-A','3-B')。単盤なら素の文字('A')。**
+    盤番号は盤を左→右(同x帯は上→下)に 1,2,3… と採番する(手本の 133-1/133-2… の並び準拠)。
+    文字の割付は assign_letters と同一(手本12製番=116/116 の採番規則を維持)。"""
+    groups = _group_indices(devs, rails)
+    # 盤を左→右(min x 昇順, 同帯は上=大y 優先)に並べて 1,2,3… と番号付け
+    groups_sorted = sorted(
+        groups, key=lambda g: (min(devs[i][0] for i in g), -max(devs[i][1] for i in g)))
+    multi = len(groups_sorted) > 1
+    out = {}
+    for pno, idxs in enumerate(groups_sorted, start=1):
+        for k, i in enumerate(_order_in_group(idxs, devs)):
+            lt = _letter(k)
+            out[i] = f'{pno}-{lt}' if multi else lt
+    return out
+
+
 def apply_numbers(doc):
-    """doc内のリレー/タイマの DEVICE1 へ相番号を書き込む。戻り: 付与件数。"""
+    """doc内のリレー/タイマの DEVICE1 へ相番号(ロケーター)を書き込む。戻り: 付与件数。
+    手本DCT(機器相番号図)に合わせ、複数盤では盤番号付き('1-A','3-B')、単盤では素('A')。"""
     devs, rails = _read(doc)
-    letters = assign_letters([(x, y, None) for (x, y, _e) in devs], rails)
+    locs = assign_locators([(x, y, None) for (x, y, _e) in devs], rails)
     cnt = 0
     for i, (_x, _y, e) in enumerate(devs):
-        L = letters.get(i)
+        L = locs.get(i)
         if not L:
             continue
         for at in e.attribs:

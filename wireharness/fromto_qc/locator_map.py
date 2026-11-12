@@ -244,17 +244,37 @@ def locator_for(lmap, device, no=''):
         return None
     B = str(device or '').upper()
     num = str(no or '')
-    full = lmap.get('by_actual', {}).get((B, num))
+    by_actual = lmap.get('by_actual', {})
+    by_base = lmap.get('by_base', {})
+    # 1) 設計の (DEVICE, DEVICE1) がそのまま対応表にある
+    full = by_actual.get((B, num))
     if full:
         return full
-    letter = lmap.get('by_base', {}).get(B)
-    return letter
+    # 2) 対応表側が『連結名』で登録されている場合に対応。
+    #    英字付き番号(例 設計 DEVICE=30X / DEVICE1=1A)は、DCT側が '30X1A' と連結で持つ。
+    #    _split_actual は末尾が数字でないと分割しないため (30X,1A) では引けない。
+    #    連結名の完全一致(by_actual→by_base)を、緩い基フォールバックより先に試す。
+    if num:
+        joined = B + num
+        full = by_actual.get((joined, ''))
+        if full:
+            return full
+        jl = by_base.get(joined)
+        if jl:
+            return jl
+    # 3) 基(base)だけの対応(番号違いの同種機器)。最後の緩い手段。
+    return by_base.get(B)
 
 
 def apply_to_routed(routed, lmap, keep_actual=True):
     """route_and_length の結果(wires)の from/to 機器を、ロケーター対応があれば仮名称へ置換する。
-    ・device = ロケーター(例 '2-E')、no = '' に正規化(人のハーネスシートに合わせる)。
+    ・device = 相番号。**手本のハーネス表に合わせ『素の相番号』(例 'E')で出す**。
+      手本DCT(機器相番号図)は盤番号付き(例 '2-E')だが、ハーネス表は1枚=1盤で盤番号が
+      自明なため素の文字('E')で記載する(盤は号線頭 1R1/2R1 等で区別)。現場の混乱を避け、
+      手本どおりの体裁にするため盤プレフィクスを外す。
+    ・no = '' に正規化(人のハーネスシートに合わせる)。
     ・keep_actual=True のとき、元の実機器を 'actual' に退避(逆引き・確認用)。
+      盤番号付きのフルロケーター(DCT式 '2-E')は 'locator_full' に保持(確認用)。
     ・対応が無い機器(MCCB/51/52/TB 等)はそのまま。回帰ゼロ(対応表が無ければ不変)。
     戻り: 置換件数。routed はその場で更新。"""
     if not lmap or not lmap.get('by_actual'):
@@ -266,7 +286,9 @@ def apply_to_routed(routed, lmap, keep_actual=True):
             if loc:
                 if keep_actual:
                     e.setdefault('actual', f"{e.get('device','')}-{e.get('no','')}".strip('-'))
-                e['device'] = loc
+                letter = _split_locator(loc)[1] or loc    # 盤番号を外した素の相番号(手本ハーネス式)
+                e['device'] = letter
+                e['locator_full'] = loc                    # DCT式(盤-文字)も保持=確認用
                 e['no'] = ''
                 n += 1
     return n
