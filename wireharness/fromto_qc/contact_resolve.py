@@ -21,6 +21,7 @@ import ezdxf
 
 from . import contact_pins
 from . import cross_learn
+from . import terminals as _terminals_lib
 
 
 def is_aux_relay(device_base):
@@ -69,7 +70,8 @@ def _sym(d):
 def scan(draw_paths):
     """図面群 → {機器sym: {'unlabeled': [{'type','x','y'}...], 'labeled_pins': set()}}。
     unlabeled = TERMINAL が空の接点シンボル(=現状 '?')。labeled_pins = 本体等で番号済のピン。"""
-    devs = collections.defaultdict(lambda: {'unlabeled': [], 'labeled_pins': set()})
+    devs = collections.defaultdict(lambda: {'unlabeled': [], 'labeled_pins': set(),
+                                             'type': '', 'parts': ''})
     for p in (draw_paths or []):
         try:
             doc = ezdxf.readfile(p)
@@ -82,6 +84,12 @@ def scan(draw_paths):
             if not d.get('DEVICE'):
                 continue
             sym = _sym(d)
+            # 機種(型式/部品カテゴリ)は本体ブロック(LA_*)に載る。接点ブロックには無い。
+            # 同一機器の別INSERTから拾って保持し、接点のピン配列推論に使う。
+            if d.get('TYPE'):
+                devs[sym]['type'] = d['TYPE']
+            if d.get('PARTS'):
+                devs[sym]['parts'] = d['PARTS']
             names = []
             for k in ('TERMINAL1', 'TERMINAL2', 'TERMINAL3', 'TERMINAL4', 'TERMINAL5', 'TERMINAL6'):
                 if d.get(k):
@@ -157,16 +165,47 @@ def _kind_of(ct):
     return None
 
 
-def _pin_pool(inv_pairs, kind, n):
+def _model_pairs(type_str, parts, kind):
+    """型式/部品カテゴリ → その機種の接点ピン対(極順)。
+    リレー(RU4S/RU2S/R87F 等＝com/no/nc を持つパターン)のみ対応。
+    kind='NO'→各極(COM,NO)、'NC'→各極(COM,NC)。
+    接触器(aux式)・不明・NO/NC以外は None(→従来の汎用nth_auxへフォールバック)。
+    例 RU4S: NO=[('9','5'),('10','6'),('11','7'),('12','8')]。手本の86X(RU4S)に一致。"""
+    if kind not in ('NO', 'NC'):
+        return None
+    try:
+        pat = _terminals_lib.resolve_pattern(parts or '', type_str or '')
+        p = _terminals_lib.library()['patterns'].get(pat) if pat else None
+    except Exception:
+        p = None
+    if not p or 'com' not in p or 'no' not in p or 'nc' not in p:
+        return None
+    com = list(p['com'])
+    side = list(p['no'] if kind == 'NO' else p['nc'])
+    return [(com[i], side[i]) for i in range(min(len(com), len(side)))]
+
+
+def _pin_pool(inv_pairs, kind, n, base_pairs=None):
     """機器＋接点種別に対し、n個分のピン対を『小さい順・重複なし』で用意する。
     方針(ユーザー整理: 同種接点は電気的に等価＝空き端子を小さい順に割付、正解は機能で判定):
+      0) base_pairs(機種別の実ピン配列=RU4S等)があれば最優先で使う。接触器式の汎用補完はしない
+         (機種に実在しないピンを作らない＝86Xの23/24/33/34誤りを防ぐ)。
       1) 学習在庫(contact_inventory, ④由来の実番号)を順に使う(実番号の忠実性を優先)。
-      2) 足りない分は標準nth接点規約(NO 13-14,23-24… / NC 11-12,21-22…)で補完。
-         既に在庫で使った対は飛ばし、重複を出さない。
+      2) base_pairs が無い機器のみ、足りない分を標準nth接点規約(NO 13-14,23-24…)で補完。
     kind が NO/NC でない(c接点=切替等)は補完しない → 空(マーカー=要確認のまま、◎誤答ゼロ)。"""
     pool = [tuple(p) for p in inv_pairs]
-    if kind in ('NO', 'NC') and len(pool) < n:
-        seen = set(pool)
+    seen = set(pool)
+    # 0) 機種別の標準対(RU4S等)を優先補充。
+    for p in (base_pairs or []):
+        if len(pool) >= n:
+            break
+        tp = tuple(p)
+        if tp not in seen:
+            pool.append(tp)
+            seen.add(tp)
+    # 2) 機種が特定できない(base_pairs=None)場合のみ、従来の汎用nth_aux補完。
+    #    機種特定済みで極数が足りない分は割り付けない(要確認のまま＝◎誤答ゼロ)。
+    if base_pairs is None and kind in ('NO', 'NC') and len(pool) < n:
         k = 1
         while len(pool) < n:
             p = contact_pins.nth_aux(kind, k)
@@ -211,7 +250,9 @@ def resolve_points(draw_paths, markers=False, inv=None):
             us_sorted = sorted(us, key=lambda z: (-z['y'], z['x']))   # 読み順(割付順)
             kind = _kind_of(ct)
             inv_pairs = [tuple(p) for p in inv.get(cross_learn.device_type(sym), {}).get(kind, [])]
-            pool = _pin_pool(inv_pairs, kind, len(us_sorted))   # 実在庫優先＋標準nth補完(小さい順)
+            # 機種(RU4S等)が分かれば、その実ピン配列を優先(接触器式テンプレの誤りを防ぐ)。
+            base = _model_pairs(info.get('type', ''), info.get('parts', ''), kind)
+            pool = _pin_pool(inv_pairs, kind, len(us_sorted), base_pairs=base)
             breaker_alarm = ct in _ALARM_PINS and _is_breaker(sym)
             for i, u in enumerate(us_sorted):
                 eps = _tb_endpoints(u)
