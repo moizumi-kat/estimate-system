@@ -44,6 +44,8 @@ from wireharness.fromto_qc import terminal_feedback as TFB
 from wireharness.fromto_qc import terminal_print as TP
 from wireharness.fromto_qc import run_local as RL
 from wireharness.fromto_qc import dwg_convert as DWG
+from wireharness.fromto_qc import harness_produce as HP
+from wireharness.fromto_qc import locator_map as LMAP
 from wireharness.fromto_qc.geometry import norm as _norm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -394,11 +396,44 @@ def _term_override_auto(seq, skel):
 
 
 def _gen_fromto(safe, seq, skel, term_ov, outdir, meta):
-    """From-To UI を生成し meta を更新。term_ov=2人目の確定端子(自動 or 保存値)。
-    併せて From-To(ハーネスデータ)を CSV として即時出力する(保存前でもDL可・ダクト工程の素データ)。"""
+    """From-To(ハーネス工程)を完全版パイプライン(route_and_length＋相番号置換)で生成し、
+    手本と同じネイティブ形式txt(相番号)も出力。確認UIも同じ行から描く。
+    term_ov=2人目の確定端子(簡易版フォールバック時のみ使用)。
+    相番号の対応表元が無い/失敗時は簡易版(stage3内部計算・記号名)にフォールバック(回帰ゼロ)。"""
+    d, _ = _dir(safe)
+    _s, _k, _layout, lct, dct = _classify_inputs(os.path.join(d, 'in'))
+    loc_src = dct or lct          # 相番号の対応表元(手本DCT優先、無ければLCT)
     ft_html = os.path.join(outdir, f'{safe}_ハーネス工程.html')
+    rows = None
+    try:
+        routed = HP.route_and_length(seq, skel, seiban=safe, dct_paths=loc_src or None)
+        # 記号→相番号(A,B,C…)置換。対応表が無ければ不変(回帰ゼロ)。
+        try:
+            lm = LMAP.build_map(loc_src) if loc_src else None
+            if lm and lm.get('by_actual'):
+                n = LMAP.apply_to_routed(routed, lm)
+                meta['ft_locator'] = n
+        except Exception:
+            app.logger.exception('locator map failed %s', safe)
+        # From-To行(相番号) [号線,種別,From機,From番,From端,To機,To番,To端]
+        rows = []
+        for w in routed.get('wires', []):
+            f, t = w.get('from', {}), w.get('to', {})
+            rows.append([w.get('gousen', ''), w.get('kind', ''),
+                         f.get('device', ''), f.get('no', ''), f.get('terminal', ''),
+                         t.get('device', ''), t.get('no', ''), t.get('terminal', '')])
+        # 手本と同じネイティブ形式(11列TAB)の ハーネスデータ txt
+        try:
+            native = os.path.join(outdir, f'{safe}_ハーネスデータ.txt')
+            HP.to_harness_txt(routed, native, seiban=safe)
+            meta['ft_native'] = os.path.basename(native)
+        except Exception:
+            app.logger.exception('harness txt failed %s', safe)
+    except Exception:
+        app.logger.exception('route_and_length failed %s; 簡易版へフォールバック', safe)
+        rows = None
     st = SV.stage3_fromto(seq, skel, safe, ft_html, term_override=term_ov,
-                          save_url=f'/p/{safe}/save-fromto')
+                          save_url=f'/p/{safe}/save-fromto', rows=rows)
     meta['ft_html'] = os.path.basename(ft_html)
     meta['gousen'] = st.get('gousen', 0)
     # 画面の保存と同じ4列(号線,種別,From,To)・cp932で From-To CSV を出力。
@@ -680,8 +715,16 @@ def project(seiban):
                   if meta.get('ft_html') else '<span class=err>From-To UIの生成に失敗しました。</span>')
         ft_out = (f' <a class="btn g" href="/p/{safe}/file/{safe}_ハーネス工程FromTo.csv">From-To(CSV)</a>'
                   if meta.get('ft_html') else '')
+        ft_native = (f' <a class="btn g" href="/p/{safe}/file/{_esc(meta["ft_native"])}">ハーネスデータ(手本形式txt)</a>'
+                     if meta.get('ft_native') else '')
+        ft_locnote = (f'<div class=ok style="margin:6px 0">機器を相番号（A,B,C…）で表記'
+                      f'（配置図の対応表から {meta.get("ft_locator")} 件置換）＝手本のハーネスデータ形式。</div>'
+                      if meta.get('ft_locator') else
+                      '<div class=muted style="margin:6px 0">※ 配置図の相番号対応表（DCT）が無いため記号名で出力。'
+                      '手本の相番号表記にするには機器相番号図(DCT)が要ります。</div>')
         stage13 += (
-            f'<div class=card><h2>④ ハーネス工程（From-To ≤5.5sq）</h2>{ft_hint}{ft_btn}{ft_out}'
+            f'<div class=card><h2>④ ハーネス工程（From-To ≤5.5sq）</h2>{ft_hint}{ft_btn}{ft_out}{ft_native}'
+            f'{ft_locnote}'
             f'<div style="margin:6px 0">{ft_state}</div>'
             f'<div class=muted style="margin-top:6px">From-To（ハーネスデータ）を確認・修正し「保存」。'
             f'③の確定端子を反映します。配線ルート確定後、ダクト作図(DCT)に進みます。</div></div>')
