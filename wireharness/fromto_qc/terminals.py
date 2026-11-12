@@ -60,6 +60,21 @@ def pattern_terminal_names(pattern_name):
     return []
 
 
+# 全端子が必ず使われる単純機器(=端子図形が無くても機種から標準端子を付与してよい)。
+# リレー/接触器は接点が選択的に使われる(全端子は使わない)ので除外=過剰計上(誤答)を防ぐ。
+SIMPLE_PATTERNS = {'breaker_2P', 'breaker_3P', 'breaker_2P_N', 'fuse', 'lamp', 'meter'}
+
+
+def standard_terminals(parts, type_str):
+    """機種(部品カテゴリ/型式)→標準端子名の一覧。
+    全端子が必ず使われる単純機器(ブレーカ/ヒューズ/表示灯/計器)のみ返す。
+    それ以外(リレー/接触器/不明)は [](機種に実在しても選択的に使う端子は付けない)。"""
+    pat = resolve_pattern(parts or '', type_str or '')
+    if pat not in SIMPLE_PATTERNS:
+        return []
+    return pattern_terminal_names(pat)
+
+
 def pattern_stud(pattern_name):
     """パターンのねじ径(圧着端子選定用)。socket=リレーソケットで圧着なし。"""
     p = library()['patterns'].get(pattern_name, {})

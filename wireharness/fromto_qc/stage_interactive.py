@@ -20,6 +20,7 @@ from . import locator_apply as LAP, locator_assign as LA, edge_trace
 from . import tracer
 from . import review_viewer as rv
 from . import terminal_rules as term_rules
+from . import terminals as _tlib
 from .geometry import norm
 
 _TR_MODEL = term_rules.load_model()   # 端子番号の確定判定モデル(手本学習)
@@ -419,11 +420,51 @@ def _all_terminals_by_sheet(seq_paths, skel_paths):
                     v = corr.get(f'{dt}|{rank}')
                     if v is not None:
                         it['num'], it['tier'] = v, 'confirmed'
+        # 端子図形が無い機器(名称ラベルのみブロック=CP制御電源ブレーカ等)に、機種(TYPE)から
+        # 標準端子を付与する。全端子が必ず使われる単純機器(ブレーカ/表示灯/ヒューズ/計器)のみ。
+        # 既に端子が抽出済みの機器は対象外(重複回避)。機種不明は不変(回帰ゼロ)。
+        items += _standard_terminals_for_sheet(p, items)
         # 番号を決められない端子(機器名の無い点・空欄)は注記しない。'?'(要確認)は残す。
         items = [it for it in items if it['num'] or it['tier'] != 'unknown']
         if items:
             sheets.append((p, items))
     return sheets
+
+
+def _standard_terminals_for_sheet(sheet_path, existing):
+    """シート内の機器で、端子がまだ1つも抽出されていない『単純機器』(ブレーカ/表示灯/
+    ヒューズ/計器)に、機種(TYPE/PARTS)から標準端子名を付与して返す。
+    tier='standard'(機種由来の標準端子)。相番号変換前の生の機器名で付与。
+    ◎誤答ゼロ: 全端子が必ず使われる単純機器のみ(リレー/接触器は対象外=terminals.SIMPLE_PATTERNS)。"""
+    have = {norm(it['dev']) for it in existing}
+    out = []
+    try:
+        doc = ezdxf.readfile(sheet_path)
+    except Exception:
+        return out
+    done = set()
+    for e in doc.modelspace().query('INSERT'):
+        d = {a.dxf.tag: (a.dxf.text or '').strip() for a in e.attribs}
+        dev = d.get('DEVICE', '')
+        if not dev:
+            continue
+        no = d.get('DEVICE1', '')
+        sym = f'{dev}-{no}' if no else dev
+        key = norm(sym)
+        if key in have or key in done:
+            continue
+        names = _tlib.standard_terminals(d.get('PARTS', ''), d.get('TYPE', ''))
+        if not names:
+            continue
+        done.add(key)
+        try:
+            ix, iy = e.dxf.insert.x, e.dxf.insert.y
+        except Exception:
+            ix, iy = 0.0, 0.0
+        for i, nm in enumerate(names):
+            out.append({'dev': sym, 'num': nm, 'tier': 'standard', 'tb': '',
+                        'gousen': [], 'x': round(ix, 1), 'y': round(iy - i * 0.1, 1)})
+    return out
 
 
 def stage2_terminal_assign(seq_paths, skel_paths, seiban, out_html, save_url=None):
@@ -587,8 +628,8 @@ def write_all_terminals_dxf(seq_paths, skel_paths, seiban, out_dir,
             uniq.sort(key=lambda it: (str(it['num'])))
             top = (len(uniq) - 1) / 2.0
             for j, it in enumerate(uniq):
-                # 確定(青)= 図面記載(drawn) または 手本学習で確定(confirmed)。
-                ok = it.get('tier') in ('drawn', 'confirmed')
+                # 確定(青)= 図面記載(drawn)/手本学習(confirmed)/機種由来の標準端子(standard)。
+                ok = it.get('tier') in ('drawn', 'confirmed', 'standard')
                 layer, color = ('TERMNO_OK', 5) if ok else ('TERMNO_CHK', 1)
                 oy = it['y'] + dy + (top - j) * step  # 上から順に縦積み
                 msp.add_text(str(it['num']),
@@ -820,6 +861,8 @@ def _write_terminal_html(out_html, seiban, sheets, save_url=None):
             return 'ctrl', '割付'
         if t in ('inferred', 'unknown'):
             return 'infer', '要確認'
+        if t == 'standard':
+            return '', '標準'          # 機種由来の標準端子(単純機器)
         if t in ('drawn', 'confirmed'):
             return '', '確定'
         return '', '―'

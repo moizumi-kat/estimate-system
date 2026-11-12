@@ -22,6 +22,8 @@
     {"parts": "ELCB", "pole": "2P", "pattern": "breaker_2P"},
     {"parts": "MS", "pattern": "contactor"},
     {"parts": "MC", "pattern": "contactor"},
+    {"type_contains": "CPS", "pattern": "breaker_2P"},
+    {"parts": "CP", "pattern": "breaker_2P"},
     {"type_contains": "RU4S", "pattern": "relay_RU4S"},
     {"type_contains": "RU2S", "pattern": "relay_RU2S"},
     {"type_contains": "R87F", "pattern": "relay_R87F"},
