@@ -285,3 +285,10 @@ Claude(1回目) ∩ Gemini 2.5 Pro(2回目)
 - サーバ: `/api/pageinfo`(ページ数)・`/api/pageimg`(fitzでページPNG描画・2x)・`/api/locate`(ページ画像＋機器名リスト→`LOCATE_PROMPT`で各機器の(x,y)%をClaudeが返す。見つからない機器は省略・推測しない。失敗=pos[]で既存に無影響)。いずれもmultipartでcurFilesを都度POST(サーバ側ファイル永続化不要)。
 - フロント: ビューアは結果表と独立(render()不改造)。`_buildDevList`でlastDataから機器リスト生成、`/api/locate`はユーザが「位置を自動付け(AI)」を押した時だけ発火(コスト最小・ページ単位)。ピンは赤数字2px(白フチ)、タップ/行クリックで拡大＋ふきだし＋双方向ハイライト。スマホは縦積み。
 - ピンはPoCで茂泉様と見た目を確定(赤数字2px・丸なし・機器位置に重ねる)。位置精度はVision依存のため「当たり付け」用途。◎誤答ゼロ・選定不変。
+
+## 11. 複数人同時利用(2026-11／5人想定・t3.medium格上げ)
+- **格上げ**: 本番EC2 `mitsumori-server`(i-0506f4e7ee413a064・Elastic IP 18.178.195.90) を t3.micro→**t3.medium(4GB)**。停止保護(disableApiStop)ONのため一旦オフ→停止→タイプ変更→起動→保護ON。EBS保持でデータ/swap/systemd不変。
+- **データ分離は元々OK**: sid別(`_LAST_RESULT[sid]`/`_save_last`)。`_EXTRACT_CACHE`/`_BUNKI_INDEX`/`_LUG_MAP`は共有読み取りで混ざらない。ログインは共有パスAPP_PASSWORD(個人別は「いずれ」対応・見送り中)。
+- **同時抽出の安全弁(本セッション実装)**: 重い抽出(高解像度×二重Vision)が同時に走るとOOMの恐れ→`_EXTRACT_SEM=Semaphore(EXTRACT_CONCURRENCY,既定2)`で同時実行を制限。超過分は`_work`内でacquire待ち=statusに`queued:true`→フロントpollJobが「順番待ち」表示。空き次第自動開始。抽出コア(`_do_extract`)は不変=回帰ゼロ。t3.medium+swap2GBで既定2、`EXTRACT_CONCURRENCY`環境変数で調整可。
+- **gunicornワーカー**: 現行 `-w 2`(INSTALL.md)。5人の軽い操作(選定/pageimg/locate=数秒ブロック)を滑らかにするなら `/etc/systemd/system/estimate.service` の ExecStart を `--workers 4 --timeout 600`(必要なら`--threads 2`)へ。要 `sudo systemctl daemon-reload && sudo systemctl restart estimate`(SSH・手動)。4GBなら4ワーカー可。
+- 未了: 個人別ログイン(users.json等)・セキュリティ宿題(APIキー失効/PW変更/SSH制限)。

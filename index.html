@@ -158,13 +158,14 @@ async function pollJob(jid,n){
     await new Promise(res=>setTimeout(res,3000));
     if(controller&&controller.signal.aborted)return null;
     waited+=3;
-    busy('[1/2] 図面から部品を抽出しています…（'+n+'件・'+waited+'秒経過／重い図面は数分かかります）');
     let sj;
     try{
       const sr=await fetch('/api/extract/status/'+jid,{signal:controller?controller.signal:undefined});
       if(sr.status===401){ throw new Error('ログインの有効期限が切れました。ページを再読み込みしてログインし直してください。'); }
       sj=await sr.json();
     }catch(e){ if(e.name==='AbortError')return null; if(e&&e.message&&e.message.indexOf('ログイン')>=0)throw e; continue; }  // 一時的な通信エラーは継続
+    if(sj&&sj.queued){ busy('[1/2] 他の抽出が実行中のため順番待ちです…（'+n+'件・'+waited+'秒経過／空き次第、自動で開始します）'); }
+    else{ busy('[1/2] 図面から部品を抽出しています…（'+n+'件・'+waited+'秒経過／重い図面は数分かかります）'); }
     if(sj.status==='done'){ return sj.result; }
     if(sj.status==='error'){ throw new Error(sj.error||'抽出に失敗しました'); }
     if(sj.status==='unknown'){ throw new Error('抽出ジョブが見つかりません（時間切れの可能性）'); }

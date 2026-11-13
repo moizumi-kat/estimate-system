@@ -4014,6 +4014,12 @@ def _persist_dir(name):
         except Exception: continue
     return tempfile.gettempdir()
 _JOB_DIR=_persist_dir('.estimate_jobs')
+# 同時抽出の上限(メモリ逼迫/OOM防止)。重い抽出(高解像度×二重Vision)が同時に走ると
+# メモリを食うため、同時実行数を制限し超過分は自動で順番待ちにする(複数人同時利用対策)。
+# t3.medium(4GB)+swap2GBの目安=2。EXTRACT_CONCURRENCY で調整可。
+try: _EXTRACT_MAX=max(1,int(os.environ.get('EXTRACT_CONCURRENCY','2') or 2))
+except Exception: _EXTRACT_MAX=2
+_EXTRACT_SEM=threading.Semaphore(_EXTRACT_MAX)
 def _cleanup_old(dirpath, max_age=86400):
     """古いジョブ/結果ファイルを掃除(永続ディレクトリの肥大化防止・既定1日)。"""
     try:
@@ -4050,7 +4056,13 @@ def api_extract():
     jid=secrets.token_hex(8)
     _job_write(jid, {'status':'running'})
     def _work(jid=jid, payload=payload):
+        got=False
         try:
+            # 同時抽出が上限に達していれば空くまで待機(OOM防止)。待機中は queued をstatusに反映。
+            while not _EXTRACT_SEM.acquire(timeout=5):
+                _job_write(jid, {'status':'running','queued':True})
+            got=True
+            _job_write(jid, {'status':'running'})
             res=_do_extract(payload)
             if isinstance(res,dict) and res.get('error'):
                 _job_write(jid, {'status':'error','error':res['error']})
@@ -4058,6 +4070,10 @@ def api_extract():
                 _job_write(jid, {'status':'done','result':res})
         except Exception as e:
             _job_write(jid, {'status':'error','error':str(e)})
+        finally:
+            if got:
+                try: _EXTRACT_SEM.release()
+                except Exception: pass
     threading.Thread(target=_work, daemon=True).start()
     return jsonify(job_id=jid, status='running')
 
