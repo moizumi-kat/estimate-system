@@ -114,6 +114,15 @@
         {"role": "aux", "side": "side", "names": ["ALa", "ALc"]}
       ]
     },
+    "CP": {
+      "desc": "小型回路遮断器 CP/CPS(制御電源・2P)。横向き図記号=左:線側1/3・右:負荷側2/4、縦向き=上1/3・下2/4。手本CP=R相1/2・S相3/4。",
+      "split_series": true,
+      "poles": 2,
+      "terminals": [
+        {"role": "line", "side": "top", "names_3p": ["1", "3"], "names": ["1", "3"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4"], "names": ["2", "4"]}
+      ]
+    },
     "ELCB": {
       "desc": "漏電遮断器。MCCBと同配列。線側1/3/5→負荷側2/4/6。",
       "split_series": true, "poles": 3,

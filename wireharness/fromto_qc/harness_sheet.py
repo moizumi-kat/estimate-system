@@ -119,6 +119,33 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
             m = nodes.setdefault(g, {'kind': nd['kind'], 'members': set()})
             m['members'] |= nd['members']
 
+    # 接点シンボルの '?' 端子を、機種別ピン配列で解決(contact_resolve.resolve_points)。
+    # 補助リレー(RU4S 等=機種別)・接触器(52=IEC補助接点13/14,21/22…)の“図面に番号が
+    # 無い接点”を、機能が正しいピンで補完する。markers=False で確信できる接点のみ採用
+    # （c接点=切替等は未割付のまま＝◎誤答ゼロ）。従来 From-To は drawn 端子のみで接点が
+    # 空欄に落ちていた（接触器AUX/リレー接点の取りこぼし）。位置照合は丸め誤差に備え近傍も見る。
+    from . import contact_resolve as _cres
+    from . import device_norm as _dn
+    _resmap = {}
+    try:
+        for (cdev, cx, cy), cpin in _cres.resolve_points(
+                list(seq_paths) + list(skel_paths), markers=False).items():
+            _resmap[(_dn.canon(cdev), round(cx), round(cy))] = cpin
+    except Exception:
+        _resmap = {}
+
+    def _resolve_term(dev, term, x, y):
+        """term が '?'/空の接点端子なら、解決済みピンに置換(近傍±2探索)。無ければ元のまま。"""
+        if term and term not in ('?', 'None'):
+            return term
+        cd = _dn.canon(dev)
+        for dx in (0, 1, -1, 2, -2):
+            for dy in (0, 1, -1, 2, -2):
+                p = _resmap.get((cd, round(x) + dx, round(y) + dy))
+                if p:
+                    return p
+        return term
+
     def split(dev):
         if '-' in dev:
             d, n = dev.rsplit('-', 1)
@@ -148,6 +175,8 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
         idx = {}
         terms = []
         for (dev, term, x, y) in sorted(nd['members']):
+            # 接点シンボルの '?'/空端子を機種別ピンで解決(接触器AUX・リレー接点の補完)。
+            term = _resolve_term(dev, term, x, y)
             d, n = split(dev)
             # 操作SW 3-<回路> の接点 → 手本式 入/切（表示端子は空に）。dsp_term は
             # 出力用、term(元の11/12/13/14)は dedup キーに残し同一SWの別接点を潰さない。

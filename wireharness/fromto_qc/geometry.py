@@ -257,7 +257,10 @@ class DrawingModel:
                 continue
             a = {at.dxf.tag: at.dxf.text for at in e.attribs}
             dev = a.get('DEVICE', '')
-            if not dev or dev in SKIP_DEVICES:
+            # CP(制御電源ブレーカ)は従来 SKIP だが、ブレーカ図記号(PARTS=CP)は実機器＝
+            # 端子(1/3線側・2/4負荷側)を持つ。銘板ラベル(PARTS空=LZ_MEISHOU)のみ従来どおり除外。
+            _parts = (a.get('PARTS', '') or '').strip()
+            if not dev or (dev in SKIP_DEVICES and not (dev == 'CP' and _parts == 'CP')):
                 continue
             sym = _mk_sym(dev, a.get('DEVICE1',''))
             ins = e.dxf.insert

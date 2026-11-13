@@ -371,14 +371,27 @@ def _attach_main_terminals(m, segs, find, comp_terms, comp_dev, margin=45):
         cx = (x0 + x1) / 2
         ymid = (y0 + y1) / 2
         eps = _endpoints_in_box(x0, y0, x1, y1)
+        # 横向き図記号(左右に端子)判定: 端点のxの広がり>yの広がり なら横向き。
+        # CP等の2P小ブレーカは単線横向き(左=線側/右=負荷側)で描かれることがある。
+        exs = [p[0] for (p, _c) in eps]
+        eys = [p[1] for (p, _c) in eps]
+        horiz = bool(exs) and (max(exs) - min(exs)) > (max(eys) - min(eys))
+
+        def comps_half_x(upper):
+            return {c for (p, c) in eps if (p[0] >= cx) == upper}
         for t in defn.get('terminals', []):
             names = t.get('names_3p') or t.get('names') or []
             if not names:
                 continue
             side = t.get('side', '')
-            if side == 'top':
+            # line/load は図記号の向きに追従: 縦向き=上(line)/下(load)、横向き=左(line)/右(load)。
+            if side in ('top', 'line') and horiz:
+                comps, ey = comps_half_x(False), ymid      # 横向きの線側=左
+            elif side in ('bottom', 'load') and horiz:
+                comps, ey = comps_half_x(True), ymid       # 横向きの負荷側=右
+            elif side in ('top', 'line'):
                 comps, ey = comps_half(eps, ymid, True), y1
-            elif side == 'bottom':
+            elif side in ('bottom', 'load'):
                 comps, ey = comps_half(eps, ymid, False), y0
             elif side == 'through':
                 comps, ey = comps_all(eps), ymid
