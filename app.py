@@ -4184,6 +4184,26 @@ def api_codeinfo():
     if d: return jsonify(ok=True, code=code, name=d.get('name',''))
     return jsonify(ok=False, code=code)
 
+@app.route('/api/variant', methods=['POST'])
+@login_required
+def api_variant():
+    """一括確定(AX)用: 非AX↔AXの変種コードがDBに実在すれば返す。
+    変種規則: 5桁コードの2桁目 0(非AX)↔1(AX) をトグル(例 40133↔41133 / 50536↔51536)。
+    実在する物だけ返す(方針1-3: DB実在コードのみ)。"""
+    data=request.get_json(silent=True) or {}
+    codes=data.get('codes',[]) or []
+    mode=data.get('mode','ax')
+    out={}
+    for c in codes:
+        c=str(c).strip()
+        if len(c)==5 and c.isdigit():
+            if mode=='ax' and c[1]=='0':   v=c[0]+'1'+c[2:]
+            elif mode=='noax' and c[1]=='1': v=c[0]+'0'+c[2:]
+            else: continue
+            if v in byCode:
+                out[c]={'code':v,'name':byCode[v].get('name','')}
+    return jsonify(ok=True, map=out)
+
 # 確実ダウンロード(GET): ブラウザでURLを開くだけで保存できる。iOS/PC問わず動作。
 @app.route('/api/excel/download', methods=['GET'])
 @login_required

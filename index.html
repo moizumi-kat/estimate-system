@@ -331,6 +331,113 @@ function applyGate(){
   Object.keys(_gate).forEach(pi=>{extracted[pi].set_attrs=extracted[pi].set_attrs||{};Object.assign(extracted[pi].set_attrs,_gate[pi]);extracted[pi].set_attrs._confirmed=true;});
   $('goSelect').onclick();
 }
+// ===== 一括確定（図面に描かれない仕様をまとめて ○→◎ に昇格） =====
+// ○のままになる主因は「図面に明記されない仕様差」(AX付の有無/SPDクラス/計器種別/支給TR容量)。
+// 案件・盤でまとめて確定すれば◎へ上げられる(◎誤答ゼロ=人が確定した仕様だけ◎化)。
+function _bulkMatch(r,cat){
+  if(!r||r.conf!=='○'||r.load_detail)return false;
+  const n=r.note||'';
+  if(cat==='ax')   return n.indexOf('AX付の有無')>=0;
+  if(cat==='spd')  return n.indexOf('SPD本体')>=0;
+  if(cat==='meter')return n.indexOf('マルチ指示計')>=0||n.indexOf('計器種別')>=0;
+  if(cat==='tr')   return n.indexOf('TR支給品')>=0||n.indexOf('支給区分')>=0;
+  if(cat==='all')  return true;
+  return false;
+}
+function _bulkCats(d){
+  const c={ax:0,spd:0,meter:0,tr:0,total:0};
+  (d.panels||[]).forEach(p=>(p.rows||[]).forEach(r=>{
+    if(r.conf!=='○'||r.load_detail)return;
+    c.total++;
+    if(_bulkMatch(r,'ax'))c.ax++;
+    else if(_bulkMatch(r,'spd'))c.spd++;
+    else if(_bulkMatch(r,'meter'))c.meter++;
+    else if(_bulkMatch(r,'tr'))c.tr++;
+  }));
+  return c;
+}
+function bulkBar(d){
+  const c=_bulkCats(d);
+  if(!c.total)return '';
+  const B=(fn,label,n)=>'<button onclick="'+fn+'" '+(n?'':'disabled')+' style="background:'+(n?'#305496':'#bbb')+';color:#fff;border:none;padding:6px 13px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:'+(n?'pointer':'default')+'">'+label+'('+n+')</button>';
+  return '<div style="margin:8px 0 12px;padding:12px;border:1px solid #6b9bd1;background:#eef4fb;border-radius:9px">'+
+    '<div style="font-weight:700;color:#234;margin-bottom:7px">■ 一括確定（図面に描かれない仕様をまとめて確定し ○→◎ に）</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px">'+
+    '<span style="white-space:nowrap">分岐遮断器 AX('+c.ax+'件)：</span>'+
+    '<select id="bulkax" style="padding:4px;border:1px solid #bbb;border-radius:5px"><option value="noax">非AXで確定（既定どおり・コードそのまま）</option><option value="ax">AX付で確定（受変電/制御盤→AX変種・分電盤60系は非AXのまま）</option></select>'+
+    '<button onclick="bulkAX()" '+(c.ax?'':'disabled')+' style="background:'+(c.ax?'#305496':'#bbb')+';color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:'+(c.ax?'pointer':'default')+'">適用</button>'+
+    '<span style="width:12px"></span>'+
+    B("bulkConfirm('spd')",'SPDを確定',c.spd)+
+    B("bulkConfirm('meter')",'計器を確定',c.meter)+
+    B("bulkConfirm('tr')",'支給TR/SC/SRを確定',c.tr)+
+    B("bulkConfirm('all')",'残りの○も全て◎に',c.total)+
+    '<button onclick="bulkReset()" style="margin-left:auto;background:#f3f3f3;color:#333;border:1px solid #bbb;padding:6px 12px;border-radius:6px;font-size:12.5px;cursor:pointer">一括確定を取り消す（元に戻す）</button>'+
+    '</div>'+
+    '<div style="font-size:11.5px;color:#567;margin-top:6px">※一括確定した行は◎になり、Excel出力にも反映されます。◎誤答ゼロのため、確定は人（ここでの選択）に基づきます。元に戻すには「取り消す」。</div>'+
+  '</div>';
+}
+function _bulkSaveOrig(r){ if(r._conf0===undefined){r._conf0=r.conf;r._code0=(r.code||'');r._official0=(r.official||'');r._note0=(r.note||'');} }
+function _bulkRecalc(){
+  const s={total:0,ok:0,warn:0,chk:0,detail:0};
+  (lastData.panels||[]).forEach(p=>(p.rows||[]).forEach(r=>{
+    if(r.load_detail){s.detail++;return;}
+    if(r.conf==='◎'){s.ok++;s.total++;}
+    else if(r.conf==='○'){s.warn++;s.total++;}
+    else if(r.conf==='△'){s.chk++;s.total++;}
+  }));
+  const tot=s.total||1; s.rate=Math.round((s.ok+s.warn)/tot*100);
+  lastData.summary=Object.assign({},lastData.summary||{},s);
+}
+function bulkConfirm(cat){
+  if(!lastData)return; let n=0;
+  lastData.panels.forEach(p=>p.rows.forEach(r=>{
+    if(_bulkMatch(r,cat)){_bulkSaveOrig(r);r.conf='◎';r.note=(r.note||'')+' [一括確定]';n++;}
+  }));
+  if(!n){alert('対象の○がありません。');return;}
+  _bulkRecalc(); render(lastData,currentFilter());
+  alert(n+'件を◎に確定しました。（「取り消す」で元に戻せます）');
+}
+async function bulkAX(){
+  if(!lastData)return;
+  const mode=($('bulkax')&&$('bulkax').value)||'noax';
+  const rows=[]; lastData.panels.forEach(p=>p.rows.forEach(r=>{ if(_bulkMatch(r,'ax'))rows.push(r); }));
+  if(!rows.length){alert('対象の分岐遮断器(AX)がありません。');return;}
+  let vmap={};
+  if(mode==='ax'){
+    const codes=[...new Set(rows.map(r=>r.code).filter(Boolean))];
+    try{
+      const res=await fetch('/api/variant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:codes,mode:'ax'})});
+      const j=await res.json(); vmap=(j&&j.map)||{};
+    }catch(e){}
+  }
+  let n=0,sw=0,keep60=0,nov=0;
+  rows.forEach(r=>{
+    _bulkSaveOrig(r);
+    if(mode==='ax'){
+      const c=String(r.code||'');
+      // 手本準拠: 受変電40系・制御盤50系の分岐はAX(41/51系)へ切替。分電盤60系は非AXのまま確定。
+      if((c[0]==='4'||c[0]==='5')&&vmap[r.code]){
+        const v=vmap[r.code];r.code=v.code;r.official=v.name;r.conf='◎';r.note=(r.note||'')+' [一括:AX確定(変種切替)]';sw++;
+      }else if(c[0]==='6'){
+        r.conf='◎';r.note=(r.note||'')+' [一括:分電盤60系は非AXで確定]';keep60++;
+      }else{
+        r.conf='◎';r.note=(r.note||'')+' [一括:AX変種なし→現コードで確定]';nov++;
+      }
+    }else{ r.conf='◎';r.note=(r.note||'')+' [一括:非AX(既定)確定]'; }
+    n++;
+  });
+  _bulkRecalc(); render(lastData,currentFilter());
+  alert(n+'件を◎に確定しました。'+(mode==='ax'?('（受変電/制御盤をAX変種へ '+sw+'件 / 分電盤60系は非AXのまま '+keep60+'件'+(nov?' / 変種なし '+nov+'件':'')+'）'):'（非AX・既定どおり）'));
+}
+function bulkReset(){
+  if(!lastData)return; let n=0;
+  lastData.panels.forEach(p=>p.rows.forEach(r=>{
+    if(r._conf0!==undefined){r.conf=r._conf0;r.code=r._code0;r.official=r._official0;r.note=r._note0;
+      delete r._conf0;delete r._code0;delete r._official0;delete r._note0;n++;}
+  }));
+  if(!n){alert('取り消す一括確定はありません。');return;}
+  _bulkRecalc(); render(lastData,currentFilter());
+}
 function render(d,filter){
   window._filter=filter||'all';
   const s=d.summary;
@@ -355,6 +462,7 @@ function render(d,filter){
     '<button id="allbtn" onclick="toggleAll()" style="background:#305496;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">全行を一括チェック</button>'+
     '<span style="font-size:12px;color:#888">もう一度押すと全解除</span>'+
     '<button id="accApply" onclick="applyAccessories()" style="display:none;margin-left:auto;background:#2a7;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">盤付属品・板金サイズを反映して再選定</button></div>';
+  h+=bulkBar(d);   // 一括確定バー(図面に描かれない仕様をまとめて ○→◎ に昇格)
   h+='<table><thead><tr><th>部品名＋仕様〈幹線〉(負荷名称)</th><th>数量</th><th>提示</th><th>判定</th><th>最終選択コード</th><th>品名</th><th>確認</th></tr></thead><tbody>';
   let gid=0;
   for(let pi=0;pi<d.panels.length;pi++){
