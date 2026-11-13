@@ -4204,6 +4204,93 @@ def api_variant():
                 out[c]={'code':v,'name':byCode[v].get('name','')}
     return jsonify(ok=True, map=out)
 
+# ===== 図面と並べて確認(位置付けビューア) =====
+# 方針: 抽出コア・選定は一切変更しない。位置は独立したVision呼び出し(advisory=積算額に無関係)。
+def _page_count(fname,data):
+    low=(fname or '').lower()
+    if low.endswith(('.png','.jpg','.jpeg')): return 1
+    if low.endswith('.pdf'):
+        try:
+            import fitz; doc=fitz.open(stream=data,filetype='pdf'); n=doc.page_count; doc.close(); return n
+        except Exception: return 0
+    return 0
+def _page_png(fname,data,idx,zoom=2):
+    low=(fname or '').lower()
+    if low.endswith(('.png','.jpg','.jpeg')): return data if idx==0 else None
+    if low.endswith('.pdf'):
+        try:
+            import fitz
+        except ImportError:
+            return None
+        doc=fitz.open(stream=data,filetype='pdf')
+        try:
+            if idx<0 or idx>=doc.page_count: return None
+            pix=doc[idx].get_pixmap(matrix=fitz.Matrix(zoom,zoom)); png=pix.tobytes('png'); return png
+        finally:
+            try: doc.close()
+            except Exception: pass
+    return None
+
+@app.route('/api/pageinfo', methods=['POST'])
+@login_required
+def api_pageinfo():
+    f=request.files.get('file')
+    if not f: return jsonify(ok=False,pages=0)
+    return jsonify(ok=True, pages=_page_count(f.filename, f.read()))
+
+@app.route('/api/pageimg', methods=['POST'])
+@login_required
+def api_pageimg():
+    f=request.files.get('file')
+    if not f: return Response('no file',status=400)
+    try: idx=int(request.form.get('page','0') or 0)
+    except Exception: idx=0
+    png=_page_png(f.filename, f.read(), idx)
+    if png is None: return Response('no page',status=404)
+    return Response(png, mimetype='image/png')
+
+LOCATE_PROMPT="""あなたは配電盤図面を読む専門家です。この図面画像から、下の「機器リスト」の各機器が
+図面上のどこにあるかを返してください。位置は画像の左上を(0,0)、右下を(100,100)とした割合で、
+機器シンボル(記号)の中心の (x,y) を示します。図面に見当たらない機器は省略(推測で置かない)。
+出力は {"pos":[{"i":番号,"x":数値,"y":数値}, ...]} のJSONのみ。
+機器リスト(番号:名称):
+%s"""
+
+@app.route('/api/locate', methods=['POST'])
+@login_required
+def api_locate():
+    """図面ページ画像と機器名リストを渡し、各機器の概略位置をVisionで返す(advisory)。
+    抽出・選定とは独立。失敗しても pos=[] を返すだけ(既存機能に影響しない)。"""
+    f=request.files.get('file')
+    if not f: return jsonify(ok=False,pos=[])
+    try: idx=int(request.form.get('page','0') or 0)
+    except Exception: idx=0
+    try: names=json.loads(request.form.get('names','[]'))
+    except Exception: names=[]
+    if not names: return jsonify(ok=False,pos=[])
+    png=_page_png(f.filename, f.read(), idx, zoom=2)
+    if png is None: return jsonify(ok=False,pos=[])
+    lst="\n".join('%s:%s'%(it.get('i'),str(it.get('name',''))[:60]) for it in names if it.get('name'))[:6000]
+    try:
+        cli=client()
+        src={"type":"base64","media_type":"image/png","data":base64.standard_b64encode(png).decode()}
+        with cli.messages.stream(model=MODEL,max_tokens=8000,
+            messages=[{"role":"user","content":[{"type":"image","source":src},{"type":"text","text":LOCATE_PROMPT%lst}]}]) as st:
+            msg=st.get_final_message()
+        txt="".join(b.text for b in msg.content if b.type=="text").strip()
+        txt=re.sub(r'^```(json)?|```$','',txt,flags=re.M).strip()
+        if not txt.startswith('{'):
+            m=re.search(r'\{.*\}',txt,re.S); txt=m.group(0) if m else '{"pos":[]}'
+        d=json.loads(txt); pos=d.get('pos',[]) if isinstance(d,dict) else []
+        clean=[]
+        for p in pos:
+            try:
+                clean.append({'i':int(p['i']),'x':max(0,min(100,float(p['x']))),'y':max(0,min(100,float(p['y'])))})
+            except Exception: continue
+        return jsonify(ok=True,pos=clean)
+    except Exception as e:
+        return jsonify(ok=False,pos=[],error=str(e)[:120])
+
 # 確実ダウンロード(GET): ブラウザでURLを開くだけで保存できる。iOS/PC問わず動作。
 @app.route('/api/excel/download', methods=['GET'])
 @login_required

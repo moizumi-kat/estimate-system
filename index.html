@@ -52,6 +52,13 @@ tr.pnl td{background:#eef2ee;font-weight:700;color:var(--green2)}
 .hl{color:var(--green2);font-weight:700}
 select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;max-width:240px;font-family:inherit;background:#fff}
 .manual{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px}
+/* 図面ビューアのピン(赤数字2px・白フチ)・ふきだし */
+#dwgInner .pin{position:absolute;transform:translate(-50%,-50%);color:#e00000;font-weight:700;font-size:2px;line-height:1;padding:4px;cursor:pointer;z-index:3;text-shadow:0 0 1px #fff,0 0 1px #fff,0 0 1px #fff}
+#dwgInner .pin:hover{font-size:12px;color:#c0392b}
+#dwgInner .pin.hot{font-size:13px;color:#c0392b}
+#dwgInner .callout{position:absolute;transform:translate(10px,-50%);background:#c0392b;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap;z-index:7;box-shadow:0 1px 5px rgba(0,0,0,.35);pointer-events:none;display:none}
+#dwgListWrap tr.hot td,#dwgListWrap tr.hot{background:#ffe9c7}
+@media(max-width:800px){#dwgBody{flex-direction:column!important}#dwgListWrap{max-width:none!important;border-left:0!important;border-top:1px solid #ccc}}
 </style></head>
 <body>
 <header><h1>積算コード選定システム</h1><span class="ver">v1.6 / engine v9.3</span><span class="db" id="db"></span><span class="uid" id="uidLabel"></span><a href="/logout" class="lo">ログアウト</a></header>
@@ -451,36 +458,114 @@ function filterCross(v){
   const b=document.querySelector('.fbar button[data-f="'+v+'"]'); if(b)b.classList.add('on');
   if(lastData)render(lastData,v);
 }
-// ===== B: 図面と並べて確認（アップした図面=ブラウザ内 curFiles を右側ドックに表示） =====
-let _dwgURLs=[];
-function _dwgClearURLs(){ _dwgURLs.forEach(u=>{try{URL.revokeObjectURL(u)}catch(e){}}); _dwgURLs=[]; }
-function _dwgShow(idx){
-  idx=idx|0; const f=curFiles&&curFiles[idx]; const box=document.getElementById('dwgView'); if(!f||!box)return;
-  _dwgClearURLs(); const url=URL.createObjectURL(f); _dwgURLs.push(url);
-  const ext=(f.name.split('.').pop()||'').toLowerCase();
-  if(ext==='pdf'){ box.innerHTML='<iframe src="'+url+'" style="width:100%;height:100%;border:0"></iframe>'; }
-  else if(['png','jpg','jpeg','gif','webp','bmp'].indexOf(ext)>=0){ box.innerHTML='<div style="overflow:auto;width:100%;height:100%"><img src="'+url+'" style="width:100%;display:block"></div>'; }
-  else { box.innerHTML='<div style="padding:20px;color:#888;font-size:13px">この形式（'+esc(ext)+'）は画面プレビュー非対応です。PDF／画像でアップすると図面を並べて確認できます。</div>'; }
+// ===== 図面と並べて確認(位置付けビューア) =====
+// サーバ描画のページ画像に、選定結果の機器を赤数字ピンで重ね、表と双方向リンク。
+// 位置は /api/locate (独立したVision・advisory=積算額に無関係)。抽出/選定には一切影響しない。
+let _dwgURLs=[], _dvList=[], _dwgFile=0, _dwgPage=0, _dwgPages=1, _dwgCur=null;
+function _dwgRevoke(){ _dwgURLs.forEach(u=>{try{URL.revokeObjectURL(u)}catch(e){}}); _dwgURLs=[]; }
+function _buildDevList(){
+  _dvList=[]; let seq=0;
+  (lastData&&lastData.panels||[]).forEach((p,pi)=>(p.rows||[]).forEach((r,ri)=>{
+    if(r.load_detail||r.is_setcode||!r.name) return;
+    _dvList.push({seq:++seq,pi:pi,ri:ri,name:r.name,code:r.code||'',conf:r.conf||''});
+  }));
 }
 function toggleDrawing(){
-  let p=document.getElementById('dwgPane');
-  const btn=document.getElementById('dwgBtn');
-  if(p){ p.remove(); _dwgClearURLs(); document.body.style.paddingRight=''; if(btn)btn.textContent='📄 図面と並べて確認'; return; }
+  let p=document.getElementById('dwgPane'); const btn=document.getElementById('dwgBtn');
+  if(p){ p.remove(); _dwgRevoke(); document.body.style.overflow=''; if(btn)btn.textContent='📄 図面と並べて確認'; return; }
   if(!curFiles||!curFiles.length){ alert('図面がありません。先に図面をアップしてください。'); return; }
-  const wide=window.innerWidth>=900;
-  const w=wide?Math.round(Math.min(window.innerWidth*0.46,620)):window.innerWidth;
+  if(!lastData){ alert('先にコード選定を実行してください。'); return; }
+  _buildDevList(); _dwgFile=0; _dwgPage=0;
   p=document.createElement('div'); p.id='dwgPane';
-  p.style.cssText='position:fixed;top:0;right:0;height:100vh;width:'+w+'px;max-width:100vw;background:#fff;border-left:1px solid #ccc;box-shadow:-3px 0 12px rgba(0,0,0,.12);z-index:9999;display:flex;flex-direction:column';
-  const opts=curFiles.map((f,i)=>'<option value="'+i+'">'+esc(f.name)+'</option>').join('');
-  p.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#1e3a28;color:#fff">'+
-    '<b style="font-size:13px;white-space:nowrap">📄 図面</b>'+
-    '<select id="dwgSel" onchange="_dwgShow(this.value)" style="flex:1;max-width:none;font-size:12px;color:#16201a">'+opts+'</select>'+
-    '<button onclick="toggleDrawing()" style="background:#c0504d;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer;white-space:nowrap">閉じる</button></div>'+
-    '<div id="dwgView" style="flex:1;overflow:hidden;background:#eee"></div>';
-  document.body.appendChild(p);
-  if(wide)document.body.style.paddingRight=w+'px';
-  _dwgShow(0);
+  p.style.cssText='position:fixed;inset:0;background:#f7f5ef;z-index:9999;display:flex;flex-direction:column';
+  const fopts=curFiles.map((f,i)=>'<option value="'+i+'">'+esc(f.name)+'</option>').join('');
+  p.innerHTML=
+   '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#1e3a28;color:#fff;flex-wrap:wrap">'+
+     '<b style="font-size:13px">📄 図面と並べて確認</b>'+
+     '<select id="dwgFsel" onchange="dwgSetFile(this.value)" style="font-size:12px;color:#16201a;max-width:38vw">'+fopts+'</select>'+
+     '<button onclick="dwgNav(-1)" style="padding:4px 10px;border:0;border-radius:5px;cursor:pointer">◀</button>'+
+     '<span id="dwgPg" style="font-size:12px;min-width:84px;text-align:center"></span>'+
+     '<button onclick="dwgNav(1)" style="padding:4px 10px;border:0;border-radius:5px;cursor:pointer">▶</button>'+
+     '<button id="dwgLoc" onclick="dwgLocate()" style="margin-left:6px;background:#e0a000;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer">この図面の位置を自動付け(AI)</button>'+
+     '<button onclick="toggleDrawing()" style="margin-left:auto;background:#c0504d;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer">閉じる</button>'+
+   '</div>'+
+   '<div style="font-size:11px;color:#7a5c1a;background:#fffbe9;padding:5px 10px">表の行or赤数字をタップで対応箇所が光ります。「位置を自動付け(AI)」で現在ページの機器に番号を付けます（位置は概略・要目視確認）。</div>'+
+   '<div id="dwgBody" style="flex:1;display:flex;min-height:0">'+
+     '<div id="dwgImgWrap" style="flex:1 1 62%;position:relative;overflow:auto;background:#e8e8e8;min-width:0">'+
+       '<div id="dwgInner" style="position:relative;display:inline-block;min-width:100%">'+
+         '<img id="dwgImg" style="display:block;width:100%" alt="図面">'+
+         '<div class="callout" id="dwgCallout"></div>'+
+       '</div></div>'+
+     '<div id="dwgListWrap" style="flex:1 1 38%;overflow:auto;border-left:1px solid #ccc;background:#fff;max-width:420px"></div>'+
+   '</div>';
+  document.body.appendChild(p); document.body.style.overflow='hidden';
   if(btn)btn.textContent='📄 図面を閉じる';
+  _dwgRenderList(); dwgSetFile(0);
+}
+function _dwgRenderList(){
+  const w=document.getElementById('dwgListWrap'); if(!w)return;
+  let h='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'+
+    '<th style="position:sticky;top:0;background:#1e3a28;color:#fff;padding:5px">No</th>'+
+    '<th style="position:sticky;top:0;background:#1e3a28;color:#fff;padding:5px;text-align:left">機器</th>'+
+    '<th style="position:sticky;top:0;background:#1e3a28;color:#fff;padding:5px">コード</th></tr></thead><tbody>';
+  _dvList.forEach(d=>{
+    h+='<tr id="dv'+d.seq+'" onclick="dwgSelDev('+d.seq+')" style="cursor:pointer;border-bottom:1px solid #eee">'+
+       '<td style="text-align:center;color:#e00000;font-weight:800;padding:4px">'+d.seq+'</td>'+
+       '<td style="padding:4px">'+esc(d.name).slice(0,42)+'</td>'+
+       '<td style="text-align:center;font-family:monospace;padding:4px">'+esc(d.code||'—')+'</td></tr>';
+  });
+  w.innerHTML=h+'</tbody></table>';
+}
+async function dwgSetFile(i){
+  _dwgFile=i|0; _dwgPage=0; _dwgPages=1;
+  try{ const fd=new FormData(); fd.append('file',curFiles[_dwgFile]);
+    const r=await fetch('/api/pageinfo',{method:'POST',body:fd}); const j=await r.json(); _dwgPages=(j&&j.pages)||1;
+  }catch(e){}
+  dwgShowPage();
+}
+async function dwgShowPage(){
+  const img=document.getElementById('dwgImg'); if(!img)return;
+  const pg=document.getElementById('dwgPg'); if(pg)pg.textContent=(_dwgPage+1)+' / '+_dwgPages+' ページ';
+  _dwgClearPins(); _dwgRevoke();
+  try{
+    const fd=new FormData(); fd.append('file',curFiles[_dwgFile]); fd.append('page',_dwgPage);
+    const r=await fetch('/api/pageimg',{method:'POST',body:fd});
+    if(!r.ok){ img.removeAttribute('src'); return; }
+    const b=await r.blob(); const u=URL.createObjectURL(b); _dwgURLs.push(u); img.src=u;
+  }catch(e){}
+}
+function dwgNav(d){ const n=_dwgPage+d; if(n<0||n>=_dwgPages)return; _dwgPage=n; dwgShowPage(); }
+function _dwgClearPins(){ document.querySelectorAll('#dwgInner .pin').forEach(e=>e.remove()); const c=document.getElementById('dwgCallout'); if(c)c.style.display='none'; _dwgCur=null; }
+async function dwgLocate(){
+  const btn=document.getElementById('dwgLoc');
+  if(!_dvList.length){ alert('機器リストがありません。'); return; }
+  if(btn){btn.disabled=true;btn.textContent='AIが位置を推定中…';}
+  try{
+    const fd=new FormData(); fd.append('file',curFiles[_dwgFile]); fd.append('page',_dwgPage);
+    fd.append('names',JSON.stringify(_dvList.map(d=>({i:d.seq,name:d.name}))));
+    const r=await fetch('/api/locate',{method:'POST',body:fd}); const j=await r.json();
+    _dwgClearPins();
+    const pos=(j&&j.pos)||[];
+    const inner=document.getElementById('dwgInner');
+    pos.forEach(p=>{
+      const d=_dvList.find(x=>x.seq===p.i); if(!d)return;
+      const el=document.createElement('div'); el.className='pin'; el.id='dpin'+p.i;
+      el.style.left=p.x+'%'; el.style.top=p.y+'%'; el.textContent=p.i; el.title=d.name;
+      el.onclick=function(ev){ev.stopPropagation();dwgSelDev(p.i);};
+      inner.appendChild(el);
+    });
+    if(!pos.length) alert('この図面上で位置を特定できる機器が見つかりませんでした（別のページの可能性）。ページを切替えてお試しください。');
+  }catch(e){ alert('位置付けに失敗しました: '+e); }
+  finally{ if(btn){btn.disabled=false;btn.textContent='この図面の位置を自動付け(AI)';} }
+}
+function dwgSelDev(seq){
+  if(_dwgCur!==null){ var op=document.getElementById('dpin'+_dwgCur),or=document.getElementById('dv'+_dwgCur); if(op)op.classList.remove('hot'); if(or)or.classList.remove('hot'); }
+  _dwgCur=seq;
+  var pin=document.getElementById('dpin'+seq), row=document.getElementById('dv'+seq), c=document.getElementById('dwgCallout');
+  if(row){ row.classList.add('hot'); row.scrollIntoView({block:'center',behavior:'smooth'}); }
+  if(pin){ pin.classList.add('hot'); pin.scrollIntoView({block:'center',behavior:'smooth'});
+    if(c){ c.textContent=pin.title||seq; c.style.left=pin.style.left; c.style.top=pin.style.top; c.style.display='block'; } }
+  else if(c){ c.style.display='none'; }
 }
 function render(d,filter){
   window._filter=filter||'all';
