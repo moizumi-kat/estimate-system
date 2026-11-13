@@ -87,9 +87,13 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
 
   <div class="summary" id="sum"></div>
   <div class="fbar" id="fbar"><span style="font-size:12px;align-self:center">表示：</span>
-    <button data-f="all" class="on">すべて</button><button data-f="◎">◎</button><button data-f="○">○</button><button data-f="△">△</button></div>
+    <button data-f="all" class="on">すべて</button><button data-f="◎">◎</button><button data-f="○">○</button><button data-f="△">△</button>
+    <span style="width:10px"></span>
+    <button data-f="x:gemini" title="Geminiだけが検出＝Claudeの取りこぼし候補。図面で確認してください" style="border-color:#e0a000;color:#a56a00">＋G 取りこぼし候補</button>
+    <button data-f="x:dual" title="Claude・Gemini両方が検出＝二重検証済" style="border-color:#3a9d5f;color:#2a7d4f">✓✓ 二重検証</button></div>
   <div class="bar" id="xlsbar" style="display:none">
     <button class="btn sec" id="xls">Excelで保存</button>
+    <button class="btn sec" id="dwgBtn" onclick="toggleDrawing()">📄 図面と並べて確認</button>
   </div>
   <div id="out"></div>
   <div class="foot">◎=確定（DB実在コード）／○=ほぼ確定／△=要確認（人の判断対象）。AIはコードを生成しません。コードはv9.2 DBと確定ルールからのみ選定します。</div>
@@ -438,6 +442,46 @@ function bulkReset(){
   if(!n){alert('取り消す一括確定はありません。');return;}
   _bulkRecalc(); render(lastData,currentFilter());
 }
+// 行頭の二重Vision突合マーカー(✓✓=両検出 / ＋G=Geminiのみ=取りこぼし候補)
+const XBD={dual:'<span title="Claude・Gemini両方が検出＝二重検証済" style="color:#2a7d4f;font-weight:700">✓✓</span> ',
+           gemini:'<span title="Geminiのみ検出＝取りこぼし候補・要確認" style="color:#e08000;font-weight:700">＋G</span> ',
+           claude:''};
+function filterCross(v){
+  document.querySelectorAll('.fbar button').forEach(x=>x.classList.remove('on'));
+  const b=document.querySelector('.fbar button[data-f="'+v+'"]'); if(b)b.classList.add('on');
+  if(lastData)render(lastData,v);
+}
+// ===== B: 図面と並べて確認（アップした図面=ブラウザ内 curFiles を右側ドックに表示） =====
+let _dwgURLs=[];
+function _dwgClearURLs(){ _dwgURLs.forEach(u=>{try{URL.revokeObjectURL(u)}catch(e){}}); _dwgURLs=[]; }
+function _dwgShow(idx){
+  idx=idx|0; const f=curFiles&&curFiles[idx]; const box=document.getElementById('dwgView'); if(!f||!box)return;
+  _dwgClearURLs(); const url=URL.createObjectURL(f); _dwgURLs.push(url);
+  const ext=(f.name.split('.').pop()||'').toLowerCase();
+  if(ext==='pdf'){ box.innerHTML='<iframe src="'+url+'" style="width:100%;height:100%;border:0"></iframe>'; }
+  else if(['png','jpg','jpeg','gif','webp','bmp'].indexOf(ext)>=0){ box.innerHTML='<div style="overflow:auto;width:100%;height:100%"><img src="'+url+'" style="width:100%;display:block"></div>'; }
+  else { box.innerHTML='<div style="padding:20px;color:#888;font-size:13px">この形式（'+esc(ext)+'）は画面プレビュー非対応です。PDF／画像でアップすると図面を並べて確認できます。</div>'; }
+}
+function toggleDrawing(){
+  let p=document.getElementById('dwgPane');
+  const btn=document.getElementById('dwgBtn');
+  if(p){ p.remove(); _dwgClearURLs(); document.body.style.paddingRight=''; if(btn)btn.textContent='📄 図面と並べて確認'; return; }
+  if(!curFiles||!curFiles.length){ alert('図面がありません。先に図面をアップしてください。'); return; }
+  const wide=window.innerWidth>=900;
+  const w=wide?Math.round(Math.min(window.innerWidth*0.46,620)):window.innerWidth;
+  p=document.createElement('div'); p.id='dwgPane';
+  p.style.cssText='position:fixed;top:0;right:0;height:100vh;width:'+w+'px;max-width:100vw;background:#fff;border-left:1px solid #ccc;box-shadow:-3px 0 12px rgba(0,0,0,.12);z-index:9999;display:flex;flex-direction:column';
+  const opts=curFiles.map((f,i)=>'<option value="'+i+'">'+esc(f.name)+'</option>').join('');
+  p.innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#1e3a28;color:#fff">'+
+    '<b style="font-size:13px;white-space:nowrap">📄 図面</b>'+
+    '<select id="dwgSel" onchange="_dwgShow(this.value)" style="flex:1;max-width:none;font-size:12px;color:#16201a">'+opts+'</select>'+
+    '<button onclick="toggleDrawing()" style="background:#c0504d;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer;white-space:nowrap">閉じる</button></div>'+
+    '<div id="dwgView" style="flex:1;overflow:hidden;background:#eee"></div>';
+  document.body.appendChild(p);
+  if(wide)document.body.style.paddingRight=w+'px';
+  _dwgShow(0);
+  if(btn)btn.textContent='📄 図面を閉じる';
+}
 function render(d,filter){
   window._filter=filter||'all';
   const s=d.summary;
@@ -463,12 +507,32 @@ function render(d,filter){
     '<span style="font-size:12px;color:#888">もう一度押すと全解除</span>'+
     '<button id="accApply" onclick="applyAccessories()" style="display:none;margin-left:auto;background:#2a7;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">盤付属品・板金サイズを反映して再選定</button></div>';
   h+=bulkBar(d);   // 一括確定バー(図面に描かれない仕様をまとめて ○→◎ に昇格)
+  // 【A: 取りこぼし確認】二重Vision(Claude∩Gemini)の突合状態を集計し、取りこぼし候補(＋G)を前面化。
+  let _cc={dual:0,claude:0,gemini:0};
+  d.panels.forEach(p=>(p.rows||[]).forEach(r=>{ if(r.load_detail)return; if(r.cross&&_cc[r.cross]!==undefined)_cc[r.cross]++; }));
+  if(_cc.dual+_cc.gemini>0){
+    h+='<div style="margin:8px 0;padding:10px 12px;border:1px solid #cdb76a;background:#fffbe9;border-radius:9px;font-size:12.5px">'+
+      '<b>🔍 取りこぼし確認（二重Vision: Claude∩Gemini）</b>　'+
+      '<span style="color:#2a7d4f;font-weight:700">✓✓ 二重検証 '+_cc.dual+'</span> ／ Claude単独 '+_cc.claude+' ／ '+
+      '<span style="color:#a56a00;font-weight:700">＋G 取りこぼし候補 '+_cc.gemini+'</span>'+
+      (_cc.gemini?' <button onclick="filterCross(\'x:gemini\')" style="margin-left:8px;background:#e0a000;color:#fff;border:none;padding:4px 12px;border-radius:6px;font-weight:600;cursor:pointer">取りこぼし候補だけ表示して図面で確認</button>':'')+
+      '<div style="font-size:11.5px;color:#7a5c1a;margin-top:4px">＋G＝もう一方のAI(Gemini)だけが検出した機器＝Claudeの取りこぼし候補です。図面で実在を確認し、不要なら数量0で除外してください。</div>'+
+    '</div>';
+  }
   h+='<table><thead><tr><th>部品名＋仕様〈幹線〉(負荷名称)</th><th>数量</th><th>提示</th><th>判定</th><th>最終選択コード</th><th>品名</th><th>確認</th></tr></thead><tbody>';
   let gid=0;
   for(let pi=0;pi<d.panels.length;pi++){
     const p=d.panels[pi];
     const visible=[];
-    p.rows.forEach((r,ri)=>{ if(!r.load_detail&&(filter==='all'||r.conf===filter)) visible.push([r,ri]); });
+    const _F=window._filter||'all';
+    p.rows.forEach((r,ri)=>{
+      if(r.load_detail)return;
+      let show;
+      if(_F==='all')show=true;
+      else if(_F.indexOf('x:')===0)show=(r.cross===_F.slice(2));  // 取りこぼし候補/二重検証フィルタ
+      else show=(r.conf===_F);
+      if(show)visible.push([r,ri]);
+    });
     if(!visible.length)continue;
     h+='<tr class="pnl"><td colspan="7">'+esc(p.panel)+
        (p.outline_note?'<span style="margin-left:12px;font-size:12px;color:#357;font-weight:500">📐 '+esc(p.outline_note)+'</span>':'')+
@@ -519,7 +583,7 @@ function render(d,filter){
         '<label style="display:block;margin-top:4px;font-size:12px;color:#1a5fb4;white-space:nowrap"><input type="checkbox"'+(r.elb_pair.is_elb?' checked':'')+' onchange="elbToggle('+pi+','+ri+',this)" style="width:16px;height:16px;vertical-align:middle;margin-right:4px">主幹を漏電ブレーカー(ELB)にする</label>' : '';
       const zeroStyle = (String(r.qty)==='0') ? ' style="opacity:.45"' : '';
       h+='<tr id="row'+id+'" data-pi="'+pi+'" data-ri="'+ri+'" data-code="'+esc(r.code||'')+'"'+zeroStyle+'>'+
-        '<td>'+esc(r.name)+(r._added?' <span style="color:#2a7;font-size:11px;font-weight:600">(人が追加)</span>':'')+'</td>'+
+        '<td>'+(XBD[r.cross]||'')+esc(r.name)+(r._added?' <span style="color:#2a7;font-size:11px;font-weight:600">(人が追加)</span>':'')+'</td>'+
         '<td class="qty"><input type="number" min="0" value="'+esc(r.qty||'1')+'" style="width:48px;text-align:center;font-size:13px;padding:3px;border:1px solid #bbb;border-radius:5px" onchange="markChange('+pi+','+ri+',this)"></td>'+
         '<td class="code" id="cd'+id+'">'+(r.code||'—')+'</td>'+
         '<td>'+bdg[r.conf]+'</td>'+
