@@ -112,9 +112,24 @@ def login():
         return Response(LOGIN_HTML.replace('{ERR}','<div class=e>パスワードが違います</div>'),mimetype='text/html')
     return Response(LOGIN_HTML.replace('{ERR}',''),mimetype='text/html')
 
+_LOGOUT_HTML="""<!doctype html><html lang="ja"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ログアウト</title>
+<body style="font-family:sans-serif;padding:24px;color:#333">ログアウトしています…
+<script>
+// サーバのセッションは消えたが、端末ローカルに残る抽出ジョブ/図面名も消す
+// (これが残ると再ログイン時に前回画面が自動復帰してしまう)
+try{localStorage.removeItem('estimate_job');localStorage.removeItem('estimate_src');}catch(e){}
+location.replace('/login');
+</script></body></html>"""
+
 @app.route('/logout')
 def logout():
-    session.clear(); return redirect('/login')
+    session.clear()
+    # localStorage(抽出ジョブ等)もクリアしてから/loginへ=再ログインで前回画面が出ない
+    resp=Response(_LOGOUT_HTML, mimetype='text/html')
+    resp.headers['Cache-Control']='no-store'
+    return resp
 
 
 def client():
@@ -3901,7 +3916,12 @@ def make_excel(panels):
 # ===== ルート =====
 @app.route('/')
 @login_required
-def index(): return Response(INDEX_HTML, mimetype='text/html')
+def index():
+    # ブラウザ(特にSafari)が古いindex.htmlをキャッシュして旧JSを使い続けるのを防ぐ
+    resp=Response(INDEX_HTML, mimetype='text/html')
+    resp.headers['Cache-Control']='no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma']='no-cache'; resp.headers['Expires']='0'
+    return resp
 
 @app.route('/api/health')
 def health(): return jsonify(ok=True, db=len(DB), key=bool(os.environ.get('ANTHROPIC_API_KEY')), user=session.get('user',''))
