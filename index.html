@@ -862,15 +862,37 @@ async function restoreState(){
       }
     }else{ _jobClear(); }           // 古いジョブは破棄
   }
-  // 直近の選定結果があれば表示(選定まで終えていた場合)
+  // 直近の選定結果があれば「表示ボタン」を出す(自動描画しない=重い結果でスマホが固まるのを防止)
   try{
     const r=await fetch('/api/last');
     if(r.ok){ const d=await r.json();
       if(d&&d.ok&&d.panels&&d.panels.length){
-        lastData=d;setStep(3);render(d,'all');$('xlsbar').style.display='flex';
-        _restoreBanner('前回の選定結果を復帰しました（この端末で最後に選定した結果です）。');
+        _restoreResultButton(d);
       }
     }
+  }catch(e){}
+}
+// 前回結果は押した時だけ描画(初期ロードは軽いまま)
+function _restoreResultButton(d){
+  try{
+    var n=(d.panels||[]).length;
+    var b=document.createElement('div');
+    b.style.cssText='margin:10px 0;padding:11px 13px;background:#eef6ee;border:1px solid #bcd3bc;border-radius:8px;font-size:13px;color:#2e6b3a;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+    var t=document.createElement('span');
+    t.textContent='前回の選定結果があります（盤 '+n+' 面）。';
+    var btn=document.createElement('button');
+    btn.textContent='前回の結果を表示';
+    btn.style.cssText='padding:7px 14px;background:#2e7d46;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer';
+    btn.onclick=function(){
+      try{ lastData=d;setStep(3);render(d,'all');$('xlsbar').style.display='flex'; }catch(e){}
+      if(b&&b.parentNode) b.parentNode.removeChild(b);
+    };
+    var x=document.createElement('button');
+    x.textContent='閉じる';
+    x.style.cssText='padding:7px 12px;background:#fff;color:#666;border:1px solid #ccc;border-radius:7px;font-size:13px;cursor:pointer';
+    x.onclick=function(){ if(b&&b.parentNode) b.parentNode.removeChild(b); };
+    b.appendChild(t);b.appendChild(btn);b.appendChild(x);
+    var out=$('out'); if(out&&out.parentNode) out.parentNode.insertBefore(b,out);
   }catch(e){}
 }
 restoreState();
