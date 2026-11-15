@@ -865,10 +865,20 @@ function _restoreBanner(msg){
     var out=$('out'); if(out&&out.parentNode) out.parentNode.insertBefore(b,out);
   }catch(e){}
 }
+// 自動復元の安全判定:
+//  ・前回の復元描画中に落ちた痕(sessionStorage='try'/'heavy')があれば今回は自動描画しない
+//  ・スマホ等のタッチ端末で結果が大きい(合計行数>40)と戻った瞬間の描画でメモリ不足→WebKitが落ちる
+//    ため、その場合も自動描画せず「表示ボタン」を出す(タップ時に描画=落ちにくい)
+function _restoreCrashed(){ try{ var s=sessionStorage.getItem('restore_render'); return (s==='try'||s==='heavy'); }catch(e){ return false; } }
+function _restoreMark(v){ try{ sessionStorage.setItem('restore_render',v); }catch(e){} }
+function _isTouch(){ return (navigator.maxTouchPoints>0)||/iPhone|iPad|iPod|Android/i.test(navigator.userAgent||''); }
+function _rowCount(panels){ var n=0; (panels||[]).forEach(function(p){ n+=((p.rows||[]).length); }); return n; }
 async function restoreState(){
+  var crashed=_restoreCrashed();
   const job=_jobGet();
-  if(job&&job.jid){
-    if(Date.now()-(job.ts||0)<30*60*1000){
+  if(job&&job.jid&&(Date.now()-(job.ts||0)<30*60*1000)){
+    if(crashed){ _restoreMark('heavy'); /*前回落ちた→ジョブ自動復帰は危険。下で選定結果をボタン表示*/ }
+    else{
       // 進行中/完了済みの抽出を復帰
       setStep(2);showStop(true);controller=new AbortController();
       busy('前回の抽出を復帰しています…');
@@ -876,67 +886,69 @@ async function restoreState(){
         const d=await pollJob(job.jid,job.n||1);
         if(d===null)return;          // 中止
         _jobClear();
+        _restoreMark('try');
         extracted=d.panels;idle();showStop(false);
         renderExtracted(d);$('confirm').classList.add('show');
         _restoreBanner('前回の抽出結果を復帰しました。続けて確認・選定してください。');
+        setTimeout(function(){ _restoreMark('ok'); },1500);
         return;
       }catch(e){ _jobClear();idle();showStop(false);
         // 復帰失敗(時間切れ等)は静かに通常画面へ(直近の選定結果があれば次で表示)
       }
-    }else{ _jobClear(); }           // 古いジョブは破棄
-  }
-  // 直近の選定結果があれば自動復元する。ただしクラッシュループ防止ガード付き:
-  // 自動描画を始める直前に sessionStorage に印を付け、無事描画できたら'ok'に更新する。
-  // 再読込時に印が'try'のまま=前回の描画中に落ちた可能性 → 今回は安全にボタンのみ表示。
+    }
+  }else if(job){ _jobClear(); }      // 古いジョブは破棄
+  // 直近の選定結果: サイズとクラッシュ痕で「自動描画」か「表示ボタン」を決める
   try{
     const r=await fetch('/api/last');
     if(r.ok){ const d=await r.json();
       if(d&&d.ok&&d.panels&&d.panels.length){
-        var st=''; try{ st=sessionStorage.getItem('restore_render')||''; }catch(e){}
-        if(st==='try'||st==='heavy'){
-          // 前回の自動復元が落ちた端末 → この結果はボタン表示に留める(ループ回避)
-          try{ sessionStorage.setItem('restore_render','heavy'); }catch(e){}
-          _restoreResultButton(d);
-        }else{
-          try{ sessionStorage.setItem('restore_render','try'); }catch(e){}
+        var rows=_rowCount(d.panels);
+        var canAuto = !crashed && (!_isTouch() || rows<=40);  // スマホで大きい結果は自動描画しない(落ちる)
+        if(canAuto){
+          _restoreMark('try');
           try{
             lastData=d;setStep(3);render(d,'all');$('xlsbar').style.display='flex';
             _restoreBanner('前回の選定結果を復帰しました（この端末で最後に選定した結果です）。');
-            // 描画が無事終われば成功印。落ちていればこのsetTimeoutは実行されない。
-            setTimeout(function(){ try{sessionStorage.setItem('restore_render','ok');}catch(e){} },1500);
-          }catch(e){
-            try{ sessionStorage.setItem('restore_render','heavy'); }catch(_){}
-            _restoreResultButton(d);
-          }
+            setTimeout(function(){ _restoreMark('ok'); },1500);  // 無事描画できたら成功印
+          }catch(e){ _restoreMark('heavy'); _restoreResultButton(d); }
+        }else{
+          if(crashed) _restoreMark('heavy');
+          _restoreResultButton(d);
         }
       }
     }
   }catch(e){}
 }
 // 新しい操作(アップロード/選定)が成功した端末では自動復元を再び有効化(ガード解除)
-function _restoreGuardClear(){ try{ sessionStorage.setItem('restore_render','ok'); }catch(e){} }
-// 前回結果は押した時だけ描画(初期ロードは軽いまま)
+function _restoreGuardClear(){ _restoreMark('ok'); }
+// 前回結果は押した時だけ描画(初期ロードは軽いまま=スマホで落ちない)
 function _restoreResultButton(d){
   try{
-    var n=(d.panels||[]).length;
+    var n=(d.panels||[]).length; var rows=_rowCount(d.panels);
     var b=document.createElement('div');
-    b.style.cssText='margin:10px 0;padding:11px 13px;background:#eef6ee;border:1px solid #bcd3bc;border-radius:8px;font-size:13px;color:#2e6b3a;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
-    var t=document.createElement('span');
-    var _ns=_srcGet(); var _sl=_ns.length?'／図面: '+_ns.join(', '):'';
-    t.textContent='前回の選定結果があります（盤 '+n+' 面'+_sl+'）。';
+    b.style.cssText='margin:10px 0;padding:13px 14px;background:#eef6ee;border:2px solid #9cc49c;border-radius:9px;font-size:14px;color:#2e6b3a;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+    var t=document.createElement('div'); t.style.cssText='flex:1 1 100%;line-height:1.5';
+    var _ns=_srcGet(); var _sl=_ns.length?'<br>📄 図面: '+esc(_ns.join(', ')):'';
+    t.innerHTML='<b>前回の選定結果は保存されています。</b>（盤 '+n+' 面・'+rows+' 行'+_sl+'）<br>'
+      +'<span style="font-size:12px;color:#5a7a5a">※スマホで大きい結果を自動表示すると固まることがあるため、ボタンで表示します。</span>';
     var btn=document.createElement('button');
-    btn.textContent='前回の結果を表示';
-    btn.style.cssText='padding:7px 14px;background:#2e7d46;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer';
+    btn.textContent='▼ 前回の結果を表示';
+    btn.style.cssText='padding:10px 18px;background:#2e7d46;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer';
     btn.onclick=function(){
-      try{ lastData=d;setStep(3);render(d,'all');$('xlsbar').style.display='flex'; }catch(e){}
+      btn.disabled=true; btn.textContent='表示中…';
+      _restoreMark('try');
+      try{ lastData=d;setStep(3);render(d,'all');$('xlsbar').style.display='flex';
+        setTimeout(function(){ _restoreMark('ok'); },1500);
+      }catch(e){ _restoreMark('heavy'); }
       if(b&&b.parentNode) b.parentNode.removeChild(b);
     };
     var x=document.createElement('button');
     x.textContent='閉じる';
-    x.style.cssText='padding:7px 12px;background:#fff;color:#666;border:1px solid #ccc;border-radius:7px;font-size:13px;cursor:pointer';
+    x.style.cssText='padding:10px 14px;background:#fff;color:#666;border:1px solid #ccc;border-radius:8px;font-size:13px;cursor:pointer';
     x.onclick=function(){ if(b&&b.parentNode) b.parentNode.removeChild(b); };
     b.appendChild(t);b.appendChild(btn);b.appendChild(x);
     var out=$('out'); if(out&&out.parentNode) out.parentNode.insertBefore(b,out);
+    try{ b.scrollIntoView({block:'center'}); }catch(e){}
   }catch(e){}
 }
 restoreState();
