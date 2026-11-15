@@ -136,6 +136,7 @@ file.onchange=()=>{if(file.files.length)setFiles(file.files)};
 function setFiles(fl){
   curFiles=Array.from(fl);
   _srcSave(curFiles.map(f=>f.name));   // 対象図面名を保持(表示・保存名に使用)
+  _restoreGuardClear();                // 新しい案件=自動復元ガードを解除(次回戻ると自動復元)
   // アップロードしたファイル名をはっきり表示(終了時に何を上げたか分かるように)
   $('fname').innerHTML = '📄 <b>アップロード済み'+(curFiles.length>1?('（'+curFiles.length+'件）'):'')+':</b> '
     + esc(curFiles.map(f=>f.name).join(' ／ '));
@@ -282,7 +283,7 @@ $('goSelect').onclick=async()=>{
       body:JSON.stringify({panels:extracted}),signal:controller.signal});
     const d=await r.json();
     if(!r.ok)throw new Error(d.error||'選定に失敗しました');
-    lastData=d;idle();showStop(false);render(d,'all');$('xlsbar').style.display='flex';
+    lastData=d;idle();showStop(false);render(d,'all');$('xlsbar').style.display='flex';_restoreGuardClear();
   }catch(e){
     if(e.name==='AbortError')return;
     fail(e.message);
@@ -884,16 +885,36 @@ async function restoreState(){
       }
     }else{ _jobClear(); }           // 古いジョブは破棄
   }
-  // 直近の選定結果があれば「表示ボタン」を出す(自動描画しない=重い結果でスマホが固まるのを防止)
+  // 直近の選定結果があれば自動復元する。ただしクラッシュループ防止ガード付き:
+  // 自動描画を始める直前に sessionStorage に印を付け、無事描画できたら'ok'に更新する。
+  // 再読込時に印が'try'のまま=前回の描画中に落ちた可能性 → 今回は安全にボタンのみ表示。
   try{
     const r=await fetch('/api/last');
     if(r.ok){ const d=await r.json();
       if(d&&d.ok&&d.panels&&d.panels.length){
-        _restoreResultButton(d);
+        var st=''; try{ st=sessionStorage.getItem('restore_render')||''; }catch(e){}
+        if(st==='try'||st==='heavy'){
+          // 前回の自動復元が落ちた端末 → この結果はボタン表示に留める(ループ回避)
+          try{ sessionStorage.setItem('restore_render','heavy'); }catch(e){}
+          _restoreResultButton(d);
+        }else{
+          try{ sessionStorage.setItem('restore_render','try'); }catch(e){}
+          try{
+            lastData=d;setStep(3);render(d,'all');$('xlsbar').style.display='flex';
+            _restoreBanner('前回の選定結果を復帰しました（この端末で最後に選定した結果です）。');
+            // 描画が無事終われば成功印。落ちていればこのsetTimeoutは実行されない。
+            setTimeout(function(){ try{sessionStorage.setItem('restore_render','ok');}catch(e){} },1500);
+          }catch(e){
+            try{ sessionStorage.setItem('restore_render','heavy'); }catch(_){}
+            _restoreResultButton(d);
+          }
+        }
       }
     }
   }catch(e){}
 }
+// 新しい操作(アップロード/選定)が成功した端末では自動復元を再び有効化(ガード解除)
+function _restoreGuardClear(){ try{ sessionStorage.setItem('restore_render','ok'); }catch(e){} }
 // 前回結果は押した時だけ描画(初期ロードは軽いまま)
 function _restoreResultButton(d){
   try{
