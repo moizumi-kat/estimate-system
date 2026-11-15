@@ -136,7 +136,10 @@ file.onchange=()=>{if(file.files.length)setFiles(file.files)};
 function setFiles(fl){
   curFiles=Array.from(fl);
   _srcSave(curFiles.map(f=>f.name));   // 対象図面名を保持(表示・保存名に使用)
-  $('fname').textContent = curFiles.length===1 ? curFiles[0].name : curFiles.length+'件: '+curFiles.map(f=>f.name).join(', ');
+  // アップロードしたファイル名をはっきり表示(終了時に何を上げたか分かるように)
+  $('fname').innerHTML = '📄 <b>アップロード済み'+(curFiles.length>1?('（'+curFiles.length+'件）'):'')+':</b> '
+    + esc(curFiles.map(f=>f.name).join(' ／ '));
+  $('fname').style.cssText='display:block;font-size:13px;color:#234;background:#eef3fb;border:1px solid #b9cdee;border-radius:7px;padding:7px 11px;margin:4px 0;word-break:break-all';
   $('goExtract').disabled=false;
   $('err').classList.remove('show');resetResults();
 }
@@ -188,7 +191,7 @@ async function pollJob(jid,n){
 $('goExtract').onclick=async()=>{
   if(!curFiles||!curFiles.length)return;
   $('err').classList.remove('show');$('goExtract').disabled=true;setStep(2);
-  busy('[1/2] 図面から部品を抽出しています…（'+curFiles.length+'件・30秒〜数分）');showStop(true);
+  busy('[1/2] 図面から部品を抽出しています…（'+esc(curFiles.map(f=>f.name).join(' ／ '))+'・30秒〜数分）');showStop(true);
   controller=new AbortController();
   const fd=new FormData();curFiles.forEach(f=>fd.append('file',f));
   try{
@@ -286,7 +289,7 @@ $('goSelect').onclick=async()=>{
   }
 };
 
-$('reset').onclick=()=>{curFiles=null;$('fname').textContent='';$('goExtract').disabled=true;resetResults();};
+$('reset').onclick=()=>{curFiles=null;$('fname').textContent='';$('fname').style.cssText='';$('goExtract').disabled=true;resetResults();};
 
 $('xls').onclick=async()=>{
   if(!lastData)return;
