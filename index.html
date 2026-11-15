@@ -666,7 +666,7 @@ function render(d,filter){
     }
     if(p.acc_gate&&p.acc_gate.length){
       let ac='<tr class="accg"><td colspan="7" style="background:#f2f8ff;padding:6px 10px;font-size:12px;color:#2a5">'+
-        '■ 盤面の標準付属品／認定料（照明・換気扇は自動計上しません＝既定0。必要な面だけ種別を選び員数を1以上にしてください。認定料も同様）：';
+        '■ 盤面の標準付属品／認定料（照明・換気扇は各配電盤に項目として表示します＝既定0。必要な面だけ員数を1以上にしてください。数量0の項目はExcelには出ません。認定料も同様）：';
       p.acc_gate.forEach((g,gi)=>{
         const key=pi+'_'+gi; let os;
         if(g.options.length>1){

@@ -3716,21 +3716,38 @@ def select_from_extracted(data):
                 r['note']='予備スペース分岐(端子台なし→%s系SP)'%_sp_series
         # 盤面の標準付属品(茂泉様の艤装ルール)。人がゲートで確定(acc_confirmed)していればそれを優先(◎)、
         # 無ければルールで自動計上(○: 照明1/配電盤面・TR≥500kVA盤の換気扇・寒冷地のヒータ+サーモ組)。
+        # 盤面の付属品:
+        #  ・照明(FL)・換気扇は【確認ゲートで聞く盤すべてに“項目として常に表示”・既定数量0】(茂泉様要望)。
+        #    ゲートで数量が入ればその行に反映(数量0のまま=Excelでは除外=見積に出ない)。種別はゲートの既定に一致。
+        #  ・寒冷地ヒータ/サーモ等の自動計上分は従来どおり(外形図がある配電盤では外形図側で計上=二重計上回避)。
         _manual=p.get('acc_confirmed')
-        if _manual is not None:
-            _acc_src=[(str(a.get('code','')),int(a.get('qty',0) or 0)) for a in _manual]; _acc_conf='◎'
-            _acc_note='盤面の標準付属品(確認ゲートで員数確定)'
+        _conf_map={str(a.get('code','')):int(a.get('qty',0) or 0) for a in _manual} if _manual is not None else {}
+        _acc_conf='◎' if _manual is not None else '○'
+        _acc_note=('盤面の標準付属品(確認ゲートで員数確定)' if _manual is not None
+                   else '盤面の標準付属品(照明/換気扇は既定0・確認ゲートで員数を入力)')
+        _ol=p.get('outline') if isinstance(p.get('outline'),dict) else {}
+        # 自動計上分(寒冷地ヒータ/サーモ): 外形図がある配電盤では外形図側で計上するのでここでは出さない。
+        if _gaikei and _panel_kind(p.get('panel',''))=='haiden':
+            _auto=[]
         else:
-            # 外形図がある場合、配電盤の照明/換気扇/ヒータは外形図から一括計上するので個々の盤では出さない。
-            _ol=p.get('outline') if isinstance(p.get('outline'),dict) else {}
-            if _gaikei and _panel_kind(p.get('panel',''))=='haiden':
-                _acc_src=[]
-            else:
-                _acc_src=_std_accessories(p.get('panel',''), rows, _cold_spec, _ol.get('faces') or 1)
-            _acc_conf='○'
-            _acc_note='盤面の標準付属品(艤装ルール自動計上・員数/種別は確認ゲートで調整)'
+            _auto=_std_accessories(p.get('panel',''), rows, _cold_spec, _ol.get('faces') or 1)
+        # この盤に付属品ゲートが付くか(=換気扇/照明を聞く盤か)を先に判定。付くなら両項目を既定0で“項目化”。
+        # プレースホルダのコード/数量はゲートの既定に一致させる(確認値があればそれを反映)。
+        _g0=accessory_gate(p.get('panel',''), _manual)
+        _acc_src=[]; _seen=set(); _ph=set()
+        if _g0:
+            for _g in _g0:
+                if _g.get('spec') in ('換気扇','盤内照明'):
+                    _d=_g.get('default') or {}; _c=str(_d.get('code','')); _q=int(_d.get('qty',0) or 0)
+                    if _c and _c in byCode and _c not in _seen:
+                        _acc_src.append((_c,_q)); _seen.add(_c); _ph.add(_c)
+        for _c,_q in _auto:
+            if _c not in _seen: _acc_src.append((_c,_conf_map.get(_c,_q))); _seen.add(_c)
+        for _c,_q in _conf_map.items():     # ゲートで選ばれた上記以外のコードも反映
+            if _c not in _seen and _c in byCode: _acc_src.append((_c,_q)); _seen.add(_c)
         for _acc,_aq in _acc_src:
-            if _acc in byCode and _aq>0:
+            # 照明/換気扇のプレースホルダは数量0でも“項目として”出す。その他は従来どおり数量>0のみ。
+            if _acc in byCode and (_acc in _ph or _aq>0):
                 rows.append(dict(code=_acc,name=byCode[_acc].get('name',''),conf=_acc_conf,qty=str(_aq),
                     note=_acc_note,load_detail=False))
         rows=_merge_dup_rows(rows)   # 同一盤内の同一コード機器を1行に集約(数量合算・社員要望)
