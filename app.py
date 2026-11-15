@@ -125,6 +125,11 @@ location.replace('/login');
 
 @app.route('/logout')
 def logout():
+    # ログアウト時は、この端末(sid)のサーバ保存図面と直近結果も削除する(茂泉様要望)。
+    try:
+        sid=session.get('sid')
+        if sid: _clear_files(sid); _clear_last(sid)
+    except Exception: pass
     session.clear()
     # localStorage(抽出ジョブ等)もクリアしてから/loginへ=再ログインで前回画面が出ない
     resp=Response(_LOGOUT_HTML, mimetype='text/html')
