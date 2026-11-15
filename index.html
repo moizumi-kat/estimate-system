@@ -99,6 +99,7 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
     <button data-f="x:gemini" title="Geminiだけが検出＝Claudeの取りこぼし候補。図面で確認してください" style="border-color:#e0a000;color:#a56a00">＋G 取りこぼし候補</button>
     <button data-f="x:dual" title="Claude・Gemini両方が検出＝二重検証済" style="border-color:#3a9d5f;color:#2a7d4f">✓✓ 二重検証</button></div>
   <div class="bar" id="xlsbar" style="display:none">
+    <input id="xlsname" type="text" placeholder="保存ファイル名(.xlsx)" title="保存するExcelのファイル名。既定は図面名から作成。編集できます。" style="padding:8px 10px;border:1px solid #bbb;border-radius:6px;font-size:13px;min-width:230px;flex:1 1 230px">
     <button class="btn sec" id="xls">Excelで保存</button>
     <button class="btn sec" id="dwgBtn" onclick="toggleDrawing()">📄 図面と並べて確認</button>
   </div>
@@ -107,7 +108,17 @@ select{font-size:13px;padding:5px 6px;border:1px solid #bbb;border-radius:6px;ma
 </div>
 <script>
 let curFiles=null, extracted=null, lastData=null, controller=null;
+let srcNames=[];   // 対象図面名(アップロードしたファイル名)
 const $=id=>document.getElementById(id);
+// ===== 対象図面名の保持・表示・保存名の生成 =====
+function _srcSave(ns){ srcNames=ns||[]; try{localStorage.setItem('estimate_src',JSON.stringify({names:srcNames,ts:Date.now()}));}catch(e){} }
+function _srcGet(){ try{var o=JSON.parse(localStorage.getItem('estimate_src')||'null'); if(o&&o.names&&(Date.now()-(o.ts||0))<24*3600*1000)return o.names;}catch(e){} return []; }
+function _srcList(){ return (curFiles&&curFiles.length)?curFiles.map(function(f){return f.name;}):_srcGet(); }
+function _srcLabel(){ return _srcList().join(', '); }
+function _sanitize(s){ return (s+'').replace(/[\\\/:*?"<>|\x00-\x1f]/g,'_').replace(/_+/g,'_').replace(/^_+|_+$/g,''); }
+function _caseBase(){ var ns=_srcList(); if(!ns.length)return ''; var b=ns[0].replace(/^.*[\\\/]/,'').replace(/\.[^.]+$/,''); return _sanitize(b).slice(0,40); }
+function _xlsDefault(){ var b=_caseBase(); var d=new Date().toISOString().slice(0,10); return (b?('積算_'+b+'_'):'積算コード選定_')+d+'.xlsx'; }
+function _fillXlsName(){ try{var el=$('xlsname'); if(el&&!el.value) el.value=_xlsDefault();}catch(e){} }
 // ログイン中の利用者(メール)はサーバのセッションから取得し、ヘッダに表示。
 window._me='';
 fetch('/api/health').then(r=>r.json()).then(d=>{
@@ -124,6 +135,7 @@ drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransf
 file.onchange=()=>{if(file.files.length)setFiles(file.files)};
 function setFiles(fl){
   curFiles=Array.from(fl);
+  _srcSave(curFiles.map(f=>f.name));   // 対象図面名を保持(表示・保存名に使用)
   $('fname').textContent = curFiles.length===1 ? curFiles[0].name : curFiles.length+'件: '+curFiles.map(f=>f.name).join(', ');
   $('goExtract').disabled=false;
   $('err').classList.remove('show');resetResults();
@@ -132,6 +144,7 @@ function resetResults(){
   extracted=null;lastData=null;
   $('confirm').classList.remove('show');$('sum').className='summary';$('fbar').className='fbar';
   $('xlsbar').style.display='none';$('out').innerHTML='';
+  try{var e=$('xlsname'); if(e)e.value='';}catch(_){}   // 保存名を次の案件で再生成させる
   setStep(1);
 }
 function setStep(n){
@@ -282,7 +295,9 @@ $('xls').onclick=async()=>{
     const r=await fetch('/api/excel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({panels:lastData.panels})});
     if(!r.ok)throw new Error('server '+r.status);
     const blob=await r.blob();
-    const fname='積算コード選定_'+new Date().toISOString().slice(0,10)+'.xlsx';
+    let fname=(($('xlsname')&&$('xlsname').value.trim())||_xlsDefault());
+    fname=fname.replace(/[\\\/:*?"<>|\x00-\x1f]/g,'_');
+    if(!/\.xlsx$/i.test(fname)) fname+='.xlsx';
     // PC(Chrome/Edge): 「名前を付けて保存」ダイアログで保存先フォルダを選べる
     if(window.showSaveFilePicker){
       try{
@@ -296,12 +311,14 @@ $('xls').onclick=async()=>{
     if(navigator.canShare&&navigator.canShare({files:[file]})){
       await navigator.share({files:[file],title:'積算コード選定'});
     }else{
-      // 非対応(Safari PC/HTTP等): 確実に保存できるGET方式
-      window.location.href='/api/excel/download';
+      // 非対応(Safari PC等): blobを指定ファイル名でダウンロード(保存先はブラウザ設定/保存先を尋ねる設定で選択)
+      const u=URL.createObjectURL(blob); const a=document.createElement('a');
+      a.href=u; a.download=fname; document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(u); },1500);
     }
   }catch(e){
     if(e&&e.name==='AbortError'){ btn.disabled=false; btn.textContent=orig; return; }  // 共有をキャンセル
-    window.location.href='/api/excel/download';   // 最終フォールバック
+    window.location.href='/api/excel/download';   // 最終フォールバック(サーバ側GET)
   }
   btn.disabled=false; btn.textContent=orig;
 };
@@ -570,9 +587,11 @@ function dwgSelDev(seq){
 }
 function render(d,filter){
   window._filter=filter||'all';
+  _fillXlsName();   // 保存名を図面名ベースで既定入力(空のときだけ)
   const s=d.summary;
+  var _sl=_srcLabel();
   $('sum').className='summary show';
-  $('sum').innerHTML=stat('',s.total,'抽出機器')+stat('ok',s.ok,'◎ 確定')+stat('warn',s.warn,'○ ほぼ確定')+stat('chk',s.chk,'△ 要確認')+stat('',s.rate+'%','自動確定率');
+  $('sum').innerHTML=(_sl?'<div style="flex-basis:100%;margin:0 0 4px;padding:7px 11px;background:#eef3fb;border:1px solid #b9cdee;border-radius:8px;font-size:12.5px;color:#234">📄 対象図面: <b>'+esc(_sl)+'</b></div>':'')+stat('',s.total,'抽出機器')+stat('ok',s.ok,'◎ 確定')+stat('warn',s.warn,'○ ほぼ確定')+stat('chk',s.chk,'△ 要確認')+stat('',s.rate+'%','自動確定率');
   $('fbar').className='fbar show';
   const bdg={'◎':'<span class="badge b-ok">◎</span>','○':'<span class="badge b-warn">○</span>','△':'<span class="badge b-chk">△</span>'};
   // このシステムの出力＝積算ソフトに入力する見積コードのリスト。函体/製作費/据付費は
@@ -879,7 +898,8 @@ function _restoreResultButton(d){
     var b=document.createElement('div');
     b.style.cssText='margin:10px 0;padding:11px 13px;background:#eef6ee;border:1px solid #bcd3bc;border-radius:8px;font-size:13px;color:#2e6b3a;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
     var t=document.createElement('span');
-    t.textContent='前回の選定結果があります（盤 '+n+' 面）。';
+    var _ns=_srcGet(); var _sl=_ns.length?'／図面: '+_ns.join(', '):'';
+    t.textContent='前回の選定結果があります（盤 '+n+' 面'+_sl+'）。';
     var btn=document.createElement('button');
     btn.textContent='前回の結果を表示';
     btn.style.cssText='padding:7px 14px;background:#2e7d46;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer';
