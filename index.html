@@ -185,7 +185,7 @@ async function pollJob(jid,n){
     else{ busy('[1/2] 図面から部品を抽出しています…（'+n+'件・'+waited+'秒経過／重い図面は数分かかります）'); }
     if(sj.status==='done'){ return sj.result; }
     if(sj.status==='error'){ throw new Error(sj.error||'抽出に失敗しました'); }
-    if(sj.status==='unknown'){ throw new Error('抽出ジョブが見つかりません（時間切れの可能性）'); }
+    if(sj.status==='unknown'){ throw new Error('前回の抽出は中断されました（サーバ更新などの可能性）。図面は選択されたままなので、もう一度「① 部品を抽出」を押してください。'); }
     if(waited>1800){ throw new Error('抽出がとても長くかかっています。図面を分割してお試しください。'); }
   }
 }

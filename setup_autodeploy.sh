@@ -13,14 +13,23 @@ cat > "$HOME_DIR/autodeploy.sh" <<'EOS'
 #!/bin/bash
 cd /home/ec2-user/estimate_code_system_v1.4 || exit 0
 git fetch origin main -q || exit 0
+PENDING="$HOME/.deploy_pending"
+# 新しいコミットがあればコードを取り込み「再起動保留」フラグを立てる(この時点では再起動しない)
 if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
   git reset --hard origin/main -q
+  touch "$PENDING"
+  echo "$(date) pulled new code -> pending restart" >> "$HOME/autodeploy.log"
+fi
+# 保留中の再起動を処理。ただし抽出が進行中なら今回は見送り、次回(5分後)に再挑戦する。
+# これにより「抽出中の再起動でジョブが消える」事態を防ぐ(保留は新コミットが無くても解消される)。
+if [ -f "$PENDING" ]; then
   JOBDIR="$HOME/.estimate_jobs"
   if [ -d "$JOBDIR" ] && find "$JOBDIR" -name '*.json' -mmin -25 2>/dev/null -exec grep -l '"status": *"running"' {} \; 2>/dev/null | grep -q .; then
-    echo "$(date) extraction in progress -> defer restart" >> "$HOME/autodeploy.log"
+    echo "$(date) extraction in progress -> defer restart (will retry)" >> "$HOME/autodeploy.log"
     exit 0
   fi
-  sudo systemctl restart estimate
+  sudo systemctl restart estimate && rm -f "$PENDING"
+  echo "$(date) restarted estimate" >> "$HOME/autodeploy.log"
 fi
 EOS
 chmod +x "$HOME_DIR/autodeploy.sh"
