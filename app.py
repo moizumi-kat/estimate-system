@@ -4063,7 +4063,14 @@ def api_extract():
     payload=[(f.filename, f.read()) for f in files if f and f.filename]
     if not payload:
         return jsonify(error='ファイルがありません'),400
-    _cleanup_old(_JOB_DIR); _cleanup_old(_LAST_DIR)   # 永続ディレクトリの古いファイルを掃除(肥大化防止)
+    _cleanup_old(_JOB_DIR); _cleanup_old(_LAST_DIR); _cleanup_old_filedirs()   # 永続ディレクトリの古い物を掃除
+    # 図面をサーバ保存(再読込後も「図面と並べて確認」が使えるように)。sidをここで確定。
+    try:
+        sid=session.get('sid')
+        if not sid:
+            sid=secrets.token_hex(8); session['sid']=sid
+        _save_files(sid, payload)
+    except Exception: pass
     jid=secrets.token_hex(8)
     _job_write(jid, {'status':'running'})
     def _work(jid=jid, payload=payload):
@@ -4175,11 +4182,84 @@ def _clear_last(sid):
         if os.path.exists(fp): os.remove(fp)
     except Exception: pass
 
+# ===== アップロード図面のサーバ保存(再読込後も「図面と並べて確認」が使えるように) =====
+# 図面はこの端末のブラウザメモリにしか無く、再読込で消える→ビューアが使えなかった。
+# 抽出時にsid別ディレクトリへ保存し、ビューアはfidxで参照する(最新の製番のみ保持)。
+_FILES_DIR=_persist_dir('.estimate_files')
+def _sid_fdir(sid): return os.path.join(_FILES_DIR, re.sub(r'[^0-9a-zA-Z]','',str(sid))[:32])
+def _clear_files(sid):
+    d=_sid_fdir(sid)
+    try:
+        if os.path.isdir(d):
+            for fn in os.listdir(d):
+                try: os.remove(os.path.join(d,fn))
+                except Exception: pass
+            os.rmdir(d)
+    except Exception: pass
+def _save_files(sid, payload):
+    """payload=[(filename,bytes)] をsid別に保存(前の製番分は消す=最新のみ)。"""
+    if not sid: return
+    _clear_files(sid)
+    d=_sid_fdir(sid)
+    try:
+        os.makedirs(d, exist_ok=True)
+        meta=[]
+        for i,(fn,data) in enumerate(payload):
+            try:
+                with open(os.path.join(d,'%d.bin'%i),'wb') as f: f.write(data)
+                meta.append({'idx':i,'name':fn or ('file%d'%i)})
+            except Exception: pass
+        with open(os.path.join(d,'meta.json'),'w',encoding='utf-8') as f:
+            json.dump({'files':meta,'ts':time.time()}, f, ensure_ascii=False)
+    except Exception: pass
+def _list_files(sid):
+    try:
+        with open(os.path.join(_sid_fdir(sid),'meta.json'),encoding='utf-8') as f:
+            return (json.load(f) or {}).get('files',[])
+    except Exception: return []
+def _read_file(sid, idx):
+    try:
+        nm=next((m.get('name') for m in _list_files(sid) if int(m.get('idx',-1))==int(idx)), None)
+        if nm is None: return None,None
+        with open(os.path.join(_sid_fdir(sid),'%d.bin'%int(idx)),'rb') as f:
+            return nm, f.read()
+    except Exception: return None,None
+def _cleanup_old_filedirs(max_age=86400):
+    """古い図面ディレクトリを掃除(肥大化防止・既定1日)。"""
+    try:
+        now=time.time()
+        for sd in os.listdir(_FILES_DIR):
+            dp=os.path.join(_FILES_DIR,sd)
+            if not os.path.isdir(dp): continue
+            mp=os.path.join(dp,'meta.json')
+            try:
+                if (not os.path.exists(mp)) or (now-os.path.getmtime(mp)>max_age):
+                    for fn in os.listdir(dp):
+                        try: os.remove(os.path.join(dp,fn))
+                        except Exception: pass
+                    os.rmdir(dp)
+            except Exception: pass
+    except Exception: pass
+def _src_or_stored():
+    """pageinfo/pageimg/locate共通: アップロードfileがあればそれ、無ければストア(fidx)から読む。"""
+    f=request.files.get('file')
+    if f: return f.filename, f.read()
+    try: fidx=int(request.form.get('fidx','0') or 0)
+    except Exception: fidx=0
+    return _read_file(session.get('sid'), fidx)
+
+@app.route('/api/files', methods=['GET'])
+@login_required
+def api_files():
+    """この端末(sid)にサーバ保存済みの図面一覧(再読込後のビューア用)。"""
+    return jsonify(ok=True, files=_list_files(session.get('sid')))
+
 @app.route('/api/last/clear', methods=['POST'])
 @login_required
 def api_last_clear():
-    """新しい製番の開始/リセット時に、この端末(sid)の直近選定結果を消す。"""
-    _clear_last(session.get('sid'))
+    """新しい製番の開始/リセット時に、この端末(sid)の直近選定結果と保存図面を消す。"""
+    sid=session.get('sid')
+    _clear_last(sid); _clear_files(sid)
     return jsonify(ok=True)
 
 @app.route('/api/excel', methods=['POST'])
@@ -4276,18 +4356,18 @@ def _page_png(fname,data,idx,zoom=2):
 @app.route('/api/pageinfo', methods=['POST'])
 @login_required
 def api_pageinfo():
-    f=request.files.get('file')
-    if not f: return jsonify(ok=False,pages=0)
-    return jsonify(ok=True, pages=_page_count(f.filename, f.read()))
+    fn,data=_src_or_stored()
+    if data is None: return jsonify(ok=False,pages=0)
+    return jsonify(ok=True, pages=_page_count(fn, data))
 
 @app.route('/api/pageimg', methods=['POST'])
 @login_required
 def api_pageimg():
-    f=request.files.get('file')
-    if not f: return Response('no file',status=400)
+    fn,data=_src_or_stored()
+    if data is None: return Response('no file',status=400)
     try: idx=int(request.form.get('page','0') or 0)
     except Exception: idx=0
-    png=_page_png(f.filename, f.read(), idx)
+    png=_page_png(fn, data, idx)
     if png is None: return Response('no page',status=404)
     return Response(png, mimetype='image/png')
 
@@ -4303,14 +4383,14 @@ LOCATE_PROMPT="""あなたは配電盤図面を読む専門家です。この図
 def api_locate():
     """図面ページ画像と機器名リストを渡し、各機器の概略位置をVisionで返す(advisory)。
     抽出・選定とは独立。失敗しても pos=[] を返すだけ(既存機能に影響しない)。"""
-    f=request.files.get('file')
-    if not f: return jsonify(ok=False,pos=[])
+    fn,data=_src_or_stored()
+    if data is None: return jsonify(ok=False,pos=[])
     try: idx=int(request.form.get('page','0') or 0)
     except Exception: idx=0
     try: names=json.loads(request.form.get('names','[]'))
     except Exception: names=[]
     if not names: return jsonify(ok=False,pos=[])
-    png=_page_png(f.filename, f.read(), idx, zoom=2)
+    png=_page_png(fn, data, idx, zoom=2)
     if png is None: return jsonify(ok=False,pos=[])
     lst="\n".join('%s:%s'%(it.get('i'),str(it.get('name',''))[:60]) for it in names if it.get('name'))[:6000]
     try:

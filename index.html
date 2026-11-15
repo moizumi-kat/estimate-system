@@ -483,6 +483,9 @@ function bulkReset(){
 // サーバ描画のページ画像に、選定結果の機器を赤数字ピンで重ね、表と双方向リンク。
 // 位置は /api/locate (独立したVision・advisory=積算額に無関係)。抽出/選定には一切影響しない。
 let _dwgURLs=[], _dvList=[], _dwgFile=0, _dwgPage=0, _dwgPages=1, _dwgCur=null;
+let _dwgFiles=[];   // 表示対象の図面: [{name, file?(端末メモリ), fidx?(サーバ保存)}]
+// 現在の図面を file(端末メモリ) か fidx(サーバ保存) でFormDataに積む
+function _dwgSrcFd(fd){ var e=_dwgFiles[_dwgFile]; if(e&&e.file){ fd.append('file',e.file); } else if(e){ fd.append('fidx',e.fidx); } return fd; }
 function _dwgRevoke(){ _dwgURLs.forEach(u=>{try{URL.revokeObjectURL(u)}catch(e){}}); _dwgURLs=[]; }
 function _buildDevList(){
   _dvList=[]; let seq=0;
@@ -491,19 +494,29 @@ function _buildDevList(){
     _dvList.push({seq:++seq,pi:pi,ri:ri,name:r.name,code:r.code||'',conf:r.conf||''});
   }));
 }
-function toggleDrawing(){
+async function toggleDrawing(){
   let p=document.getElementById('dwgPane'); const btn=document.getElementById('dwgBtn');
   if(p){ p.remove(); _dwgRevoke(); document.body.style.overflow=''; if(btn)btn.textContent='📄 図面と並べて確認'; return; }
-  if(!curFiles||!curFiles.length){
-    // 図面ファイルはこの端末のメモリにのみ保持。アプリ切替で画面が再読込されると消えるため案内。
-    alert('図面データがこの端末に残っていません。\n（別アプリに移動して画面が再読込された等）\n\nお手数ですが、同じ図面をもう一度「図面をアップロード」から選び直してください。選定結果はそのまま使えます。');
+  if(!lastData){ alert('先にコード選定を実行してください。'); return; }
+  // 図面ソースを決定: ①端末メモリ(curFiles) ②無ければサーバ保存(再読込後も使える)
+  _dwgFiles=[];
+  if(curFiles&&curFiles.length){
+    _dwgFiles=curFiles.map(function(f){return {name:f.name,file:f};});
+  }else{
+    if(btn){btn.disabled=true;btn.textContent='図面を取得中…';}
+    try{ const r=await fetch('/api/files'); const j=await r.json();
+      if(j&&j.ok&&j.files&&j.files.length){ _dwgFiles=j.files.map(function(m){return {name:m.name,fidx:m.idx};}); }
+    }catch(e){}
+    if(btn){btn.disabled=false;btn.textContent='📄 図面と並べて確認';}
+  }
+  if(!_dwgFiles.length){
+    alert('図面データが見つかりません。\nお手数ですが、同じ図面をもう一度「図面をアップロード」から選び直してください。選定結果はそのまま使えます。');
     return;
   }
-  if(!lastData){ alert('先にコード選定を実行してください。'); return; }
   _buildDevList(); _dwgFile=0; _dwgPage=0;
   p=document.createElement('div'); p.id='dwgPane';
   p.style.cssText='position:fixed;inset:0;background:#f7f5ef;z-index:9999;display:flex;flex-direction:column';
-  const fopts=curFiles.map((f,i)=>'<option value="'+i+'">'+esc(f.name)+'</option>').join('');
+  const fopts=_dwgFiles.map((f,i)=>'<option value="'+i+'">'+esc(f.name)+'</option>').join('');
   p.innerHTML=
    '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#1e3a28;color:#fff;flex-wrap:wrap">'+
      '<b style="font-size:13px">📄 図面と並べて確認</b>'+
@@ -543,7 +556,7 @@ function _dwgRenderList(){
 }
 async function dwgSetFile(i){
   _dwgFile=i|0; _dwgPage=0; _dwgPages=1;
-  try{ const fd=new FormData(); fd.append('file',curFiles[_dwgFile]);
+  try{ const fd=_dwgSrcFd(new FormData());
     const r=await fetch('/api/pageinfo',{method:'POST',body:fd}); const j=await r.json(); _dwgPages=(j&&j.pages)||1;
   }catch(e){}
   dwgShowPage();
@@ -553,7 +566,7 @@ async function dwgShowPage(){
   const pg=document.getElementById('dwgPg'); if(pg)pg.textContent=(_dwgPage+1)+' / '+_dwgPages+' ページ';
   _dwgClearPins(); _dwgRevoke();
   try{
-    const fd=new FormData(); fd.append('file',curFiles[_dwgFile]); fd.append('page',_dwgPage);
+    const fd=_dwgSrcFd(new FormData()); fd.append('page',_dwgPage);
     const r=await fetch('/api/pageimg',{method:'POST',body:fd});
     if(!r.ok){ img.removeAttribute('src'); return; }
     const b=await r.blob(); const u=URL.createObjectURL(b); _dwgURLs.push(u); img.src=u;
@@ -566,7 +579,7 @@ async function dwgLocate(){
   if(!_dvList.length){ alert('機器リストがありません。'); return; }
   if(btn){btn.disabled=true;btn.textContent='AIが位置を推定中…';}
   try{
-    const fd=new FormData(); fd.append('file',curFiles[_dwgFile]); fd.append('page',_dwgPage);
+    const fd=_dwgSrcFd(new FormData()); fd.append('page',_dwgPage);
     fd.append('names',JSON.stringify(_dvList.map(d=>({i:d.seq,name:d.name}))));
     const r=await fetch('/api/locate',{method:'POST',body:fd}); const j=await r.json();
     _dwgClearPins();
