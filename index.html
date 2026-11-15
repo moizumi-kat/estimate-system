@@ -146,6 +146,7 @@ function resetResults(){
   extracted=null;lastData=null;
   $('confirm').classList.remove('show');$('sum').className='summary';$('fbar').className='fbar';
   $('xlsbar').style.display='none';$('out').innerHTML='';
+  try{ document.querySelectorAll('.restoreMsg').forEach(function(x){x.remove();}); }catch(_){}  // 復帰バナー/ボタンも消す
   try{var e=$('xlsname'); if(e)e.value='';}catch(_){}   // 保存名を次の案件で再生成させる
   setStep(1);
 }
@@ -294,6 +295,7 @@ function newProductReset(){
   _jobClear();                        // 進行中ジョブ情報クリア
   _restoreMark('ok'); _loadGuardReset && _loadGuardReset();
   try{ var e=$('xlsname'); if(e)e.value=''; }catch(_){}
+  try{ document.querySelectorAll('.restoreMsg').forEach(function(x){x.remove();}); }catch(_){}  // 復帰バナー/ボタンも消す
   resetResults();
   // サーバ保存済みの前回結果も消す(戻った時に前の製番が復帰しないように)
   try{ fetch('/api/last/clear',{method:'POST'}); }catch(e){}
@@ -862,7 +864,7 @@ document.querySelectorAll('.fbar button').forEach(b=>b.onclick=()=>{
 // ①進行中/完了済みの抽出ジョブがあれば取り戻す ②直近の選定結果があれば表示する
 function _restoreBanner(msg){
   try{
-    var b=document.createElement('div');
+    var b=document.createElement('div'); b.className='restoreMsg';
     b.style.cssText='margin:10px 0;padding:9px 12px;background:#eef6ee;border:1px solid #bcd3bc;border-radius:7px;font-size:13px;color:#2e6b3a';
     b.textContent=msg;
     var out=$('out'); if(out&&out.parentNode) out.parentNode.insertBefore(b,out);
@@ -894,7 +896,7 @@ function restoreState(){
 // 安全モード: 自動では一切描画せず、手動タップで復元させる(ループを断ち切る)
 function _safeRecoveryButton(){
   try{
-    var b=document.createElement('div');
+    var b=document.createElement('div'); b.className='restoreMsg';
     b.style.cssText='margin:10px 0;padding:13px 14px;background:#fff6e5;border:2px solid #e0b870;border-radius:9px;font-size:14px;color:#7a4b00;line-height:1.6';
     var msg=document.createElement('div');
     msg.innerHTML='<b>画面の読み込みを繰り返したため、自動復元を一時停止しました。</b><br>'
@@ -966,7 +968,7 @@ async function _doRestore(){
 function _extractedButton(d){
   try{
     var n=(d.panels||[]).length;
-    var b=document.createElement('div');
+    var b=document.createElement('div'); b.className='restoreMsg';
     b.style.cssText='margin:10px 0;padding:13px 14px;background:#eef6ee;border:2px solid #9cc49c;border-radius:9px;font-size:14px;color:#2e6b3a;line-height:1.5';
     var t=document.createElement('div');
     t.innerHTML='<b>抽出が完了しています。</b>（盤 '+n+' 面）<br>'
@@ -992,7 +994,7 @@ function _restoreGuardClear(){ _restoreMark('ok'); }
 function _restoreResultButton(d){
   try{
     var n=(d.panels||[]).length; var rows=_rowCount(d.panels);
-    var b=document.createElement('div');
+    var b=document.createElement('div'); b.className='restoreMsg';
     b.style.cssText='margin:10px 0;padding:13px 14px;background:#eef6ee;border:2px solid #9cc49c;border-radius:9px;font-size:14px;color:#2e6b3a;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
     var t=document.createElement('div'); t.style.cssText='flex:1 1 100%;line-height:1.5';
     var _ns=_srcGet(); var _sl=_ns.length?'<br>📄 図面: '+esc(_ns.join(', ')):'';
