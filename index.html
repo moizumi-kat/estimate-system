@@ -873,8 +873,39 @@ function _restoreCrashed(){ try{ var s=sessionStorage.getItem('restore_render');
 function _restoreMark(v){ try{ sessionStorage.setItem('restore_render',v); }catch(e){} }
 function _isTouch(){ return (navigator.maxTouchPoints>0)||/iPhone|iPad|iPod|Android/i.test(navigator.userAgent||''); }
 function _rowCount(panels){ var n=0; (panels||[]).forEach(function(p){ n+=((p.rows||[]).length); }); return n; }
-async function restoreState(){
-  var crashed=_restoreCrashed();
+// クラッシュ→自動再読込のループ検出。直前の読込から6秒以内の連続読込をカウントし、
+// 2回以上続いたら「安全モード」(自動復元・自動描画を一切しない=何が原因でも落ちない)にする。
+function _loadGuard(){
+  var now=Date.now(), last=0, cnt=0;
+  try{ last=parseInt(sessionStorage.getItem('load_ts')||'0',10)||0; cnt=parseInt(sessionStorage.getItem('load_cnt')||'0',10)||0; }catch(e){}
+  if(now-last<6000){ cnt++; } else { cnt=0; }
+  try{ sessionStorage.setItem('load_ts',String(now)); sessionStorage.setItem('load_cnt',String(cnt)); }catch(e){}
+  return cnt>=2;
+}
+function _loadGuardReset(){ try{ sessionStorage.setItem('load_cnt','0'); }catch(e){} }
+// 入口: 連続再読込(クラッシュループ)なら安全モード、通常は自動復元
+function restoreState(){
+  if(_loadGuard()){ _safeRecoveryButton(); }
+  else{ _doRestore(); }
+}
+// 安全モード: 自動では一切描画せず、手動タップで復元させる(ループを断ち切る)
+function _safeRecoveryButton(){
+  try{
+    var b=document.createElement('div');
+    b.style.cssText='margin:10px 0;padding:13px 14px;background:#fff6e5;border:2px solid #e0b870;border-radius:9px;font-size:14px;color:#7a4b00;line-height:1.6';
+    var msg=document.createElement('div');
+    msg.innerHTML='<b>画面の読み込みを繰り返したため、自動復元を一時停止しました。</b><br>'
+      +'<span style="font-size:12px">抽出や前回結果はサーバに保存されています。下のボタンで手動復元できます。</span>';
+    var btn=document.createElement('button');
+    btn.textContent='▼ 前回の抽出・結果を復元する';
+    btn.style.cssText='margin-top:10px;padding:10px 18px;background:#2e7d46;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer';
+    btn.onclick=function(){ _loadGuardReset(); if(b&&b.parentNode) b.parentNode.removeChild(b); _doRestore(); };
+    b.appendChild(msg); b.appendChild(btn);
+    var out=$('out'); if(out&&out.parentNode) out.parentNode.insertBefore(b,out);
+  }catch(e){}
+}
+async function _doRestore(){
+  var crashed=_restoreCrashed(); var touch=_isTouch();
   const job=_jobGet();
   if(job&&job.jid&&(Date.now()-(job.ts||0)<30*60*1000)){
     if(crashed){ _restoreMark('heavy'); /*前回落ちた→ジョブ自動復帰は危険。下で選定結果をボタン表示*/ }
@@ -886,11 +917,20 @@ async function restoreState(){
         const d=await pollJob(job.jid,job.n||1);
         if(d===null)return;          // 中止
         _jobClear();
-        _restoreMark('try');
         extracted=d.panels;idle();showStop(false);
-        renderExtracted(d);$('confirm').classList.add('show');
-        _restoreBanner('前回の抽出結果を復帰しました。続けて確認・選定してください。');
-        setTimeout(function(){ _restoreMark('ok'); },1500);
+        var erows=_rowCount(d.panels);
+        if(!touch || erows<=40){
+          // 小さい抽出/PCは自動表示
+          _restoreMark('try');
+          try{
+            renderExtracted(d);$('confirm').classList.add('show');
+            _restoreBanner('前回の抽出結果を復帰しました。続けて確認・選定してください。');
+            setTimeout(function(){ _restoreMark('ok'); },1500);
+          }catch(e){ _restoreMark('heavy'); _extractedButton(d); }
+        }else{
+          // 大きい抽出をスマホで自動描画すると落ちるためボタンに(タップ時描画)
+          _restoreMark('ok'); _extractedButton(d);
+        }
         return;
       }catch(e){ _jobClear();idle();showStop(false);
         // 復帰失敗(時間切れ等)は静かに通常画面へ(直近の選定結果があれば次で表示)
@@ -903,7 +943,7 @@ async function restoreState(){
     if(r.ok){ const d=await r.json();
       if(d&&d.ok&&d.panels&&d.panels.length){
         var rows=_rowCount(d.panels);
-        var canAuto = !crashed && (!_isTouch() || rows<=40);  // スマホで大きい結果は自動描画しない(落ちる)
+        var canAuto = !crashed && (!touch || rows<=40);  // スマホで大きい結果は自動描画しない(落ちる)
         if(canAuto){
           _restoreMark('try');
           try{
@@ -917,6 +957,30 @@ async function restoreState(){
         }
       }
     }
+  }catch(e){}
+}
+// 抽出完了を押した時だけ描画(初期ロードは軽いまま=スマホで落ちない)
+function _extractedButton(d){
+  try{
+    var n=(d.panels||[]).length;
+    var b=document.createElement('div');
+    b.style.cssText='margin:10px 0;padding:13px 14px;background:#eef6ee;border:2px solid #9cc49c;border-radius:9px;font-size:14px;color:#2e6b3a;line-height:1.5';
+    var t=document.createElement('div');
+    t.innerHTML='<b>抽出が完了しています。</b>（盤 '+n+' 面）<br>'
+      +'<span style="font-size:12px;color:#5a7a5a">※スマホで大きい結果を自動表示すると固まることがあるため、ボタンで表示します。</span>';
+    var btn=document.createElement('button');
+    btn.textContent='▼ 抽出結果を確認する';
+    btn.style.cssText='margin-top:10px;padding:10px 18px;background:#2e7d46;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer';
+    btn.onclick=function(){
+      btn.disabled=true; btn.textContent='表示中…'; _restoreMark('try');
+      try{ extracted=d.panels;idle();showStop(false);setStep(2);renderExtracted(d);$('confirm').classList.add('show');
+        setTimeout(function(){ _restoreMark('ok'); },1500);
+      }catch(e){ _restoreMark('heavy'); }
+      if(b&&b.parentNode) b.parentNode.removeChild(b);
+    };
+    b.appendChild(t); b.appendChild(btn);
+    var out=$('out'); if(out&&out.parentNode) out.parentNode.insertBefore(b,out);
+    try{ b.scrollIntoView({block:'center'}); }catch(e){}
   }catch(e){}
 }
 // 新しい操作(アップロード/選定)が成功した端末では自動復元を再び有効化(ガード解除)
