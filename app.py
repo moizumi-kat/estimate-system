@@ -2888,16 +2888,9 @@ def _std_accessories(panel_name, rows, cold=False, faces=1):
       ヒータ+サーモ: 図面に寒冷地仕様がある場合のみ 74106+74107 を1組。"""
     if _panel_kind(panel_name)!='haiden' or not _panel_is_real_face(rows): return []
     out=[]
-    _nf=max(1,int(faces or 1))
-    if '71091' in byCode: out.append(('71091',_nf))               # 照明1/配電盤面 × 面数
-    # 外形図に換気扇が描かれ既に計上済(74100-74103)なら、その記載を優先しTR≥500の自動追加はしない(二重計上防止)。
-    _has_fan=any(str(r.get('code','') or '') in ('74100','74101','74102','74103') for r in rows)
-    tr500=False
-    for r in rows:
-        s=(str(r.get('raw',''))+' '+byCode.get(str(r.get('code','') or ''),{}).get('name','')).upper()
-        for m in re.finditer(r'(\d{3,4})\s*KVA', s):
-            if int(m.group(1))>=500: tr500=True
-    if tr500 and not _has_fan and '74102' in byCode: out.append(('74102',1))   # TR≥500kVA盤の換気扇(外形図に無い時のみ)
+    # 【2026-11 茂泉様確定】照明(FL)・換気扇は自動計上しない(盤ごとの確認ゲートは残し、人が必要時に員数を入れる)。
+    #   従来は 照明71091×面数 と TR≥500盤の換気扇74102 を自動計上していたが、これを取りやめ。
+    #   ※寒冷地のヒータ+サーモは従来どおり(図面に寒冷地明記時のみ)。
     if cold and '74106' in byCode and '74107' in byCode: out+=[('74106',1),('74107',1)]  # 寒冷地=ヒータ+サーモ組
     return out
 
@@ -3799,20 +3792,18 @@ def select_from_extracted(data):
         def _add(tgt,c,nt):
             if tgt is not None and c in byCode:
                 tgt['rows'].append(dict(code=c,name=byCode[c].get('name',''),conf='○',qty='1',note=nt,load_detail=False))
+        # 【2026-11 茂泉様確定】照明(71091)・換気扇(74102)は外形図からも自動計上しない(確認ゲートで人が入れる)。
+        #   寒冷地のヒータ+サーモは従来どおり自動計上。
         if _secs:
             for s in _secs:
                 _fn=s.get('name','') or ''
                 _tp=_find_panel_by_face(_fn) or _fallback
-                _add(_tp,'71091','配電盤 盤内照明(外形図の面%s・1扉1。両扉等は員数を確認)'%(('「%s」'%_fn) if _fn else ''))
-                if s.get('fan'): _add(_tp,'74102','配電盤 換気扇(外形図でこの面に換気扇あり)')
                 if _cold_spec:
                     _add(_tp,'74106','配電盤 スペースヒーター(寒冷地)'); _add(_tp,'74107','配電盤 サーモスタット(寒冷地)')
         else:
             # sectionsが無いが面数だけある場合は従来どおり受電盤へまとめて計上(員数は人が配分)。
             _nf=_gaikei['faces']; _nv=_gaikei.get('fans',0)
             if _fallback is not None:
-                if '71091' in byCode: _fallback['rows'].append(dict(code='71091',name=byCode['71091'].get('name',''),conf='○',qty=str(_nf),note='配電盤 盤内照明(外形図の面数=%d面・配分は人が確認)'%_nf,load_detail=False))
-                if _nv>0 and '74102' in byCode: _fallback['rows'].append(dict(code='74102',name=byCode['74102'].get('name',''),conf='○',qty=str(_nv),note='配電盤 換気扇(外形図で換気扇あり%d面・配分は人が確認)'%_nv,load_detail=False))
                 if _cold_spec and '74106' in byCode and '74107' in byCode:
                     _fallback['rows'].append(dict(code='74106',name=byCode['74106'].get('name',''),conf='○',qty=str(_nf),note='配電盤 スペースヒーター(寒冷地・面数分)',load_detail=False))
                     _fallback['rows'].append(dict(code='74107',name=byCode['74107'].get('name',''),conf='○',qty=str(_nf),note='配電盤 サーモスタット(寒冷地・面数分)',load_detail=False))
@@ -4175,6 +4166,21 @@ def _load_last(sid):
             with open(fp,encoding='utf-8') as f: return json.load(f)
     except Exception: pass
     return None
+def _clear_last(sid):
+    """新しい製番を始める時に、前の製番の保存済み選定結果を消す(復帰で前のが出ないように)。"""
+    try: _LAST_RESULT.pop(sid,None)
+    except Exception: pass
+    try:
+        fp=os.path.join(_LAST_DIR,re.sub(r'[^0-9a-zA-Z]','',str(sid))[:32]+'.json')
+        if os.path.exists(fp): os.remove(fp)
+    except Exception: pass
+
+@app.route('/api/last/clear', methods=['POST'])
+@login_required
+def api_last_clear():
+    """新しい製番の開始/リセット時に、この端末(sid)の直近選定結果を消す。"""
+    _clear_last(session.get('sid'))
+    return jsonify(ok=True)
 
 @app.route('/api/excel', methods=['POST'])
 @login_required
