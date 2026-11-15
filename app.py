@@ -3975,15 +3975,23 @@ def api_confirm_stats():
 # タイムアウトに掛かる。精度(モデル/解像度)は落とさず、抽出を「裏で実行→進捗ポーリング」
 # の非同期方式にして、どんなに重い図面でもタイムアウトしないようにする。
 def _do_extract(payload):
-    """payload=[(fname, raw_bytes), ...] を抽出し、フロント用の結果dictを返す(同期処理の中身)。"""
+    """payload=[(fname, src), ...] を抽出(src=bytesかディスク上のパス)。フロント用の結果dictを返す。
+    【メモリ削減】srcがパスなら1ファイルずつディスクから読み、処理後に解放(全ファイルを同時にRAM保持しない)。
+    抽出ロジック(extract_panels以降)は不変=精度不変。"""
+    import gc as _gc
     all_panels=[]; errors=[]; nfiles=0; dual={'dual':0,'claude_only':0,'gemini_only':0}; _dual_used=False
-    for fname, raw in payload:
+    for fname, src in payload:
         low=str(fname).lower()
         if not low.endswith(('.pdf','.png','.jpg','.jpeg','.dxf','.zip')):
             errors.append(f'{fname}: 非対応形式(PDF/PNG/JPG/DXF/ZIP)')
             continue
         try:
+            if isinstance(src,(bytes,bytearray)):
+                raw=src
+            else:
+                with open(src,'rb') as _f: raw=_f.read()   # このファイルを読む時だけメモリに載せる
             data=extract_panels(fname, raw)
+            raw=None; _gc.collect()                         # 次ファイル前に解放(ピークメモリを1ファイル分に)
             for p in data.get('panels',[]):
                 all_panels.append(p)
             if data.get('_dual'):
@@ -4064,18 +4072,35 @@ def api_extract():
     if not files:
         f=request.files.get('file')
         files=[f] if f else []
-    # リクエスト中にファイル本体を読み込む(スレッド内ではrequestにアクセスできないため)。
-    payload=[(f.filename, f.read()) for f in files if f and f.filename]
-    if not payload:
+    files=[f for f in files if f and f.filename]
+    if not files:
         return jsonify(error='ファイルがありません'),400
     _cleanup_old(_JOB_DIR); _cleanup_old(_LAST_DIR); _cleanup_old_filedirs()   # 永続ディレクトリの古い物を掃除
-    # 図面をサーバ保存(再読込後も「図面と並べて確認」が使えるように)。sidをここで確定。
+    # 【メモリ削減】図面をディスクへストリーム保存し、抽出スレッドへは(ファイル名,パス)を渡す。
+    #   ・全ファイルのバイト列をRAMに載せ続けない(f.saveはチャンク保存)。
+    #   ・同時にビューア用のサーバ保存(meta.json)も兼ねる(再読込後も図面を参照可)。
+    #   ・スレッド内ではrequestに触れないため、保存先パスを渡す。
+    sid=session.get('sid')
+    if not sid:
+        sid=secrets.token_hex(8); session['sid']=sid
+    payload=[]
     try:
-        sid=session.get('sid')
-        if not sid:
-            sid=secrets.token_hex(8); session['sid']=sid
-        _save_files(sid, payload)
-    except Exception: pass
+        _clear_files(sid)
+        d=_sid_fdir(sid); os.makedirs(d, exist_ok=True)
+        meta=[]
+        for i,f in enumerate(files):
+            path=os.path.join(d,'%d.bin'%i)
+            f.save(path)                              # ストリーム保存(全バイトをRAMに載せない)
+            payload.append((f.filename, path))
+            meta.append({'idx':i,'name':f.filename})
+        with open(os.path.join(d,'meta.json'),'w',encoding='utf-8') as mf:
+            json.dump({'files':meta,'ts':time.time()}, mf, ensure_ascii=False)
+    except Exception:
+        # ディスク保存に失敗した場合はメモリ読込にフォールバック(抽出は継続)
+        try: payload=[(f.filename, f.read()) for f in files]
+        except Exception: payload=[]
+    if not payload:
+        return jsonify(error='ファイルがありません'),400
     jid=secrets.token_hex(8)
     _job_write(jid, {'status':'running'})
     def _work(jid=jid, payload=payload):
