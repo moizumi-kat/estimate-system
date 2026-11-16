@@ -3834,6 +3834,14 @@ def select_from_extracted(data):
     # 【#4 多図面の重複排除】同一物理盤(受変電側/分電側)をベースキー一致で自動統合＋近縁は重複候補を警告。
     out = _merge_cross_drawing_panels(out)
     _DRAWING_KIND.set(None)   # 後続処理へ図面種別ヒントを漏らさない
+    # 【並び順】盤種順(配電盤/受変電→制御盤→分電盤→その他)に安定ソート。
+    # スマホの複数選択ではブラウザが返すファイル順がアップロード順と一致しないため、
+    # 「配電盤が最初」になるよう盤種で並べる(同一盤種内は元の順を保持=安定ソート)。
+    _KIND_PRI={'haiden':0,'ctrl':1,'bunden':2}
+    def _kind_pri(_p):
+        try: return _KIND_PRI.get(_panel_kind(_p.get('panel','')), 3)
+        except Exception: return 3
+    out = sorted(out, key=_kind_pri)   # Pythonのsortは安定
     return out
 
 def make_excel(panels):
