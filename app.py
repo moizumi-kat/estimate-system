@@ -3748,7 +3748,9 @@ def select_from_extracted(data):
         for _acc,_aq in _acc_src:
             # 照明/換気扇のプレースホルダは数量0でも“項目として”出す。その他は従来どおり数量>0のみ。
             if _acc in byCode and (_acc in _ph or _aq>0):
-                rows.append(dict(code=_acc,name=byCode[_acc].get('name',''),conf=_acc_conf,qty=str(_aq),
+                _anm=byCode[_acc].get('name','')
+                # name は表示直前に display/raw で上書きされるため raw にも品名を入れる(項目名が空白にならないように)。
+                rows.append(dict(code=_acc,name=_anm,raw=_anm,conf=_acc_conf,qty=str(_aq),
                     note=_acc_note,load_detail=False))
         rows=_merge_dup_rows(rows)   # 同一盤内の同一コード機器を1行に集約(数量合算・社員要望)
         _tag_elb_pair(rows)          # 主幹ブレーカーに漏電(ELB)⇄MCB切替ペアをタグ付け(UIで要否選択)
