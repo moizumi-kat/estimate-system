@@ -911,17 +911,20 @@ function _restoreBanner(msg){
 function _restoreCrashed(){ try{ var s=sessionStorage.getItem('restore_render'); return (s==='try'||s==='heavy'); }catch(e){ return false; } }
 function _restoreMark(v){ try{ sessionStorage.setItem('restore_render',v); }catch(e){} }
 function _isTouch(){ return (navigator.maxTouchPoints>0)||/iPhone|iPad|iPod|Android/i.test(navigator.userAgent||''); }
-function _rowCount(panels){ var n=0; (panels||[]).forEach(function(p){ n+=((p.rows||[]).length); }); return n; }
-// クラッシュ→自動再読込のループ検出。直前の読込から6秒以内の連続読込をカウントし、
-// 2回以上続いたら「安全モード」(自動復元・自動描画を一切しない=何が原因でも落ちない)にする。
+// 復帰対象の大きさ(選定=rows / 抽出=items の両方を数える。抽出をrowsだけで数えると0と誤判定し大きい抽出で落ちる)
+function _rowCount(panels){ var n=0; (panels||[]).forEach(function(p){ n+=((p.rows||[]).length)+((p.items||[]).length); }); return n; }
+// クラッシュ→自動再読込のループ検出。直近60秒の読込回数を数え、3回以上なら「安全モード」
+// (自動復元・自動描画を一切しない=何が原因でも落ちない)。ゆっくり落ちるループ(1周>6秒)も捕まえる。
 function _loadGuard(){
-  var now=Date.now(), last=0, cnt=0;
-  try{ last=parseInt(sessionStorage.getItem('load_ts')||'0',10)||0; cnt=parseInt(sessionStorage.getItem('load_cnt')||'0',10)||0; }catch(e){}
-  if(now-last<6000){ cnt++; } else { cnt=0; }
-  try{ sessionStorage.setItem('load_ts',String(now)); sessionStorage.setItem('load_cnt',String(cnt)); }catch(e){}
-  return cnt>=2;
+  var now=Date.now(), arr=[];
+  try{ arr=JSON.parse(sessionStorage.getItem('load_hist')||'[]')||[]; }catch(e){ arr=[]; }
+  if(!Array.isArray(arr)) arr=[];
+  arr.push(now);
+  arr=arr.filter(function(t){ return (now-t)<60000; });   // 直近60秒
+  try{ sessionStorage.setItem('load_hist', JSON.stringify(arr.slice(-12))); }catch(e){}
+  return arr.length>=3;
 }
-function _loadGuardReset(){ try{ sessionStorage.setItem('load_cnt','0'); }catch(e){} }
+function _loadGuardReset(){ try{ sessionStorage.removeItem('load_hist'); }catch(e){} }
 // 入口: 連続再読込(クラッシュループ)なら安全モード、通常は自動復元
 function restoreState(){
   if(_loadGuard()){ _safeRecoveryButton(); }
