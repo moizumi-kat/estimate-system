@@ -391,17 +391,23 @@ function _bulkMatch(r,cat){
   if(cat==='all')  return true;
   return false;
 }
-// 要確認(○)の項目を、確認カテゴリ別に「盤名・品名・確認内容(note)」付きで集める
+// 要確認(○)の項目を、確認カテゴリ別に「盤名・品名・確認内容(note)・行位置(pi/ri)」付きで集める
 function _bulkItems(d){
   const g={ax:[],spd:[],meter:[],tr:[],other:[]};
-  (d.panels||[]).forEach(function(p){ (p.rows||[]).forEach(function(r){
+  (d.panels||[]).forEach(function(p,pi){ (p.rows||[]).forEach(function(r,ri){
     if(r.conf!=='○'||r.load_detail||String(r.qty)==='0')return;
     var cat='other';
     if(_bulkMatch(r,'ax'))cat='ax'; else if(_bulkMatch(r,'spd'))cat='spd';
     else if(_bulkMatch(r,'meter'))cat='meter'; else if(_bulkMatch(r,'tr'))cat='tr';
-    g[cat].push({panel:p.panel||'',name:(r.name||r.raw||''),code:(r.code||''),note:(r.note||'')});
+    g[cat].push({panel:p.panel||'',name:(r.name||r.raw||''),code:(r.code||''),note:(r.note||''),pi:pi,ri:ri});
   }); });
   return g;
+}
+// 1行だけ◎に確定(確認ゲートで内容を読んで確認した行)。
+function confirmOne(pi,ri){
+  if(!lastData)return; const row=_rowObj(pi,ri); if(!row)return;
+  _bulkSaveOrig(row); row.conf='◎'; row.note=(row.note||'')+' [確認◎]';
+  _bulkRecalc(); render(lastData,currentFilter());
 }
 function _bulkCats(d){
   const c={ax:0,spd:0,meter:0,tr:0,total:0};
@@ -421,12 +427,15 @@ function bulkBar(d){
   if(!total)return '';
   function _list(arr){
     if(!arr.length)return '';
-    return '<ul style="margin:4px 0 7px;padding-left:17px;font-size:12px;color:#334;line-height:1.5">'+
+    return '<div style="margin:4px 0 7px">'+
       arr.map(function(it){
         var nm=esc(String(it.name)).slice(0,42);
         var nt=esc(String(it.note||'').replace(/\s*\[[^\]]*\]\s*/g,'').trim()).slice(0,76);
-        return '<li style="margin:1px 0"><b>'+esc(String(it.panel)).slice(0,24)+'</b>｜'+nm+(it.code?'（'+esc(String(it.code))+'）':'')+(nt?'　<span style="color:#7a7">'+nt+'</span>':'')+'</li>';
-      }).join('')+'</ul>';
+        return '<div style="display:flex;align-items:flex-start;gap:6px;padding:2px 0;border-bottom:1px solid #e3ecf7">'+
+          '<div style="flex:1;font-size:12px;color:#334;line-height:1.45">• <b>'+esc(String(it.panel)).slice(0,24)+'</b>｜'+nm+(it.code?'（'+esc(String(it.code))+'）':'')+(nt?'<br><span style="color:#7a7;font-size:11.5px">'+nt+'</span>':'')+'</div>'+
+          '<button onclick="confirmOne('+it.pi+','+it.ri+')" title="この行の内容を確認して◎に" style="flex:0 0 auto;background:#2e7d46;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap">✓確認</button>'+
+        '</div>';
+      }).join('')+'</div>';
   }
   function _sec(label,desc,arr,ctrl){
     if(!arr.length)return '';
@@ -441,7 +450,7 @@ function bulkBar(d){
   function _btn(cat,txt){ return '<button onclick="bulkConfirm(\''+cat+'\')" style="background:#305496;color:#fff;border:none;padding:5px 13px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">'+txt+'</button>'; }
   var h='<div style="margin:8px 0 12px;padding:12px;border:1px solid #6b9bd1;background:#eef4fb;border-radius:9px">'+
     '<div style="font-weight:700;color:#234">■ 要確認（○）の内容と一括確定（'+total+'件）</div>'+
-    '<div style="font-size:11.5px;color:#567;margin:3px 0 6px">下の各項目の内容をここで確認し、問題なければボタンで◎に確定できます（図面に描かれない仕様差＝誤ると◎誤答のため既定は○。確定は人の判断に基づく）。</div>';
+    '<div style="font-size:11.5px;color:#567;margin:3px 0 6px">各項目の内容をここで読んで確認できます。<b>各行の「✓確認」で1件ずつ</b>、または下の<b>カテゴリ/全体のボタンでまとめて</b>◎に確定できます。結果表で候補を選んでも◎になります（図面に描かれない仕様差＝誤ると◎誤答のため既定は○。確定は人の判断に基づく）。</div>';
   h+=_sec('分岐遮断器 AX','AX付(漏電アラーム)の有無を確認',g.ax,axCtrl);
   h+=_sec('SPD（避雷器）','本体/クラスを確認',g.spd,_btn('spd','SPDを確定（◎）'));
   h+=_sec('計器（指示計・計器種別）','計器種別を確認（単線図で確定しづらい）',g.meter,_btn('meter','計器を確定（◎）'));
@@ -810,6 +819,9 @@ function onSel(id,pi,ri,sel){
   else{m.style.display='none';
     const lbl=sel.options[sel.selectedIndex].text; const mt=lbl.match(/（(.*)）/); const name=mt?mt[1]:'';
     nm.textContent=name; if(cd)cd.textContent=sel.value; _writeCode(pi,ri,sel.value,name);
+    // 候補を選んだ=確定 → ○なら◎に昇格して再描画
+    const row=_rowObj(pi,ri);
+    if(row&&row.conf==='○'){ _bulkSaveOrig(row); row.conf='◎'; row.note=(row.note||'')+' [候補選択で◎]'; _bulkRecalc(); render(lastData,currentFilter()); return; }
   }
   onChk();
 }
