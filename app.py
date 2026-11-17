@@ -3002,6 +3002,54 @@ _UNCERTAIN_KW=('要確認','確認ゲート','候補','推定','不明','可能�
     '切上','切下','感度','型式','クラス','支給','計器','マルチ','指示計','既定',
     '寸法別','最善','オプション','範囲外','スペース','電圧帯','絞込','繰上','繰下',
     '要否','最近傍','AX','選択','警報','UVR','スコット')
+# 遮断器(40/50/60系 MCB/ELB)の『変種ファミリ』(同一 盤種・極・容量・主幹/分岐 で
+# 高性能/電子式/漏電アラーム/欠相保護/ELB/AX付 等)をDBから集め、確認ゲート(候補)で選べるようにする。
+# frame/容量は選定が既に正解しているため、変種を選べば手本の変種(例 41235電子式/51201漏電)に到達可能。
+def _breaker_variants(code):
+    code=str(code); nm=byCode.get(code,{}).get('name','')
+    pm=re.search(r'(\d)P\s*(\d+)\s*A', nm)
+    if not pm or not re.search(r'MCB|ELB', nm) or not re.match(r'^[456]\d{4}$', code): return []
+    pole, amp, kind = pm.group(1), pm.group(2), code[0]
+    ismain = nm.startswith('M)') or nm.startswith('SM)')
+    # 同一 盤種/極/容量/主幹-分岐 のコードを集め、変種名ごとに代表1件(現コードに近いもの)を選ぶ
+    cands=[]
+    for c,d in byCode.items():
+        if not re.match(r'^[456]\d{4}$', c) or c[0]!=kind or c==code: continue
+        n=d.get('name','')
+        if not re.search(r'MCB|ELB', n): continue
+        p2=re.search(r'(\d)P\s*(\d+)\s*A', n)
+        if not p2 or p2.group(1)!=pole or p2.group(2)!=amp: continue
+        if (n.startswith('M)') or n.startswith('SM)')) != ismain: continue  # 主幹系/分岐系を混ぜない
+        if 'スペース' in n or 'MDU' in n or '耐熱' in n: continue             # 特殊は除外(必要なら手入力)
+        cands.append((c,n))
+    basefr=code[2:4]
+    def _blk(c): return 0 if c[2:4]==basefr else 1   # baseと同じframeブロックを優先
+    best={}
+    for c,n in cands:
+        cur=best.get(n)
+        if cur is None or (_blk(c),abs(int(c)-int(code))) < (_blk(cur),abs(int(cur)-int(code))): best[n]=c
+    fam=sorted(best.values(), key=lambda c:(0 if any(k in byCode[c]['name'] for k in
+            ('高性能','電子式','漏電','欠相','ELB','AX付')) else 1, abs(int(c)-int(code))))
+    return fam[:20]
+
+def _attach_breaker_variants(panels):
+    for p in panels:
+        for r in (p.get('rows') or []):
+            c=r.get('code')
+            if not c or not re.match(r'^[456]\d{4}$', str(c)): continue
+            if not re.search(r'MCB|ELB', byCode.get(str(c),{}).get('name','')): continue
+            fam=_breaker_variants(c)
+            if not fam: continue
+            exist={x.get('code') for x in (r.get('candidates') or [])}
+            cand=list(r.get('candidates') or [])
+            for fc in fam:
+                if fc not in exist: cand.append({'code':fc,'name':byCode.get(fc,{}).get('name',''),'volt':''})
+            r['candidates']=cand
+            # 変種が選べる旨をnoteに補足(トリップ種別/高性能/欠相/漏電は図面/特記で確定)
+            if '変種' not in str(r.get('note','')):
+                r['note']=(str(r.get('note','') or '').strip()+'／' if r.get('note') else '')+'遮断器の変種(熱動/電子式・高性能・欠相保護・漏電アラーム・ELB)は候補から選択'
+    return panels
+
 def _promote_determined(panels):
     for p in panels:
         for r in (p.get('rows') or []):
@@ -3862,6 +3910,7 @@ def select_from_extracted(data):
         try: return _KIND_PRI.get(_panel_kind(_p.get('panel','')), 3)
         except Exception: return 3
     out = sorted(out, key=_kind_pri)   # Pythonのsortは安定
+    out = _attach_breaker_variants(out)  # 遮断器に変種ファミリを候補付与(確認ゲートで変種確定可能に)
     out = _promote_determined(out)     # 候補が無く不確か語も無い○→◎(実質確定・安全側)
     return out
 
