@@ -2996,6 +2996,26 @@ def _merge_cross_drawing_panels(out):
             p['dup_note']='⚠ 重複候補: 「%s」と同一物理盤の可能性(多図面で別名抽出)。同一なら1盤に統合してください。'%('／'.join(p['dup_candidates']))
     return merged
 
+# ○のうち「実質確定」(候補が無く、noteに不確かさを示す語が無い)を◎へ昇格(茂泉様要望)。
+# ◎誤答ゼロのため、少しでも不確かさを示す語があれば○のまま残す(安全側=昇格しない)。
+_UNCERTAIN_KW=('要確認','確認ゲート','候補','推定','不明','可能性','判別','変種',
+    '切上','切下','感度','型式','クラス','支給','計器','マルチ','指示計','既定',
+    '寸法別','最善','オプション','範囲外','スペース','電圧帯','絞込','繰上','繰下',
+    '要否','最近傍','AX','選択','警報','UVR','スコット')
+def _promote_determined(panels):
+    for p in panels:
+        for r in (p.get('rows') or []):
+            if r.get('conf')!='○' or r.get('load_detail'): continue
+            if not r.get('code') or str(r.get('qty'))=='0': continue
+            cand=r.get('candidates') or []
+            # 現コードと異なる実候補が1つでもあれば「選ぶ余地あり」→○のまま
+            if any((c.get('code') or '')!=(r.get('code') or '') for c in cand): continue
+            note=str(r.get('note') or '')
+            if any(k in note for k in _UNCERTAIN_KW): continue   # 不確か語があれば○維持
+            r['conf']='◎'
+            r['note']=((note+'／') if note else '')+'候補なし・実質確定で◎'
+    return panels
+
 def _tag_elb_pair(rows):
     """主幹ブレーカー(M)MCB=末尾03 / M)ELB=末尾06)に 漏電(ELB)⇄非漏電(MCB) の切替ペアをタグ付け。
     両変種がDBに実在する行のみ対象(受変電40系は06が無いので非対象)。UIで主幹の漏電要否を選ぶ。
@@ -3842,6 +3862,7 @@ def select_from_extracted(data):
         try: return _KIND_PRI.get(_panel_kind(_p.get('panel','')), 3)
         except Exception: return 3
     out = sorted(out, key=_kind_pri)   # Pythonのsortは安定
+    out = _promote_determined(out)     # 候補が無く不確か語も無い○→◎(実質確定・安全側)
     return out
 
 def make_excel(panels):
