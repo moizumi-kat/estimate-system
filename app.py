@@ -2732,13 +2732,13 @@ def sc_confirm_form(attrs):
     # 低圧TR盤は「個別」か「17系セット」かを人が選ぶ(案件で使い分け・茂泉様確定)。既定=個別。
     # 17系セットを選んだ時のみ計器種別が効く(セットのメータ digit)。個別時は個別選定。
     if st=='低圧':
-        out.append({'spec':'低圧計上','options':['個別','17系セット'],'default':(attrs.get('低圧計上') or '個別')})
+        out.append({'spec':'低圧計上','options':['個別','17系セット'],'default':(attrs.get('低圧計上') or '17系セット')})
         out.append({'spec':'meter','options':_sc_valid_options('低圧','meter',attrs),'default':_sc_default('meter',SC_OPTIONS.get('meter',[]),attrs)})
         return out
     # コンデンサ盤は「個別」か「段積VCSセット(16系)」かを人が選ぶ。既定=個別。段積VCS選択時は段数(role)・VCS型(op)も確定。
     # VCS素/引出PFは図面から判別不能(7-4)→op候補を提示し人が確定(確定まで○)。
     if st=='コンデンサ':
-        out.append({'spec':'コンデンサ計上','options':['個別','段積VCSセット'],'default':(attrs.get('コンデンサ計上') or '個別')})
+        out.append({'spec':'コンデンサ計上','options':['個別','段積VCSセット'],'default':(attrs.get('コンデンサ計上') or '段積VCSセット')})
         out.append({'spec':'role','options':['一段積','二段積','三段積'],'default':(attrs.get('role') if attrs.get('role') in ('一段積','二段積','三段積') else '')})
         out.append({'spec':'op','options':['電磁','電磁引出PF'],'default':(attrs.get('op') or '電磁引出PF')})
         return out
@@ -2747,7 +2747,7 @@ def sc_confirm_form(attrs):
     #   段積(段数指定)→16系。11/16の別は op(操作方式)と role(段数)で自動判定(select側)。
     # ※op/vcb/計器種別は単線図に明記されず誤読が◎誤答→常に確認。表参道/城山手本=電動引出→16214。
     if st=='高圧':
-        out.append({'spec':'受電計上','options':['個別','セット'],'default':(attrs.get('受電計上') or '個別')})
+        out.append({'spec':'受電計上','options':['個別','セット'],'default':(attrs.get('受電計上') or 'セット')})
         # 受電盤は単独固定(段数不要)。饋電盤は単独/段積(段数)を選ぶ。
         if attrs.get('role')!='受電盤':
             _rc=attrs.get('role') if attrs.get('role') in ('単独','一段積','二段積','三段積','母線連絡') else '単独'
@@ -2758,7 +2758,7 @@ def sc_confirm_form(attrs):
         return out
     # 発電機連絡盤等(名称で段積確定): 個別/セットを選ぶ(既定=個別)。段数は盤名で固定のため不要。
     if st=='段積':
-        out.append({'spec':'受電計上','options':['個別','セット'],'default':(attrs.get('受電計上') or '個別')})
+        out.append({'spec':'受電計上','options':['個別','セット'],'default':(attrs.get('受電計上') or 'セット')})
         if attrs.get('role') not in ('受電盤','発電機連絡'):
             _rc=attrs.get('role') if attrs.get('role') in ('一段積','二段積','三段積','母線連絡') else ''
             out.append({'spec':'role','options':['一段積','二段積','三段積','母線連絡'],'default':_rc})
@@ -3227,15 +3227,20 @@ def select_from_extracted(data):
         # 段積は人が確認ゲートで確定した時のみ(Vision誤検出対策)。JEMは盤名一意で自動。
         # 【低圧17系】案件で個別/セットを使い分ける(茂泉様確定)。既定=個別(尼崎手本=個別)。
         #   確認ゲートで「17系セット」を選んだ低圧TR盤のみセット発火(YUASA手本=セット)。MCCB盤は個別。
-        _low_set = _cls0.get('settype')=='低圧' and _sa.get('低圧計上')=='17系セット'
-        # コンデンサ盤: ゲートで「段積VCSセット」を選んだ時のみ16系セット発火(既定=個別)。settypeを段積VCSへ。
-        _cond_set = _cls0.get('settype')=='コンデンサ' and _sa.get('コンデンサ計上')=='段積VCSセット'
+        # 【2026-11 受変電セット既定化(茂泉様確定・正解率シミュで裏取り)】既定をセットに。
+        #   明示的に「個別」を選んだ時のみ個別。既定発火(人が未確認)のセット行は○止め=◎誤答ゼロ(下の_capで)。
+        _low_set = _cls0.get('settype')=='低圧' and _sa.get('低圧計上','17系セット')!='個別'
+        _cond_set = _cls0.get('settype')=='コンデンサ' and _sa.get('コンデンサ計上','段積VCSセット')!='個別'
         if _cond_set:
             _sa=dict(_sa); _sa['settype']='段積VCS'
         # 【受電/饋電(高圧)】ゲートで「セット」を選んだ時のみ発火(既定=個別・茂泉様確定・表参道/城山手本で裏取り)。
         #   単独で手動/電動VCB→11系(settype=高圧)、単独でも電動引出VCB→16系(settype=段積・受電/饋電role)、
         #   段数指定(一/二/三段積・母線連絡)→16系(その段数role)。op/roleで自動判定。
-        _hv_set = _cls0.get('settype') in ('高圧','段積') and _sa.get('受電計上')=='セット'
+        _hv_set = _cls0.get('settype') in ('高圧','段積') and _sa.get('受電計上','セット')!='個別'
+        # 既定発火(人が受電計上/低圧計上/コンデンサ計上を明示していない)かどうか=◎抑制の判定材料
+        _set_defaulted = ((_hv_set and _sa.get('受電計上') is None) or
+                          (_low_set and _sa.get('低圧計上') is None) or
+                          (_cond_set and _sa.get('コンデンサ計上') is None))
         if _hv_set:
             _sa=dict(_sa)
             if _cls0.get('settype')=='段積':
@@ -3274,6 +3279,11 @@ def select_from_extracted(data):
         elif _use_set:
             _sc=sc_resolve(panel_nm, _sa)
             if _sc:
+                # 既定発火(人が未確認)のセット行は◎を○に抑制=セット既定化しても◎誤答ゼロ。
+                # (op/段数/計器等が未確定のまま◎にしない。人が確認ゲートで確定すれば◎に上がる)
+                if _set_defaulted and not _sa.get('_confirmed') and _sc.get('conf')=='◎':
+                    _sc['conf']='○'
+                    _sc['note']=(str(_sc.get('note','') or '').strip()+'／' if _sc.get('note') else '')+'セット既定発火(確認で◎・op/段数/計器を確認ゲートで確定)'
                 if _sc.get('code'):
                     _srow=byCode.get(_sc['code'],{})
                     _set_expand={x.split('x')[0] for x in (_srow.get('expand','') or '').split(';') if x}
