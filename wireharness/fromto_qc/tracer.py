@@ -379,10 +379,16 @@ def _attach_main_terminals(m, segs, find, comp_terms, comp_dev, margin=45):
 
         def comps_half_x(upper):
             return {c for (p, c) in eps if (p[0] >= cx) == upper}
+        # 型式(TYPE)に極数(2P/3P等)があれば、相端子(names_3p)をその極数に切り詰める。
+        # 例: CP30-2P→線側[1,3]/負荷側[2,4]、CP30-3P→[1,3,5]/[2,4,6]。MCCBの2P品も正確化。
+        _pm = re.search(r'(\d)\s*P', ty or '')
+        _npole = int(_pm.group(1)) if _pm else defn.get('poles')
         for t in defn.get('terminals', []):
             names = t.get('names_3p') or t.get('names') or []
             if not names:
                 continue
+            if _npole and t.get('names_3p') and len(names) > _npole:
+                names = names[:_npole]           # 極数ぶんに制限(過剰な相端子を出さない)
             side = t.get('side', '')
             # line/load は図記号の向きに追従: 縦向き=上(line)/下(load)、横向き=左(line)/右(load)。
             if side in ('top', 'line') and horiz:

@@ -119,8 +119,8 @@
       "split_series": true,
       "poles": 2,
       "terminals": [
-        {"role": "line", "side": "top", "names_3p": ["1", "3"], "names": ["1", "3"]},
-        {"role": "load", "side": "bottom", "names_3p": ["2", "4"], "names": ["2", "4"]}
+        {"role": "line", "side": "top", "names_3p": ["1", "3", "5"], "names": ["1", "3"]},
+        {"role": "load", "side": "bottom", "names_3p": ["2", "4", "6"], "names": ["2", "4"]}
       ]
     },
     "ELCB": {
