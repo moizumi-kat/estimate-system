@@ -470,6 +470,34 @@ def _attach_legend_devices(m, nodes):
 _VS_PHASE_TERM = {'R1': '1', 'S1': '5', 'T1': '7', 'V1': '6', 'V2': '8'}
 
 
+def _attach_wl_lamp(m, nodes):
+    """WL(表示灯)を、WL-k の号線 {k}R1(R相)・{k}S1(S相)に付与する。
+    表示灯の端子は無番号のリード(手本=空欄/"-")なので端子は空で付与(機能=表示灯リード)。
+    手本(1-12188-117, 5-12043)で WL-k が号線 kR1/kS1 に繋がることを確認。号線が既に
+    トレース済みの時だけ付与(新規号線は作らない＝◎誤答ゼロ)。"""
+    node_keys = set(nodes.keys())
+    for e in m.msp:
+        if e.dxftype() != 'INSERT' or not e.attribs:
+            continue
+        a = {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}
+        if a.get('DEVICE', '') != 'WL':
+            continue
+        k = (a.get('DEVICE1', '') or '').strip()
+        if not k:
+            continue
+        sym = _mk_sym('WL', k)
+        try:
+            bx, by = round(e.dxf.insert.x, 1), round(e.dxf.insert.y, 1)
+        except Exception:
+            bx, by = 0.0, 0.0
+        for suf in ('R1', 'S1'):
+            g = f'{k}{suf}'
+            if g in node_keys:
+                nd = nodes[g]
+                nd['devices'].add(sym)
+                nd['members'].add((sym, '', bx, by))
+
+
 def _attach_vs_switch(m, nodes):
     """VS(電圧計切替SW)を、VS-k の号線 {k}R1/S1/T1/V1/V2 に規約端子で付与する。"""
     node_keys = set(nodes.keys())
@@ -538,6 +566,7 @@ def trace_nodes(path, tol=TOL):
     # 規則で既存号線に付与（新規号線は作らない＝◎誤答ゼロ）。
     _attach_legend_devices(m, nodes)
     _attach_vs_switch(m, nodes)
+    _attach_wl_lamp(m, nodes)
     return nodes
 
 
