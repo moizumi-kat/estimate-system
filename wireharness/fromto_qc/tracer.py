@@ -463,6 +463,38 @@ def _attach_legend_devices(m, nodes):
             nd['members'].add((sym, '', bx, by))
 
 
+# VS 電圧計切替スイッチ(富士 BHN-V, 3φ3W)の端子は、接続号線の末尾(相)で決定的に決まる。
+# 手本(5-12043)で確認: 号線 {k}R1→端子1, {k}S1→5, {k}T1→7, {k}V1→6, {k}V2→8。
+# 図記号は2点しか描かれず幾何では割付不能だが、社内規約(号線末尾)で決定的に割り付けできる。
+# ◎誤答ゼロ: 規約に合致した号線が既にトレース済みの時だけ付与(新規号線は作らない)。
+_VS_PHASE_TERM = {'R1': '1', 'S1': '5', 'T1': '7', 'V1': '6', 'V2': '8'}
+
+
+def _attach_vs_switch(m, nodes):
+    """VS(電圧計切替SW)を、VS-k の号線 {k}R1/S1/T1/V1/V2 に規約端子で付与する。"""
+    node_keys = set(nodes.keys())
+    for e in m.msp:
+        if e.dxftype() != 'INSERT' or not e.attribs:
+            continue
+        a = {at.dxf.tag: (at.dxf.text or '').strip() for at in e.attribs}
+        if a.get('DEVICE', '') != 'VS':
+            continue
+        k = (a.get('DEVICE1', '') or '').strip()
+        if not k:
+            continue
+        sym = _mk_sym('VS', k)
+        try:
+            bx, by = round(e.dxf.insert.x, 1), round(e.dxf.insert.y, 1)
+        except Exception:
+            bx, by = 0.0, 0.0
+        for suf, term in _VS_PHASE_TERM.items():
+            g = f'{k}{suf}'
+            if g in node_keys:
+                nd = nodes[g]
+                nd['devices'].add(sym)
+                nd['members'].add((sym, term, bx, by))
+
+
 def trace_nodes(path, tol=TOL):
     """1シートを端子粒度で辿り、号線→ノード情報 を返す（§3.1 出力用）。
     戻り: {号線: {'kind': 'ctrl'|'main', 'members': set((機器, 端子名, x, y)),
@@ -505,6 +537,7 @@ def trace_nodes(path, tol=TOL):
     # 銘板/属性ブロック(端子座標なしの実機器: CP制御電源・DI/TOTリモートI/O 等)を
     # 規則で既存号線に付与（新規号線は作らない＝◎誤答ゼロ）。
     _attach_legend_devices(m, nodes)
+    _attach_vs_switch(m, nodes)
     return nodes
 
 
