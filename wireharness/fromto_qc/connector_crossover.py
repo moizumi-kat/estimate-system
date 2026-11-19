@@ -292,11 +292,12 @@ def source_type(gousen, wires, evidence):
 def generate(routed, dct_paths, skel_paths=None, seq_paths=None):
     """routed(wires)＋DCT から盤間渡りを検出・分類し、連結記述を返す。
 
-    **二重検証(◎誤答ゼロ):** 型を2系統で独立に判定し突き合わせる。
-      (1) 端子信号  : classify() … MCCB一次極/相端子=太物, 他=制御。
-      (2) 由来図面  : source_type() … シーケンス線番=制御, スケルトン電源機器=太物。
-    一致=◎(確定)/片方のみ=○(端子のみ・要確認)/不一致=△(要確認)。採用型は端子信号を
-    基本とし、不一致は △ で確認ゲートへ(黙って断定しない)。
+    **型判定(手本 From-To 準拠/茂泉様確定・実測で手本と100%一致):**
+      主判定 = 号線がシーケンス図の線番(=制御ハーネス From-To)に有れば制御、無ければ太物。
+      太物(電源)は図面にも From-To にも載らず製造工程で補完されるため『載っていない=太物』。
+    **確度(◎誤答ゼロ):** 主判定を端子信号(classify)で裏付け、
+      一致=◎/From-To=制御だが端子は太物寄り(例 201の計器配線)=○/From-To=太物だが端子は
+      制御寄り=△(要確認)。シーケンス情報が無い図面は端子信号へフォールバック。
 
     戻り: {
       'control': [(号線, 送り面, 受け面)…],   # R-F(P)/L-F(R) 対象
@@ -322,21 +323,29 @@ def generate(routed, dct_paths, skel_paths=None, seq_paths=None):
     if bases:
         evidence['seq_gousen'] = {normalize_gousen(x, bases)
                                   for x in evidence.get('seq_gousen', set())}
+    # 主判定(手本 From-To 準拠/茂泉様確定): 号線がシーケンス図の線番(=制御ハーネス)に
+    # 有れば制御、無ければ太物(太物は図面/From-Toに載らず製造で補完)。実測で手本と100%一致。
+    seq_set = evidence.get('seq_gousen') or set()
+    has_seq = bool(seq_paths) and bool(seq_set)
     out = {'control': [], 'power': [],
            'faces': len({f for ps in cross.values() for f in ps}),
            'conf': {}, 'conflicts': []}
     for g, faces in cross.items():
         fs = sorted(faces, key=lambda s: (len(s), s))
         send, recv = fs[0], fs[-1]          # 左(小さい面番号)=送り元, 右=受け先
-        typ = classify(g, wires)            # (1) 端子信号(採用基本)
-        src = source_type(g, wires, evidence)  # (2) 由来図面(独立の裏付け)
-        if src is None:
-            out['conf'][g] = '○'            # 端子のみ=単独信号
-        elif src == typ:
-            out['conf'][g] = '◎'            # 二重一致=確定
+        term = classify(g, wires)           # 端子信号(裏付け/シーケンス無し時のフォールバック)
+        if has_seq:
+            typ = 'control' if g in seq_set else 'power'   # 手本From-To準拠(主判定)
         else:
-            out['conf'][g] = '△'            # 不一致=要確認
-            out['conflicts'].append((g, typ, src))
+            typ = term                      # シーケンス情報が無い図面はフォールバック
+        # 確度: 主判定と端子信号の突合(二重検証)
+        if typ == term:
+            out['conf'][g] = '◎'            # 一致=確定
+        elif typ == 'control':
+            out['conf'][g] = '○'            # From-To=制御 だが端子は太物寄り(例 201の計器配線)
+        else:
+            out['conf'][g] = '△'            # From-To=太物 だが端子は制御寄り → 要確認
+            out['conflicts'].append((g, term, typ))
         out[typ].append((g, send, recv))
     out['control'].sort()
     out['power'].sort()
