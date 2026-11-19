@@ -14,12 +14,23 @@ def _wire(g, fd, fn, ft, td, tn, tt):
             'to': {'device': td, 'no': tn, 'terminal': tt}}
 
 
-def test_classify_power_by_mccb_main_terminal():
-    # MCCB の主端子(1,3,5/相)を使う渡り = 太物(power)
+def test_classify_power_by_mccb_primary_pole():
+    # MCCB の一次極(奇数 1/3/5)を使う渡り = 太物(power)。手本: 5-21071 の 1G系。
     wires = [_wire('1G2', 'MCCB', '1G2', '1', 'MCCB', '2G2', '3')]
     assert CC.classify('1G2', wires) == 'power'
-    wires2 = [_wire('2U', 'MCCB', 'X', 'U', 'TB', '1', '')]
-    assert CC.classify('2U', wires2) == 'power'
+
+
+def test_classify_power_by_phase_terminal():
+    # 相端子(R/S/T/U/V/W/N・数字前置可: U,1R,201U)に繋がる渡り = 太物。手本: 渡り用TB の相端子。
+    assert CC.classify('2U', [_wire('2U', 'MCCB', 'X', 'U', 'TB', '1', '')]) == 'power'
+    assert CC.classify('201U', [_wire('201U', 'TB', 'C', '201U', 'LOAD', '1', '')]) == 'power'
+
+
+def test_classify_control_by_mccb_secondary_pole():
+    # MCCB の二次極(2/4/6)のみを使う計器/CT タップ = 制御。手本: 117 の RC2/SC2。
+    wires = [_wire('RC2', 'MCCB', '1A', '2', 'CT', 'k', ''),
+             _wire('RC2', 'MCCB', '1A', '4', '51', '201', '97')]
+    assert CC.classify('RC2', wires) == 'control'
 
 
 def test_classify_control_by_mccb_alarm_terminal():
@@ -33,6 +44,13 @@ def test_classify_control_without_mccb():
     # MCCB を含まない制御号線
     wires = [_wire('104', 'OL', '12', '', 'DTAL', '1', '2')]
     assert CC.classify('104', wires) == 'control'
+
+
+def test_classify_control_relay_numeric_contacts():
+    # リレー/VCB の接点番号(1-6)は MCCB の一次極ではない = 制御。手本: 117 の 201。
+    wires = [_wire('201', '52', 'X', '1', '52', 'X', '3'),
+             _wire('201', '52', 'X', '5', 'CT', 'K', '')]
+    assert CC.classify('201', wires) == 'control'
 
 
 def test_detect_crossings_spans_two_faces():

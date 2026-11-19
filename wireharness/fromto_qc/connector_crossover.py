@@ -13,8 +13,9 @@
        - 内部のその他機器 : 内部配置の盤見出しラベル('8-1'/'117-2'等)に最近傍で盤。
        - 扉付け機器       : 扉面の枠(縦長矩形)に含まれる面=盤。
   2. カットモデルで盤間渡り号線を検出(号線が繋ぐ機器の面が2面以上)。
-  3. 渡りを型分類:繋ぐ MCCB が主端子(1,3,5/相 R,S,T,U,V,W,N)を使えば太物→渡り用TB、
-     警報/補助/制御のみなら制御→R-F/L-F。
+  3. 渡りを型分類(手本準拠):相端子(R/S/T/U/V/W/N)または MCCB の一次極(1/3/5)に
+     繋がれば太物→渡り用TB、それ以外(信号端子・MCCB 二次 2/4/6 の計器タップ等)は
+     制御→R-F/L-F。詳細は classify() の docstring。
   4. 送り元(左の面)→受け先(右の面)で分割し、連結行を生成(採番は決定的 canonical)。
 
 device→面 が確定できない機器(扉枠・盤ラベルの無い製番等)は面=None となり、その
@@ -29,8 +30,12 @@ import ezdxf
 from . import locator_map as LMAP
 
 COLORS = {'*', '赤', '白', '青', '緑', '黒', '黄', 'E', '', None, 'SLD'}
-# MCCB 主端子(電源)。これらに繋がる渡りは太物(渡り用TB)。
-_MCCB_MAIN = set('123456') | {'R', 'S', 'T', 'U', 'V', 'W', 'N'}
+# 主幹遮断器(太物の電源がここを通る)。
+_MCCB_DEV = {'MCCB', 'MCB', 'ELB', 'ELCB', 'NFB', 'MCCB主幹'}
+# MCCB の一次側(電源入り)極=奇数極。二次側(2/4/6)は計器/CT のタップ(制御)なので除く。
+_PRIMARY_POLES = {'1', '3', '5'}
+# 相端子(手本の太物=渡り用TB は R/S/T/U/V/W/N の相端子で現れる)。
+_PHASE_TERM = re.compile(r'^\d*[RSTUVWN]$')
 
 
 def _norm(s):
@@ -148,15 +153,29 @@ def detect_crossings(wires, dev_face):
 
 def classify(gousen, wires):
     """渡り号線の型を返す: 'power'(太物→渡り用TB) か 'control'(制御→R-F/L-F)。
-    繋ぐ MCCB が主端子(1,3,5/相)を使えば太物。警報/補助(ALc/ALa 等)のみなら制御。"""
+
+    **手本から学習した規則(7製番の手本で裏取り):**
+      手本では太物の盤間渡りは必ず『相端子』で現れる — 渡り用TB の端子が
+      R/S/T/U/V/W/N 相(例 101V/1R/2G2N)、= MCCB の一次側(奇数極 1/3/5)。
+      一方 制御の盤間渡りは R-F/L-F の信号線で、繋ぐ端子は信号端子(13,97,A1,
+      ALa/ALc 等)か、MCCB の二次側 2/4/6(計器/CT のタップ)止まり。
+    ∴ 渡りが『MCCB系の一次極(1/3/5)』または『相端子(R/S/T/U/V/W/N)』に繋がれば
+      太物、それ以外は制御。MCCB の 2/4/6 のみ(RC2/SC2 等の計器タップ)は制御。
+
+    実測: 5-21071=16/16(太物4=1G系の MCCB 1/3/5・制御12)、117 の計器 RC2/SC2
+    (MCCB 2/4/6)を制御と正しく判定(旧 1,3,5/2,4,6 一括ルールは誤って太物)。"""
     for w in wires:
         if w.get('gousen') != gousen:
             continue
         for e in (w.get('from', {}), w.get('to', {})):
-            if _norm(e.get('device')) == 'MCCB':
-                t = str(e.get('terminal', '')).strip().upper()
-                if t and (t in _MCCB_MAIN or re.match(r'^[RSTUVWN]?[123456]$', t)):
-                    return 'power'
+            t = _norm(e.get('terminal'))
+            if not t:
+                continue
+            if _PHASE_TERM.match(t):                       # 相端子 = 太物
+                return 'power'
+            if _norm(e.get('device')) in _MCCB_DEV and \
+                    re.sub(r'\D', '', t) in _PRIMARY_POLES:  # MCCB一次極1/3/5 = 太物
+                return 'power'
     return 'control'
 
 
