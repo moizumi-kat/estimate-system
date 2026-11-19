@@ -17,6 +17,7 @@
   配線ダクトの自動配置(Phase 2)は含まない。
 """
 import re
+import collections
 import ezdxf
 
 _RELAY_PARTS = ('AXR', 'TM')
@@ -139,13 +140,53 @@ def assign_letters(devs, rails):
     return letters
 
 
-def assign_locators(devs, rails):
+def _panel_cols(doc):
+    """DCT/配置図の盤見出しラベル(例 '117-2','8-1')から物理盤の列 [(盤番号:int, x)] を返す。
+    内部配置の見出し行(最上段 y)を採用。扉面/側面の重複ラベルを避けるため最大 y の行のみ。
+    盤ラベルが無ければ []（従来の相対採番にフォールバック）。"""
+    labs = collections.defaultdict(list)
+    for e in doc.modelspace().query('TEXT MTEXT'):
+        t = (e.plain_text() if e.dxftype() == 'MTEXT' else e.dxf.text).strip()
+        m = re.match(r'^(\d+)-(\d+)$', t)
+        if m:
+            try:
+                labs[round(float(e.dxf.insert[1]))].append((int(m.group(2)), float(e.dxf.insert[0])))
+            except Exception:
+                continue
+    if not labs:
+        return []
+    ytop = max(labs)                      # 内部配置の見出し行(最上段)
+    return sorted(set(labs[ytop]), key=lambda c: c[1])
+
+
+def assign_locators(devs, rails, panel_cols=None):
     """devs/rails から {index: ロケーター} を返す。**手本DCT(機器相番号図)の体裁に合わせ、
     盤が複数あるときは盤番号を前置する(例 '1-A','3-B')。単盤なら素の文字('A')。**
-    盤番号は盤を左→右(同x帯は上→下)に 1,2,3… と採番する(手本の 133-1/133-2… の並び準拠)。
+
+    panel_cols（[(盤番号, x), …]=_panel_cols の出力）を渡すと、盤番号は**物理盤ラベル**から
+    決める(各機器群を最近傍の盤ラベルへ割当)。制御リレーが無い盤があっても盤番号がずれない
+    (例 5-21071: リレーは全て盤2 → '2-A'…)。panel_cols 省略時は従来どおり、機器群を
+    左→右に 1,2,3… と相対採番する(合成テスト/盤ラベルの無い図面の後方互換)。
     文字の割付は assign_letters と同一(手本12製番=116/116 の採番規則を維持)。"""
     groups = _group_indices(devs, rails)
-    # 盤を左→右(min x 昇順, 同帯は上=大y 優先)に並べて 1,2,3… と番号付け
+    if panel_cols and len(panel_cols) > 1:
+        # 各機器群を物理盤(最近傍ラベル)へ割当て、盤ごとに読み順(上→下・左→右)で連番
+        by_panel = collections.defaultdict(list)
+        for g in groups:
+            gx = sum(devs[i][0] for i in g) / len(g)
+            pno = min(panel_cols, key=lambda c: abs(c[1] - gx))[0]
+            by_panel[pno].append(g)
+        out = {}
+        for pno, glist in by_panel.items():
+            glist_sorted = sorted(
+                glist, key=lambda g: (-max(devs[i][1] for i in g), min(devs[i][0] for i in g)))
+            k = 0
+            for g in glist_sorted:
+                for i in _order_in_group(g, devs):
+                    out[i] = f'{pno}-{_letter(k)}'
+                    k += 1
+        return out
+    # 盤ラベルが無い場合の従来動作（機器群を左→右に相対採番）
     groups_sorted = sorted(
         groups, key=lambda g: (min(devs[i][0] for i in g), -max(devs[i][1] for i in g)))
     multi = len(groups_sorted) > 1
@@ -161,7 +202,8 @@ def apply_numbers(doc):
     """doc内のリレー/タイマの DEVICE1 へ相番号(ロケーター)を書き込む。戻り: 付与件数。
     手本DCT(機器相番号図)に合わせ、複数盤では盤番号付き('1-A','3-B')、単盤では素('A')。"""
     devs, rails = _read(doc)
-    locs = assign_locators([(x, y, None) for (x, y, _e) in devs], rails)
+    cols = _panel_cols(doc)
+    locs = assign_locators([(x, y, None) for (x, y, _e) in devs], rails, panel_cols=cols)
     cnt = 0
     for i, (_x, _y, e) in enumerate(devs):
         L = locs.get(i)
