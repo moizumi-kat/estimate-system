@@ -181,4 +181,24 @@ def generate(routed, dct_paths):
         out[typ].append((g, send, recv))
     out['control'].sort()
     out['power'].sort()
+    out['rows'] = _rows(out['control'], out['power'])
     return out
+
+
+def _rows(control, power):
+    """検出した渡りを手本形式の連結行(端点行)に変換。
+    制御=R-F(P)[送り面]/L-F(R)[受け面] の白-N芯(採番は面ペアごと canonical=送り先一致が要件で
+    芯番号の規約は不要との茂泉様方針)。太物=渡り用TB[両面](相端子 N/U/V/W/R は電源構成依存の
+    ため号線名を端子に置き、相の確定は確認ゲート/積算ソフト側)。
+    戻り: [{'面','号線','機器','端子','型'}]。"""
+    rows = []
+    core = collections.defaultdict(int)         # (送り面,受け面) -> 芯カウンタ
+    for g, s, r in control:
+        core[(s, r)] += 1
+        k = core[(s, r)]
+        rows.append({'面': s, '号線': g, '機器': 'R-F(P)', '端子': f'白-{k}', '型': '制御'})
+        rows.append({'面': r, '号線': g, '機器': 'L-F(R)', '端子': f'白-{k}', '型': '制御'})
+    for g, s, r in power:
+        rows.append({'面': s, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物'})
+        rows.append({'面': r, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物'})
+    return rows

@@ -65,3 +65,27 @@ def test_color_gousen_ignored():
     dev_face = {('A', '1'): '1', ('B', '2'): '2'}
     wires = [_wire('白', 'A', '1', '', 'B', '2', '')]
     assert CC.detect_crossings(wires, dev_face) == {}
+
+
+def test_rows_control_rf_lf_cores():
+    # 制御渡りは R-F(P)[送り面]/L-F(R)[受け面] の白-N芯(面ペアごと連番)
+    rows = CC._rows(control=[('104', '1', '2'), ('106', '1', '2')], power=[])
+    assert {'面': '1', '号線': '104', '機器': 'R-F(P)', '端子': '白-1', '型': '制御'} in rows
+    assert {'面': '2', '号線': '104', '機器': 'L-F(R)', '端子': '白-1', '型': '制御'} in rows
+    assert {'面': '1', '号線': '106', '機器': 'R-F(P)', '端子': '白-2', '型': '制御'} in rows
+
+
+def test_rows_power_watari_tb():
+    # 太物渡りは両面に 渡り用TB
+    rows = CC._rows(control=[], power=[('2G2', '1', '2')])
+    kinds = {(r['面'], r['機器']) for r in rows}
+    assert ('1', '渡り用TB') in kinds and ('2', '渡り用TB') in kinds
+    assert all(r['型'] == '太物' for r in rows)
+
+
+def test_rows_core_number_per_face_pair():
+    # 芯番号は面ペアごとに独立採番
+    rows = CC._rows(control=[('a', '1', '2'), ('b', '2', '3')], power=[])
+    b1 = [r for r in rows if r['号線'] == 'a' and r['機器'] == 'R-F(P)'][0]
+    b2 = [r for r in rows if r['号線'] == 'b' and r['機器'] == 'R-F(P)'][0]
+    assert b1['端子'] == '白-1' and b2['端子'] == '白-1'   # 別ペアなので各々1から
