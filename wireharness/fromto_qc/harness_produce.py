@@ -231,9 +231,12 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
     # 図面/DCTの不備で失敗しても既存出力は壊さない。
     try:
         from . import connector_crossover as _cc
-        out['crossings'] = _cc.generate(out, dct_paths)
+        # 由来図面(スケルトン=skel/シーケンス=seq)を渡し、端子信号と二重検証する。
+        out['crossings'] = _cc.generate(out, dct_paths,
+                                        skel_paths=skel_paths, seq_paths=seq_paths)
     except Exception:
-        out['crossings'] = {'control': [], 'power': [], 'faces': 0}
+        out['crossings'] = {'control': [], 'power': [], 'faces': 0,
+                            'conf': {}, 'conflicts': [], 'rows': []}
     return out
 
 

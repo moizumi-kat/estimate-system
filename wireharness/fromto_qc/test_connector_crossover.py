@@ -75,7 +75,43 @@ def test_generate_empty_without_faces():
     # device→面 が作れない(dct_paths=None)なら空=回帰ゼロ
     routed = {'wires': [_wire('104', 'OL', '12', '', 'DTAL', '1', '2')]}
     out = CC.generate(routed, None)
-    assert out == {'control': [], 'power': [], 'faces': 0}
+    assert out == {'control': [], 'power': [], 'faces': 0,
+                   'conf': {}, 'conflicts': [], 'rows': []}
+
+
+def test_source_type_sequence_is_control():
+    # シーケンス図の線番に出る号線 = 制御(由来図面の裏付け)
+    ev = {'seq_gousen': {'KA'}, 'power_devs': set()}
+    assert CC.source_type('KA', [_wire('KA', 'X', '1', '13', 'Y', '2', '14')], ev) == 'control'
+
+
+def test_source_type_skeleton_power_device_is_power():
+    # スケルトンの電源機器に繋がり線番に無い号線 = 太物(由来図面の裏付け)
+    ev = {'seq_gousen': set(), 'power_devs': {('MCCB', '1G2')}}
+    assert CC.source_type('1G2', [_wire('1G2', 'MCCB', '1G2', '1', 'BUS', '', '')], ev) == 'power'
+
+
+def test_source_type_none_when_ambiguous():
+    # 由来情報が無い/両立しない号線は None(由来からは断定しない)
+    assert CC.source_type('X', [_wire('X', 'A', '1', '1', 'B', '2', '2')], None) is None
+    ev = {'seq_gousen': {'Y'}, 'power_devs': {('A', '1')}}   # 線番かつ電源機器=両立
+    assert CC.source_type('Y', [_wire('Y', 'A', '1', '1', 'B', '2', '2')], ev) is None
+
+
+def test_generate_conf_agreement_double_checked():
+    # 端子信号と由来図面が一致すれば確度◎、由来情報が無ければ○
+    routed = {'wires': [_wire('1G2', 'MCCB', '1G2', '1', 'MCCB', '2G2', '3'),
+                        _wire('KA', 'OL', '12', '13', 'DTAL', '1', '2')]}
+    # dev_face を直接与えるため build をモンキーパッチせず、generate 内の検出に乗る形で検証
+    dev_face = {('MCCB', '1G2'): '1', ('MCCB', '2G2'): '2',
+                ('OL', '12'): '1', ('DTAL', '1'): '2'}
+    cross = CC.detect_crossings(routed['wires'], dev_face)
+    assert cross.get('1G2') == {'1', '2'} and cross.get('KA') == {'1', '2'}
+    ev = {'seq_gousen': {'KA'}, 'power_devs': {('MCCB', '1G2'), ('MCCB', '2G2')}}
+    assert CC.source_type('1G2', routed['wires'], ev) == 'power'      # 由来=太物
+    assert CC.classify('1G2', routed['wires']) == 'power'             # 端子=太物 → ◎
+    assert CC.source_type('KA', routed['wires'], ev) == 'control'     # 由来=制御
+    assert CC.classify('KA', routed['wires']) == 'control'            # 端子=制御 → ◎
 
 
 def test_color_gousen_ignored():
@@ -87,10 +123,11 @@ def test_color_gousen_ignored():
 
 def test_rows_control_rf_lf_cores():
     # 制御渡りは R-F(P)[送り面]/L-F(R)[受け面] の白-N芯(面ペアごと連番)
-    rows = CC._rows(control=[('104', '1', '2'), ('106', '1', '2')], power=[])
-    assert {'面': '1', '号線': '104', '機器': 'R-F(P)', '端子': '白-1', '型': '制御'} in rows
-    assert {'面': '2', '号線': '104', '機器': 'L-F(R)', '端子': '白-1', '型': '制御'} in rows
-    assert {'面': '1', '号線': '106', '機器': 'R-F(P)', '端子': '白-2', '型': '制御'} in rows
+    rows = CC._rows(control=[('104', '1', '2'), ('106', '1', '2')], power=[],
+                    conf={'104': '◎', '106': '○'})
+    assert {'面': '1', '号線': '104', '機器': 'R-F(P)', '端子': '白-1', '型': '制御', '確度': '◎'} in rows
+    assert {'面': '2', '号線': '104', '機器': 'L-F(R)', '端子': '白-1', '型': '制御', '確度': '◎'} in rows
+    assert {'面': '1', '号線': '106', '機器': 'R-F(P)', '端子': '白-2', '型': '制御', '確度': '○'} in rows
 
 
 def test_rows_power_watari_tb():

@@ -36,6 +36,11 @@ _MCCB_DEV = {'MCCB', 'MCB', 'ELB', 'ELCB', 'NFB', 'MCCB主幹'}
 _PRIMARY_POLES = {'1', '3', '5'}
 # 相端子(手本の太物=渡り用TB は R/S/T/U/V/W/N の相端子で現れる)。
 _PHASE_TERM = re.compile(r'^\d*[RSTUVWN]$')
+# スケルトン図(E)に『電源機器』として実在する PARTS(由来図面での裏付けに使う)。
+# これらは太物(電源系統)の本体。シーケンス図(F)では PARTS 空の参照として現れる。
+_POWER_PARTS = {'MCCB', 'MCB', 'MCDT', 'ELB', 'ELCB', 'NFB'}
+# 線番属性のタグ(シーケンス図に描かれた号線=制御の裏付け)。
+_SENBAN_TAGS = {'線番', 'SENBAN', 'GOUSEN'}
 
 
 def _norm(s):
@@ -179,45 +184,128 @@ def classify(gousen, wires):
     return 'control'
 
 
-def generate(routed, dct_paths):
+def build_source_evidence(skel_paths=None, seq_paths=None):
+    """由来図面から独立した裏付け情報を作る(端子信号とは別系統の第2の証拠)。
+
+      - power_devs: スケルトン図(E)に PARTS∈電源機器 として実在する機器 (DEVICE,DEVICE1)。
+                    = 太物(電源系統)の本体。シーケンス図では PARTS 空の参照。
+      - seq_gousen: シーケンス図(F)に『線番』として描かれた号線。= 制御結線。
+
+    実測(5-21071/117): 太物 1G/2G 系は seq_gousen に出ず(電源機器に接続)、制御 104/KA/
+    RC2/SC2 は seq_gousen に出る。117 の 201 は seq_gousen に無い→太物側を裏付け。
+    戻り: {'power_devs': set((DEVICE,DEVICE1)), 'seq_gousen': set(号線)}。図面無しなら空。"""
+    power_devs = set()
+    for p in (skel_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            if a.get('PARTS', '').upper() in _POWER_PARTS and a.get('DEVICE'):
+                power_devs.add((_norm(a.get('DEVICE')), _norm(a.get('DEVICE1'))))
+    seq_gousen = set()
+    for p in (seq_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            for at in ins.attribs:
+                if at.dxf.tag in _SENBAN_TAGS:
+                    t = (at.dxf.text or '').strip()
+                    if t and t not in COLORS:
+                        seq_gousen.add(t)
+    return {'power_devs': power_devs, 'seq_gousen': seq_gousen}
+
+
+def source_type(gousen, wires, evidence):
+    """由来図面だけから渡りの型を推す(端子信号とは独立): 'power'/'control'/None。
+      号線がシーケンス図の線番 → 制御。電源機器(スケルトン)に繋がる → 太物。両方/無しは None。"""
+    if not evidence:
+        return None
+    seq_g = evidence.get('seq_gousen') or set()
+    power_devs = evidence.get('power_devs') or set()
+    in_seq = gousen in seq_g
+    hits_power = False
+    for w in wires:
+        if w.get('gousen') != gousen:
+            continue
+        for e in (w.get('from', {}), w.get('to', {})):
+            if (_norm(e.get('device')), _norm(e.get('no'))) in power_devs:
+                hits_power = True
+    if in_seq and not hits_power:
+        return 'control'
+    if hits_power and not in_seq:
+        return 'power'
+    return None            # 情報不足/両立 → 由来からは断定しない
+
+
+def generate(routed, dct_paths, skel_paths=None, seq_paths=None):
     """routed(wires)＋DCT から盤間渡りを検出・分類し、連結記述を返す。
+
+    **二重検証(◎誤答ゼロ):** 型を2系統で独立に判定し突き合わせる。
+      (1) 端子信号  : classify() … MCCB一次極/相端子=太物, 他=制御。
+      (2) 由来図面  : source_type() … シーケンス線番=制御, スケルトン電源機器=太物。
+    一致=◎(確定)/片方のみ=○(端子のみ・要確認)/不一致=△(要確認)。採用型は端子信号を
+    基本とし、不一致は △ で確認ゲートへ(黙って断定しない)。
+
     戻り: {
       'control': [(号線, 送り面, 受け面)…],   # R-F(P)/L-F(R) 対象
       'power'  : [(号線, 送り面, 受け面)…],   # 渡り用TB 対象
       'faces'  : 検出に使えた面の数,
+      'conf'   : {号線: '◎'|'○'|'△'},        # 二重検証の確度
+      'conflicts': [(号線, 端子信号型, 由来図面型)…],  # 不一致=人が確認
+      'rows'   : [...],
     }
     device→面 が作れない(盤情報なし)図面では空(回帰ゼロ)。"""
     wires = routed.get('wires', [])
     dev_face = build_device_face(dct_paths)
     if not dev_face:
-        return {'control': [], 'power': [], 'faces': 0}
+        return {'control': [], 'power': [], 'faces': 0,
+                'conf': {}, 'conflicts': [], 'rows': []}
     cross = detect_crossings(wires, dev_face)
-    out = {'control': [], 'power': [], 'faces': len({f for ps in cross.values() for f in ps})}
+    evidence = build_source_evidence(skel_paths, seq_paths)
+    out = {'control': [], 'power': [],
+           'faces': len({f for ps in cross.values() for f in ps}),
+           'conf': {}, 'conflicts': []}
     for g, faces in cross.items():
         fs = sorted(faces, key=lambda s: (len(s), s))
         send, recv = fs[0], fs[-1]          # 左(小さい面番号)=送り元, 右=受け先
-        typ = classify(g, wires)
+        typ = classify(g, wires)            # (1) 端子信号(採用基本)
+        src = source_type(g, wires, evidence)  # (2) 由来図面(独立の裏付け)
+        if src is None:
+            out['conf'][g] = '○'            # 端子のみ=単独信号
+        elif src == typ:
+            out['conf'][g] = '◎'            # 二重一致=確定
+        else:
+            out['conf'][g] = '△'            # 不一致=要確認
+            out['conflicts'].append((g, typ, src))
         out[typ].append((g, send, recv))
     out['control'].sort()
     out['power'].sort()
-    out['rows'] = _rows(out['control'], out['power'])
+    out['conflicts'].sort()
+    out['rows'] = _rows(out['control'], out['power'], out['conf'])
     return out
 
 
-def _rows(control, power):
+def _rows(control, power, conf=None):
     """検出した渡りを手本形式の連結行(端点行)に変換。
     制御=R-F(P)[送り面]/L-F(R)[受け面] の白-N芯(採番は面ペアごと canonical=送り先一致が要件で
     芯番号の規約は不要との茂泉様方針)。太物=渡り用TB[両面](相端子 N/U/V/W/R は電源構成依存の
-    ため号線名を端子に置き、相の確定は確認ゲート/積算ソフト側)。
-    戻り: [{'面','号線','機器','端子','型'}]。"""
+    ため号線名を端子に置き、相の確定は確認ゲート/積算ソフト側)。conf(号線→◎/○/△)があれば
+    各行に確度を付す。戻り: [{'面','号線','機器','端子','型','確度'}]。"""
+    conf = conf or {}
     rows = []
     core = collections.defaultdict(int)         # (送り面,受け面) -> 芯カウンタ
     for g, s, r in control:
         core[(s, r)] += 1
         k = core[(s, r)]
-        rows.append({'面': s, '号線': g, '機器': 'R-F(P)', '端子': f'白-{k}', '型': '制御'})
-        rows.append({'面': r, '号線': g, '機器': 'L-F(R)', '端子': f'白-{k}', '型': '制御'})
+        c = conf.get(g, '○')
+        rows.append({'面': s, '号線': g, '機器': 'R-F(P)', '端子': f'白-{k}', '型': '制御', '確度': c})
+        rows.append({'面': r, '号線': g, '機器': 'L-F(R)', '端子': f'白-{k}', '型': '制御', '確度': c})
     for g, s, r in power:
-        rows.append({'面': s, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物'})
-        rows.append({'面': r, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物'})
+        c = conf.get(g, '○')
+        rows.append({'面': s, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物', '確度': c})
+        rows.append({'面': r, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物', '確度': c})
     return rows
