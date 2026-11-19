@@ -89,11 +89,27 @@ def test_normalize_gousen_letter_suffix_kept():
 
 
 def test_normalize_gousen_non_circuit_kept():
-    # 回路集合に無い基底(5-21071の104=回路は1G/2G系)は畳まない=104→1等の誤変換なし。
+    # 回路集合に無い数字基底(5-21071の104=回路は1G/2G系)は畳まない=104→1等の誤変換なし。
     bases = {'1G', '2G2', '1A'}      # 単桁主幹は len>=2 で既に除外済みの想定
     assert CC.normalize_gousen('104', bases) == '104'
-    assert CC.normalize_gousen('2BZ04', {'201', '2'}) == '2BZ04'   # 末尾が英字→非畳み
     assert CC.normalize_gousen('104', set()) == '104'             # 空集合=無変換(回帰ゼロ)
+
+
+def test_normalize_gousen_control_two_digit_branch_collapses():
+    # 制御: 英字基底＋末尾2桁数字=枝番 → 基底。手本: 1BZ07→1BZ, 2BZ04→2BZ。回路集合不要。
+    assert CC.normalize_gousen('2BZ04', set()) == '2BZ'
+    assert CC.normalize_gousen('1BZ07', set()) == '1BZ'
+    assert CC.normalize_gousen('4BZ05', {'201'}) == '4BZ'
+    assert CC.normalize_gousen('2A31', set()) == '2A'
+
+
+def test_normalize_gousen_control_one_digit_index_kept():
+    # 制御: 英字基底＋末尾1桁=信号index(別信号) → そのまま。手本: RC1-4/LT1-4/AL1-2 を区別。
+    for g in ['RC2', 'LT2', 'SC2', 'AL1', 'AL2', 'P1']:
+        assert CC.normalize_gousen(g, set()) == g
+    # 末尾が英字/端子(201R/201C1)も非畳み
+    assert CC.normalize_gousen('201R', {'201'}) == '201R'
+    assert CC.normalize_gousen('201C1', {'201'}) == '201C1'
 
 
 def test_normalize_gousen_longest_base_wins():

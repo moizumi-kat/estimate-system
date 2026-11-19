@@ -241,20 +241,29 @@ def build_circuit_bases(skel_paths=None):
 
 
 def normalize_gousen(g, circuit_bases):
-    """線番を『回路番号＋数字枝番(1〜2桁)』なら回路番号(基底)へ畳む。手本準拠。
-      - '20110' → '201'(回路201＋枝番10)   - '201R'/'201C1' → そのまま(末尾が英字/端子)
-      - '104'(回路集合に無い) → そのまま      - 回路番号は最長一致を優先
-    circuit_bases が空なら無変換(回帰ゼロ)。"""
-    if not circuit_bases:
-        return g
+    """線番を手本準拠で基底(回路番号/制御信号名)へ畳む。
+
+    **電源(スケルトン回路番号＋数字枝番):** '20110'→'201'(回路201＋枝番10)。
+      回路番号はスケルトン由来の集合(circuit_bases)のみ。'104'(回路に非該当)→そのまま
+      ('104→1' の誤変換を防ぐ)。線番そのものが回路番号(1G1/1G2=別MCCB)→畳まない。
+    **制御(英字基底＋末尾ちょうど2桁数字=枝番):** '2BZ04'→'2BZ','1BZ07'→'1BZ'。
+      末尾1桁(RC2/LT2/AL2=信号index)や末尾が英字/端子(201R/201C1)→別号線のまま。
+      制御は英字を含むため回路番号集合に依らず判定できる(circuit_bases 不要)。
+    畳む対象が無ければ原文のまま(回帰ゼロ)。"""
     gn = _norm(g)
-    if gn in circuit_bases:
+    if circuit_bases and gn in circuit_bases:
         return g              # 線番そのものが回路番号(例 1G1/1G2=別MCCB)なら畳まない
-    for c in sorted((b for b in circuit_bases if len(b) >= 2), key=len, reverse=True):
-        if gn.startswith(c):
-            rem = gn[len(c):]
-            if rem and rem.isdigit() and len(rem) <= 2:   # 数字枝番(1〜2桁)のみ畳む
-                return c
+    # 制御: 英字で終わる基底＋末尾ちょうど2桁の数字枝番 → 基底(2桁=枝番/1桁=index)
+    m = re.fullmatch(r'(.*[A-Za-z])(\d{2})', gn)
+    if m:
+        return m.group(1)
+    # 電源: 回路番号(スケルトン由来・len>=2)＋数字枝番(1〜2桁) → 回路番号(最長一致)
+    if circuit_bases:
+        for c in sorted((b for b in circuit_bases if len(b) >= 2), key=len, reverse=True):
+            if gn.startswith(c):
+                rem = gn[len(c):]
+                if rem and rem.isdigit() and len(rem) <= 2:
+                    return c
     return g
 
 
