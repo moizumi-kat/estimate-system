@@ -71,6 +71,44 @@ def test_detect_concat_name_fallback():
     assert cross.get('104') == {'1', '2'}
 
 
+def test_normalize_gousen_numeric_branch_collapses():
+    # 回路番号＋数字枝番(1〜2桁) → 回路番号。手本: 20110→201。
+    bases = {'201', '202', '101'}
+    assert CC.normalize_gousen('20110', bases) == '201'
+    assert CC.normalize_gousen('20131', bases) == '201'
+    assert CC.normalize_gousen('2029', bases) == '202'        # 1桁枝番
+    assert CC.normalize_gousen('201', bases) == '201'          # 枝番なしはそのまま
+
+
+def test_normalize_gousen_letter_suffix_kept():
+    # 末尾が英字/端子名(201R/201C1)は畳まず別号線のまま。手本準拠。
+    bases = {'201'}
+    assert CC.normalize_gousen('201R', bases) == '201R'
+    assert CC.normalize_gousen('201C1', bases) == '201C1'
+    assert CC.normalize_gousen('201S', bases) == '201S'
+
+
+def test_normalize_gousen_non_circuit_kept():
+    # 回路集合に無い基底(5-21071の104=回路は1G/2G系)は畳まない=104→1等の誤変換なし。
+    bases = {'1G', '2G2', '1A'}      # 単桁主幹は len>=2 で既に除外済みの想定
+    assert CC.normalize_gousen('104', bases) == '104'
+    assert CC.normalize_gousen('2BZ04', {'201', '2'}) == '2BZ04'   # 末尾が英字→非畳み
+    assert CC.normalize_gousen('104', set()) == '104'             # 空集合=無変換(回帰ゼロ)
+
+
+def test_normalize_gousen_longest_base_wins():
+    # 最長一致: 20110 は 201(3桁)で畳む(2(1桁)ではない)。※単桁は len>=2 で除外前提
+    assert CC.normalize_gousen('20110', {'201', '20'}) == '201'
+
+
+def test_normalize_gousen_circuit_itself_not_collapsed():
+    # 線番そのものが回路番号(別MCCB)なら畳まない。5-21071: 1G/1G1/1G2 は各々別回路。
+    bases = {'1G', '1G1', '1G2', '2G2'}
+    assert CC.normalize_gousen('1G1', bases) == '1G1'
+    assert CC.normalize_gousen('1G2', bases) == '1G2'
+    assert CC.normalize_gousen('1G', bases) == '1G'
+
+
 def test_generate_empty_without_faces():
     # device→面 が作れない(dct_paths=None)なら空=回帰ゼロ
     routed = {'wires': [_wire('104', 'OL', '12', '', 'DTAL', '1', '2')]}

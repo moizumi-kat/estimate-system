@@ -219,6 +219,45 @@ def build_source_evidence(skel_paths=None, seq_paths=None):
     return {'power_devs': power_devs, 'seq_gousen': seq_gousen}
 
 
+def build_circuit_bases(skel_paths=None):
+    """スケルトン(E)のMCCB系機器の DEVICE1 = 回路番号の集合を返す(線番畳みの権威)。
+    茂泉様確定: MCCBの2行目(DEVICE1)が回路番号で、その回路の電線は『回路番号＋枝番』。
+    単桁の主幹(DEVICE1='1'/'2'等)は回路でなく主幹番号なので除外(len>=2)。
+    例 117: {101,102,103,201,202,203,204,301,302,303,401,402}
+       5-21071: {1G,2G1,2G2,1A,1G1,1G2,2G3,1AC,1GC}"""
+    bases = set()
+    for p in (skel_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            if a.get('PARTS', '').upper() in _POWER_PARTS:
+                c = _norm(a.get('DEVICE1'))
+                if len(c) >= 2:
+                    bases.add(c)
+    return bases
+
+
+def normalize_gousen(g, circuit_bases):
+    """線番を『回路番号＋数字枝番(1〜2桁)』なら回路番号(基底)へ畳む。手本準拠。
+      - '20110' → '201'(回路201＋枝番10)   - '201R'/'201C1' → そのまま(末尾が英字/端子)
+      - '104'(回路集合に無い) → そのまま      - 回路番号は最長一致を優先
+    circuit_bases が空なら無変換(回帰ゼロ)。"""
+    if not circuit_bases:
+        return g
+    gn = _norm(g)
+    if gn in circuit_bases:
+        return g              # 線番そのものが回路番号(例 1G1/1G2=別MCCB)なら畳まない
+    for c in sorted((b for b in circuit_bases if len(b) >= 2), key=len, reverse=True):
+        if gn.startswith(c):
+            rem = gn[len(c):]
+            if rem and rem.isdigit() and len(rem) <= 2:   # 数字枝番(1〜2桁)のみ畳む
+                return c
+    return g
+
+
 def source_type(gousen, wires, evidence):
     """由来図面だけから渡りの型を推す(端子信号とは独立): 'power'/'control'/None。
       号線がシーケンス図の線番 → 制御。電源機器(スケルトン)に繋がる → 太物。両方/無しは None。"""
@@ -264,8 +303,16 @@ def generate(routed, dct_paths, skel_paths=None, seq_paths=None):
     if not dev_face:
         return {'control': [], 'power': [], 'faces': 0,
                 'conf': {}, 'conflicts': [], 'rows': []}
+    # 線番の畳み込み(スケルトン由来の回路番号＋数字枝番 → 回路番号)。
+    # 盤間渡りの号線名に限定して一貫適用(wires/seq_gousen 双方を同じ基底に揃える)。
+    bases = build_circuit_bases(skel_paths)
+    if bases:
+        wires = [dict(w, gousen=normalize_gousen(w.get('gousen'), bases)) for w in wires]
     cross = detect_crossings(wires, dev_face)
     evidence = build_source_evidence(skel_paths, seq_paths)
+    if bases:
+        evidence['seq_gousen'] = {normalize_gousen(x, bases)
+                                  for x in evidence.get('seq_gousen', set())}
     out = {'control': [], 'power': [],
            'faces': len({f for ps in cross.values() for f in ps}),
            'conf': {}, 'conflicts': []}
