@@ -12,6 +12,7 @@ From-To 生成時に実機器→ロケーターへ変換することで、人の
 取得結果は「実機器ベース→ロケーター文字」と「(ベース,番号)→フルロケーター」の両方。
 """
 import re
+import collections
 import ezdxf
 
 
@@ -84,12 +85,18 @@ def build_map(dct_paths):
       'by_actual' : {(ベース大文字, 番号): フルロケーター},   例 {('86X','103'):'2-E'}
       'pairs'     : [(locator, actual), ...],                 生の対応
       'confidence': {(ベース大文字, 番号): '確定'},           凡例由来は確定
+      'ambig'     : {(ベース大文字, 番号): {盤番号: フルロケーター}},  盤跨ぎ同名の衝突のみ
     }
+
+    注意: 同名機器が複数盤に在る(例 133: 30Y101 が 盤1=1-C と 盤3=3-I)と、キー
+    (base, num) が衝突する。by_actual は後勝ちで1件になるため、衝突分は 'ambig' に
+    盤番号付きで全候補を残す。locator_for が号線の盤で正しい候補を選ぶのに使う。
     """
     by_base = {}
     by_actual = {}
     pairs_all = []
     confidence = {}
+    cand = collections.defaultdict(dict)        # (B,num) -> {盤番号: loc}
     for p in (dct_paths or []):
         for loc, act in extract_pairs(p):
             base, num = _split_actual(act)
@@ -100,8 +107,11 @@ def build_map(dct_paths):
                 by_actual[(B, num)] = loc
                 confidence[(B, num)] = '確定'
                 pairs_all.append((loc, act))
+                if ki:
+                    cand[(B, num)][ki] = loc
+    ambig = {k: v for k, v in cand.items() if len(v) > 1}   # 2盤以上=衝突のみ
     return {'by_base': by_base, 'by_actual': by_actual, 'pairs': pairs_all,
-            'confidence': confidence}
+            'confidence': confidence, 'ambig': ambig}
 
 
 # ---------------------------------------------------------------------------
@@ -237,15 +247,25 @@ def resolve_by_terminals(letter_pins, candidates):
     return assign
 
 
-def locator_for(lmap, device, no=''):
+def locator_for(lmap, device, no='', gousen=''):
     """実機器(device, no) → ロケーター表記。対応が無ければ None。
-    既定は『基-文字』(例 '2-E')。基が不明なら文字のみ(例 'E')。"""
+    既定は『基-文字』(例 '2-E')。基が不明なら文字のみ(例 'E')。
+
+    gousen(接続号線)を渡すと、**盤跨ぎ同名機器の衝突('ambig')だけ**、号線先頭の
+    盤番号で正しい候補を選ぶ(◎誤答ゼロ: 号線の盤が候補のいずれかと一致した時のみ採用。
+    一致しなければ従来どおり by_actual にフォールバック)。衝突が無い機器には一切影響しない。"""
     if not lmap:
         return None
     B = str(device or '').upper()
     num = str(no or '')
     by_actual = lmap.get('by_actual', {})
     by_base = lmap.get('by_base', {})
+    # 0) 盤跨ぎ同名の衝突は、号線先頭の盤番号で候補を選ぶ(一致時のみ=安全)
+    ambig = lmap.get('ambig', {})
+    if (B, num) in ambig and gousen:
+        m = re.match(r'(\d+)', str(gousen))
+        if m and m.group(1) in ambig[(B, num)]:
+            return ambig[(B, num)][m.group(1)]
     # 1) 設計の (DEVICE, DEVICE1) がそのまま対応表にある
     full = by_actual.get((B, num))
     if full:
@@ -282,7 +302,7 @@ def apply_to_routed(routed, lmap, keep_actual=True):
     n = 0
     for w in routed.get('wires', []):
         for e in (w.get('from', {}), w.get('to', {})):
-            loc = locator_for(lmap, e.get('device', ''), e.get('no', ''))
+            loc = locator_for(lmap, e.get('device', ''), e.get('no', ''), gousen=w.get('gousen', ''))
             if loc:
                 if keep_actual:
                     e.setdefault('actual', f"{e.get('device','')}-{e.get('no','')}".strip('-'))
