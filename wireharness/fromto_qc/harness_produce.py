@@ -221,11 +221,20 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
                 return False
         return True
     wires_out = [w for w in wires_out if not _blank_dup(w)]
-    return {'seiban': seiban, 'priority': {'topology': topology, 'physical': physical},
-            'duct_type': duct_type, 'wires': wires_out,
-            'total_length': round(total, 1), 'duct_util': duct_util,
-            'summary': {'電線数': len(wires_out), '総配線長': round(total, 1),
-                        'ダクト種別': duct_type, 'ダクト有': lay is not None and bool(duct_util)}}
+    out = {'seiban': seiban, 'priority': {'topology': topology, 'physical': physical},
+           'duct_type': duct_type, 'wires': wires_out,
+           'total_length': round(total, 1), 'duct_util': duct_util,
+           'summary': {'電線数': len(wires_out), '総配線長': round(total, 1),
+                       'ダクト種別': duct_type, 'ダクト有': lay is not None and bool(duct_util)}}
+    # 盤間渡りコネクタ(R-F/L-F=制御 / 渡り用TB=太物)を検出。DCTから device→面 を作り、
+    # 号線が2面に跨れば渡り。盤情報が無ければ空=加算的で既存出力に影響しない(回帰ゼロ)。
+    # 図面/DCTの不備で失敗しても既存出力は壊さない。
+    try:
+        from . import connector_crossover as _cc
+        out['crossings'] = _cc.generate(out, dct_paths)
+    except Exception:
+        out['crossings'] = {'control': [], 'power': [], 'faces': 0}
+    return out
 
 
 def duct_decision(seq_paths, skel_paths=None, seiban='', dct_paths=None, duct_type=None):
