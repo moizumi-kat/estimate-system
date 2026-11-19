@@ -336,7 +336,14 @@ def generate(routed, dct_paths, skel_paths=None, seq_paths=None):
         send, recv = fs[0], fs[-1]          # 左(最小面)=送り元, 右(最大面)=受け先
         term = classify(g, wires)           # 端子信号(裏付け/シーケンス無し時のフォールバック)
         if has_seq:
-            typ = 'control' if g in seq_set else 'power'   # 手本From-To準拠(主判定)
+            if g in seq_set:
+                typ = 'control'             # 手本From-To(制御ハーネス)に在る=制御
+            elif bases and g not in bases:
+                # 太物候補だが、シーケンス線番にもスケルトン回路番号にも無い
+                # = 本物のフィーダでない(機器番号の誤認等の文字化け/産物) → 除外(確認依頼に出さない)
+                continue
+            else:
+                typ = 'power'               # シーケンスに無く回路番号=本物の太物フィーダ
         else:
             typ = term                      # シーケンス情報が無い図面はフォールバック
         # 確度: 主判定と端子信号の突合(二重検証)
