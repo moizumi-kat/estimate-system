@@ -115,6 +115,7 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
                               '未記入のため台番号を一意に確定できません。',
                 }
     dfx = list(defects or []) + list(tb_gaps.values())
+    cross = _crossings_data(routed)
     meta = {
         'seiban': seiban,
         'count': len(rows),
@@ -122,8 +123,37 @@ def build_review_data(routed, addr_map=None, ec=None, seiban='', defects=None):
         'duct_type': routed.get('duct_type', ''),
         'need_confirm': sum(1 for r in rows if r['flags']),
         'defects': dfx,
+        'cross_count': len(cross['items']),
+        'cross_need': cross['need'],
     }
-    return {'meta': meta, 'rows': rows}
+    return {'meta': meta, 'rows': rows, 'crossings': cross}
+
+
+def _crossings_data(routed):
+    """盤間渡り(R-F/L-F=制御 / 渡り用TB=太物)を確認UI用に整形。
+    各渡りを 送り面→受け面 の対で示し、二重検証の確度(◎/○/△)と不一致を添える。
+    device→面 が取れない図面では空(既存UIに影響なし=回帰ゼロ)。"""
+    cross = routed.get('crossings') or {}
+    by_g = {}
+    for r in cross.get('rows', []):
+        by_g.setdefault(r['号線'], []).append(r)
+    items = []
+    for g, send, recv in list(cross.get('control', [])) + list(cross.get('power', [])):
+        rs = by_g.get(g, [])
+        sr = next((r for r in rs if r['面'] == send), {})
+        rr = next((r for r in rs if r['面'] == recv), {})
+        items.append({
+            'gousen': g,
+            'type': sr.get('型', rr.get('型', '')),
+            'conf': cross.get('conf', {}).get(g, '○'),
+            'send': send, 'recv': recv,
+            'send_dev': sr.get('機器', ''), 'send_term': sr.get('端子', ''),
+            'recv_dev': rr.get('機器', ''), 'recv_term': rr.get('端子', ''),
+        })
+    items.sort(key=lambda x: (x['type'], x['gousen']))
+    return {'faces': cross.get('faces', 0), 'items': items,
+            'conflicts': [list(c) for c in cross.get('conflicts', [])],
+            'need': sum(1 for x in items if x['conf'] == '△')}
 
 
 def to_review_html(routed, path, seiban='', addr_map=None, ec=None, defects=None):
@@ -195,6 +225,13 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
   .badge{font-size:11px;border-radius:10px;padding:1px 8px;font-weight:700}
   .badge.back{background:#fff0e6;color:#a5480a;border:1px solid #f2c39c}
   .badge.mfg{background:#e8f1ff;color:#1652c9;border:1px solid #bcd3f7}
+  /* 盤間渡り */
+  .xwarn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:7px;padding:7px 10px;margin:6px 0;color:#7a5c00}
+  .cf{font-weight:700;border-radius:10px;padding:1px 8px;font-size:12px}
+  .cf.ok{background:#e9f7ee;color:var(--ok);border:1px solid #bfe6cc}
+  .cf.mid{background:#eef3fe;color:#1652c9;border:1px solid #bcd3f7}
+  .cf.bad{background:#fdecea;color:var(--bad);border:1px solid #f1c9c2}
+  .muted{color:var(--muted)}
 </style></head><body>
 <header>
   <h1>ハーネス生成データ 確認 <span id="sb" class="muted"></span></h1>
@@ -204,6 +241,7 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
     <span>ダクト <b id="k-duct">-</b></span>
     <span>設計不備 <b id="k-def" class="need">0</b></span>
     <span>要確認 <b id="k-need" class="need">0</b></span>
+    <span>盤間渡り <b id="k-cross">0</b><b id="k-cross-need" class="need"></b></span>
   </div>
   <div class="sp"></div>
   <button class="primary" id="btn-out" disabled>③ 確定・出力＋学習 ▶</button>
@@ -243,6 +281,7 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
       <th>To場所</th><th>To機器</th><th>番号</th><th>端子</th><th>ﾛｹｰﾀ</th><th>圧着</th>
       <th>測長</th><th>要確認</th><th>確認</th>
     </tr></thead><tbody id="tb"></tbody></table>
+    <div class="panel" id="crossbox" hidden style="margin-top:12px"></div>
     <div class="panel" id="donebox" hidden style="margin-top:12px"></div>
   </section>
 </div>
@@ -364,12 +403,44 @@ $('btn-allok').addEventListener('click',function(){
   render();
 });
 
+/* ---------- 盤間渡り(R-F/L-F・渡り用TB)＋二重検証の確度 ---------- */
+function confBadge(c){ var cls=c==='◎'?'ok':(c==='△'?'bad':'mid'); return '<span class="cf '+cls+'">'+esc(c)+'</span>'; }
+function renderCrossings(){
+  var box=$('crossbox'); if(!box) return;
+  var cx=DATA.crossings||{items:[],conflicts:[],faces:0,need:0};
+  $('k-cross').textContent=cx.items.length;
+  $('k-cross-need').textContent = cx.need? (' / △'+cx.need) : '';
+  if(!cx.items.length){ box.hidden=true; return; }
+  box.hidden=false;
+  var confl=cx.conflicts||[], banner='';
+  if(cx.need||confl.length){
+    banner='<div class="xwarn">⚠ 要確認 '+cx.need+' 件'
+      +(confl.length?('（うち型の不一致 '+confl.length+' 件: '
+        +confl.map(function(c){return esc(c[0])+'（端子信号='+esc(c[1])+'／由来図面='+esc(c[2])+'）';}).join('、')+'）'):'')
+      +' — △は人が型（制御=R-F/L-F か 太物=渡り用TB）を確定してください。</div>';
+  }
+  var body=cx.items.map(function(x){
+    return '<tr'+(x.conf==='△'?' class="flag"':'')+'>'
+      +'<td>'+esc(x.gousen)+'</td><td>'+esc(x.type)+'</td>'
+      +'<td style="text-align:center">'+confBadge(x.conf)+'</td>'
+      +'<td>面'+esc(x.send)+' → 面'+esc(x.recv)+'</td>'
+      +'<td>'+esc(x.send_dev)+' <span class="muted">'+esc(x.send_term)+'</span></td>'
+      +'<td>'+esc(x.recv_dev)+' <span class="muted">'+esc(x.recv_term)+'</span></td></tr>';
+  }).join('');
+  box.innerHTML='<h2>盤間渡り（R-F/L-F=制御 ／ 渡り用TB=太物）'
+    +'<span class="hint"> 面数 '+esc(cx.faces)+' ／ 渡り '+cx.items.length+' 件</span></h2>'
+    +'<p class="hint">盤をまたぐ線を分割し、送り面=R-F(P)/渡り用TB・受け面=L-F(R)/渡り用TB に接続（図面に描かれず製造で用意）。'
+    +'確度 ◎=端子信号と由来図面が一致／○=端子信号のみ／△=要確認。</p>'+banner
+    +'<table><thead><tr><th>号線</th><th>型</th><th>確度</th><th>渡り(送り→受け)</th>'
+    +'<th>送り側(機器:端子)</th><th>受け側(機器:端子)</th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+
 /* ---------- 工程遷移 ---------- */
 function goPhase(p){
   phase=p;
   $('phase1').hidden = p!==1; $('phase2').hidden = p!==2;
   $('st1').className='s '+(p>1?'done':'on'); $('st2').className='s '+(p===2?'on':(p>2?'done':''));
-  if(p===2) render();
+  if(p===2){ render(); renderCrossings(); }
   recalc();
 }
 $('to2').addEventListener('click',function(){ goPhase(2); });
@@ -414,5 +485,6 @@ $('btn-out').addEventListener('click',function(){
 });
 
 renderDefects();
+renderCrossings();   // 盤間渡りの件数KPIを初期表示(表はphase2で表示)
 goPhase(1);
 </script></body></html>"""
