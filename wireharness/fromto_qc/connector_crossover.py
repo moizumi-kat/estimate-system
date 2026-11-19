@@ -327,12 +327,13 @@ def generate(routed, dct_paths, skel_paths=None, seq_paths=None):
     # 有れば制御、無ければ太物(太物は図面/From-Toに載らず製造で補完)。実測で手本と100%一致。
     seq_set = evidence.get('seq_gousen') or set()
     has_seq = bool(seq_paths) and bool(seq_set)
+    face_order = sorted({f for ps in cross.values() for f in ps}, key=_face_key)
     out = {'control': [], 'power': [],
-           'faces': len({f for ps in cross.values() for f in ps}),
+           'faces': len(face_order),
            'conf': {}, 'conflicts': []}
     for g, faces in cross.items():
-        fs = sorted(faces, key=lambda s: (len(s), s))
-        send, recv = fs[0], fs[-1]          # 左(小さい面番号)=送り元, 右=受け先
+        fs = sorted(faces, key=_face_key)
+        send, recv = fs[0], fs[-1]          # 左(最小面)=送り元, 右(最大面)=受け先
         term = classify(g, wires)           # 端子信号(裏付け/シーケンス無し時のフォールバック)
         if has_seq:
             typ = 'control' if g in seq_set else 'power'   # 手本From-To準拠(主判定)
@@ -350,27 +351,51 @@ def generate(routed, dct_paths, skel_paths=None, seq_paths=None):
     out['control'].sort()
     out['power'].sort()
     out['conflicts'].sort()
-    out['rows'] = _rows(out['control'], out['power'], out['conf'])
+    out['rows'] = _rows(out['control'], out['power'], out['conf'], face_order)
     return out
 
 
-def _rows(control, power, conf=None):
+def _face_key(f):
+    """面(盤番号)を物理順に並べるキー。数字前置を数値、以降を文字列で比較。"""
+    m = re.match(r'^(\d+)', str(f))
+    return (int(m.group(1)) if m else 10 ** 9, str(f))
+
+
+def _boundaries(send, recv, face_order):
+    """送り面〜受け面の間の『隣接する物理盤境界』ペア列を返す(通過面も中継)。
+    手本では3面跨ぎは各盤境界ごとにR-F/L-Fを置くため、送受の間の全境界を列挙する。"""
+    order = list(face_order or [])
+    if order and send in order and recv in order:
+        i, j = order.index(send), order.index(recv)
+        if i > j:
+            i, j = j, i
+        seg = order[i:j + 1]
+    else:
+        seg = sorted({send, recv}, key=_face_key)
+    return list(zip(seg, seg[1:]))
+
+
+def _rows(control, power, conf=None, face_order=None):
     """検出した渡りを手本形式の連結行(端点行)に変換。
-    制御=R-F(P)[送り面]/L-F(R)[受け面] の白-N芯(採番は面ペアごと canonical=送り先一致が要件で
-    芯番号の規約は不要との茂泉様方針)。太物=渡り用TB[両面](相端子 N/U/V/W/R は電源構成依存の
-    ため号線名を端子に置き、相の確定は確認ゲート/積算ソフト側)。conf(号線→◎/○/△)があれば
-    各行に確度を付す。戻り: [{'面','号線','機器','端子','型','確度'}]。"""
+
+    **多面跨ぎ(手本準拠):** 送り面〜受け面の間の各盤境界に R-F(P)[左面]/L-F(R)[右面] を置く。
+    中間面は『左から受ける L-F(R) ＋ 右へ送る R-F(P)』の両方を持つ(通過面も中継)。
+    **コア番号(白-N):** 信号ごとに一貫(全境界で同じ芯番号)。採番順の規約は不要で、送り=受けの
+    一致が要件との茂泉様方針。太物=渡り用TB[各境界の両面](相端子は電源構成依存のため号線名を端子に)。
+    戻り: [{'面','号線','機器','端子','型','確度'}]。"""
     conf = conf or {}
     rows = []
-    core = collections.defaultdict(int)         # (送り面,受け面) -> 芯カウンタ
+    kc = 0                                      # 制御信号ごとの芯番号(全境界で一貫)
     for g, s, r in control:
-        core[(s, r)] += 1
-        k = core[(s, r)]
+        kc += 1
+        core = f'白-{kc}'
         c = conf.get(g, '○')
-        rows.append({'面': s, '号線': g, '機器': 'R-F(P)', '端子': f'白-{k}', '型': '制御', '確度': c})
-        rows.append({'面': r, '号線': g, '機器': 'L-F(R)', '端子': f'白-{k}', '型': '制御', '確度': c})
+        for a, b in _boundaries(s, r, face_order):
+            rows.append({'面': a, '号線': g, '機器': 'R-F(P)', '端子': core, '型': '制御', '確度': c})
+            rows.append({'面': b, '号線': g, '機器': 'L-F(R)', '端子': core, '型': '制御', '確度': c})
     for g, s, r in power:
         c = conf.get(g, '○')
-        rows.append({'面': s, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物', '確度': c})
-        rows.append({'面': r, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物', '確度': c})
+        for a, b in _boundaries(s, r, face_order):
+            rows.append({'面': a, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物', '確度': c})
+            rows.append({'面': b, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物', '確度': c})
     return rows

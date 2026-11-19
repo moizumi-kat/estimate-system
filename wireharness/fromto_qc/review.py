@@ -137,20 +137,28 @@ def _crossings_data(routed):
     by_g = {}
     for r in cross.get('rows', []):
         by_g.setdefault(r['号線'], []).append(r)
+
+    def _fk(f):
+        import re as _re
+        m = _re.match(r'^(\d+)', str(f))
+        return (int(m.group(1)) if m else 10 ** 9, str(f))
+
     items = []
     for g, send, recv in list(cross.get('control', [])) + list(cross.get('power', [])):
         rs = by_g.get(g, [])
-        sr = next((r for r in rs if r['面'] == send), {})
-        rr = next((r for r in rs if r['面'] == recv), {})
+        faces = sorted({r['面'] for r in rs}, key=_fk)      # 跨ぐ全面(通過面含む)
+        core = next((r['端子'] for r in rs), '')
+        nb = max(0, len(faces) - 1)                          # 盤境界(コネクタ)数
         items.append({
             'gousen': g,
-            'type': sr.get('型', rr.get('型', '')),
+            'type': cross.get('conf') and (rs[0]['型'] if rs else ''),
             'conf': cross.get('conf', {}).get(g, '○'),
             'send': send, 'recv': recv,
-            'send_dev': sr.get('機器', ''), 'send_term': sr.get('端子', ''),
-            'recv_dev': rr.get('機器', ''), 'recv_term': rr.get('端子', ''),
+            'path': '→'.join('面' + f for f in faces),       # 面1→面2→面3
+            'core': core, 'boundaries': nb,
+            'relay': faces[1:-1] if len(faces) > 2 else [],   # 中継(通過)面
         })
-    items.sort(key=lambda x: (x['type'], x['gousen']))
+    items.sort(key=lambda x: (x['type'] or '', x['gousen']))
     return {'faces': cross.get('faces', 0), 'items': items,
             'conflicts': [list(c) for c in cross.get('conflicts', [])],
             'need': sum(1 for x in items if x['conf'] == '△')}
@@ -420,19 +428,22 @@ function renderCrossings(){
       +' — △は人が型（制御=R-F/L-F か 太物=渡り用TB）を確定してください。</div>';
   }
   var body=cx.items.map(function(x){
+    var relay = (x.relay&&x.relay.length)? ' <span class="tag">中継 面'+x.relay.join('・面')+'</span>' : '';
+    var conn = (x.type==='制御')? 'R-F(P)／L-F(R)' : '渡り用TB';
     return '<tr'+(x.conf==='△'?' class="flag"':'')+'>'
       +'<td>'+esc(x.gousen)+'</td><td>'+esc(x.type)+'</td>'
       +'<td style="text-align:center">'+confBadge(x.conf)+'</td>'
-      +'<td>面'+esc(x.send)+' → 面'+esc(x.recv)+'</td>'
-      +'<td>'+esc(x.send_dev)+' <span class="muted">'+esc(x.send_term)+'</span></td>'
-      +'<td>'+esc(x.recv_dev)+' <span class="muted">'+esc(x.recv_term)+'</span></td></tr>';
+      +'<td>'+esc(x.path)+relay+'</td>'
+      +'<td style="text-align:center">'+esc(x.boundaries)+'</td>'
+      +'<td>'+esc(conn)+' <span class="muted">'+esc(x.core)+'</span></td></tr>';
   }).join('');
   box.innerHTML='<h2>盤間渡り（R-F/L-F=制御 ／ 渡り用TB=太物）'
     +'<span class="hint"> 面数 '+esc(cx.faces)+' ／ 渡り '+cx.items.length+' 件</span></h2>'
     +'<p class="hint">盤をまたぐ線を分割し、送り面=R-F(P)/渡り用TB・受け面=L-F(R)/渡り用TB に接続（図面に描かれず製造で用意）。'
+    +'3面以上は各盤境界にコネクタを置き、中間面は受け＋再送で中継（コア番号は信号ごとに一貫）。'
     +'確度 ◎=端子信号と由来図面が一致／○=端子信号のみ／△=要確認。</p>'+banner
-    +'<table><thead><tr><th>号線</th><th>型</th><th>確度</th><th>渡り(送り→受け)</th>'
-    +'<th>送り側(機器:端子)</th><th>受け側(機器:端子)</th></tr></thead><tbody>'+body+'</tbody></table>';
+    +'<table><thead><tr><th>号線</th><th>型</th><th>確度</th><th>渡り(面の経路)</th>'
+    +'<th>境界(コネクタ)数</th><th>コネクタ:コア</th></tr></thead><tbody>'+body+'</tbody></table>';
 }
 
 /* ---------- 工程遷移 ---------- */

@@ -192,9 +192,29 @@ def test_rows_power_watari_tb():
     assert all(r['型'] == '太物' for r in rows)
 
 
-def test_rows_core_number_per_face_pair():
-    # 芯番号は面ペアごとに独立採番
+def test_rows_core_number_per_signal_global():
+    # 芯番号は信号ごとに一貫(全境界で同じ)。手本: KA=白-1/KB=白-2 を各境界で使用。
     rows = CC._rows(control=[('a', '1', '2'), ('b', '2', '3')], power=[])
-    b1 = [r for r in rows if r['号線'] == 'a' and r['機器'] == 'R-F(P)'][0]
-    b2 = [r for r in rows if r['号線'] == 'b' and r['機器'] == 'R-F(P)'][0]
-    assert b1['端子'] == '白-1' and b2['端子'] == '白-1'   # 別ペアなので各々1から
+    a1 = [r for r in rows if r['号線'] == 'a' and r['機器'] == 'R-F(P)'][0]
+    b1 = [r for r in rows if r['号線'] == 'b' and r['機器'] == 'R-F(P)'][0]
+    assert a1['端子'] == '白-1' and b1['端子'] == '白-2'   # 信号ごとに通し番号
+
+
+def test_rows_multiface_connector_per_boundary():
+    # 3面跨ぎ(面1-2-3)は各境界にR-F/L-F、中間面2は L-F(R)＋R-F(P) の両方。手本KA準拠。
+    rows = CC._rows(control=[('KA', '1', '3')], power=[], face_order=['1', '2', '3'])
+    got = {(r['面'], r['機器'], r['端子']) for r in rows if r['号線'] == 'KA'}
+    assert ('1', 'R-F(P)', '白-1') in got          # 面1=送り
+    assert ('2', 'L-F(R)', '白-1') in got          # 面2=左から受け
+    assert ('2', 'R-F(P)', '白-1') in got          # 面2=右へ再送(中継)
+    assert ('3', 'L-F(R)', '白-1') in got          # 面3=受け
+    # 面2は L-F(R) と R-F(P) の両方を持つ
+    f2 = {r['機器'] for r in rows if r['面'] == '2'}
+    assert f2 == {'L-F(R)', 'R-F(P)'}
+
+
+def test_rows_passthrough_face_relayed():
+    # 面{1,3}しか触れない信号も、間の面2を物理境界として中継(通過面)。
+    rows = CC._rows(control=[('X', '1', '3')], power=[], face_order=['1', '2', '3'])
+    faces = sorted({r['面'] for r in rows})
+    assert faces == ['1', '2', '3']               # 通過面2にも中継コネクタ
