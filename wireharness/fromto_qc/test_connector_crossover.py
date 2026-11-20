@@ -63,6 +63,25 @@ def test_detect_crossings_spans_two_faces():
     assert '900' not in cross
 
 
+def test_detect_tb_goes_to_circuit_panel():
+    # 汎用端子台(device='TB')は端子番号が物理ブロック名(TB22)に偶然一致しても
+    # そこへ当てず、号線の回路基底が属する盤へ寄せる(回路103のTBは盤1=52-103の盤)。
+    # bases 指定で: 103D(TB→回路103の盤1 ＋ 52-103=盤1) は同一盤 → 渡りにならない。
+    dev_face = {('52', '103'): '1', ('TB', '22'): '2'}   # TB22 は盤2(物理ブロック)
+    wires = [_wire('103D', 'TB', '22', '', '52', '103', '')]
+    # bases 無し(従来)は TB を物理ブロックに当てない=盤不明 → 52-103 のみ=非跨ぎ
+    assert CC.detect_crossings(wires, dev_face) == {}
+    # bases 有り: TB は回路103の盤(=1)、52-103 も盤1 → 同一盤=非跨ぎ(偽渡り解消)
+    assert CC.detect_crossings(wires, dev_face, {'103'}) == {}
+
+
+def test_detect_tb_real_cross_via_devices():
+    # 本物の盤間渡りは TB 以外の実機器端点で検出される(TBを寄せても recall を損なわない)。
+    dev_face = {('52', '301'): '3', ('51', '301'): '5'}
+    wires = [_wire('C9', '52', '301', '', '51', '301', '')]   # 面3↔面5 = 実機器で跨ぎ
+    assert CC.detect_crossings(wires, dev_face, {'301'}) == {'C9': {'3', '5'}}
+
+
 def test_detect_concat_name_fallback():
     # app の (DTAL,1) が DCT の DEVICE 'DTAL1' と連結名で一致
     dev_face = {('DTAL1', '2-I'): '2', ('OL', '12'): '1'}
