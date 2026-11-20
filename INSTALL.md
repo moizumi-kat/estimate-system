@@ -81,12 +81,12 @@ export APP_PASSWORD="社内で決めたパスワード"
 python app.py
 ```
 
-- 起動ログに `積算コード選定システム起動: http://localhost:8000 (DB 3641件 / APIキー OK)` が出る。
+- 起動ログに `積算コード選定システム起動: http://localhost:8000 (DB 3666件 / APIキー OK)` が出る。
 - ブラウザで `http://localhost:8000` → ログイン → 図面をアップして抽出→選定を確認。
 
 ### 疎通確認
 ```bash
-curl -s localhost:8000/api/health      # {"ok":true,"db":3641,...}
+curl -s localhost:8000/api/health      # {"ok":true,"db":3666,...}
 ```
 
 ## 6. 本番運用（EC2・systemd 常駐）
