@@ -240,6 +240,31 @@ def build_circuit_bases(skel_paths=None):
     return bases
 
 
+def build_cable_sizes(skel_paths=None):
+    """スケルトン(E)の電源機器から 回路番号(DEVICE1)→電線サイズ(CABLE_SIZE) を作る。
+    現場ルール(茂泉様): 盤間渡りは 2.0sq以下＝コネクタ(R-F/L-F)、2.0sq超＝直接1本渡り(太物)。
+    太物フィーダ(CVTケーブル等)のサイズ確認・注記に使う。例 2G2→60sq, 1G1→200sq。"""
+    sizes = {}
+    for p in (skel_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            cs = a.get('CABLE_SIZE', '') or a.get('GAISENSIZE', '')
+            c = _norm(a.get('DEVICE1'))
+            if cs and c and len(c) >= 2:
+                sizes[c] = cs
+    return sizes
+
+
+def _sq_value(size_str):
+    """'60sq'/'HIV3.5sq'/'200sq' から sq 数値を取り出す。取れなければ None。"""
+    m = re.search(r'(\d+(?:\.\d+)?)\s*sq', str(size_str or ''), re.I)
+    return float(m.group(1)) if m else None
+
+
 def normalize_gousen(g, circuit_bases):
     """線番を手本準拠で基底(回路番号/制御信号名)へ畳む。
 
@@ -358,7 +383,10 @@ def generate(routed, dct_paths, skel_paths=None, seq_paths=None):
     out['control'].sort()
     out['power'].sort()
     out['conflicts'].sort()
-    out['rows'] = _rows(out['control'], out['power'], out['conf'], face_order)
+    # 太物フィーダの電線サイズ(現場ルール: 2.0sq超=直接渡り)。スケルトンのCABLE_SIZEから。
+    cs = build_cable_sizes(skel_paths)
+    out['sizes'] = {g: cs[g] for g, _s, _r in out['power'] if g in cs}
+    out['rows'] = _rows(out['control'], out['power'], out['conf'], face_order, out['sizes'])
     return out
 
 
@@ -382,15 +410,18 @@ def _boundaries(send, recv, face_order):
     return list(zip(seg, seg[1:]))
 
 
-def _rows(control, power, conf=None, face_order=None):
+def _rows(control, power, conf=None, face_order=None, sizes=None):
     """検出した渡りを手本形式の連結行(端点行)に変換。
 
     **多面跨ぎ(手本準拠):** 送り面〜受け面の間の各盤境界に R-F(P)[左面]/L-F(R)[右面] を置く。
     中間面は『左から受ける L-F(R) ＋ 右へ送る R-F(P)』の両方を持つ(通過面も中継)。
     **コア番号(白-N):** 信号ごとに一貫(全境界で同じ芯番号)。採番順の規約は不要で、送り=受けの
-    一致が要件との茂泉様方針。太物=渡り用TB[各境界の両面](相端子は電源構成依存のため号線名を端子に)。
+    一致が要件との茂泉様方針。
+    **太物(現場ルール/茂泉様): 2.0sq超は盤間を『直接1本渡り』(たまに渡りTB)。** 渡り用TBでなく
+    直接渡りとして各境界の両面に記す。電線サイズ(sizes)が取れれば端子に併記(例 60sq)。
     戻り: [{'面','号線','機器','端子','型','確度'}]。"""
     conf = conf or {}
+    sizes = sizes or {}
     rows = []
     kc = 0                                      # 制御信号ごとの芯番号(全境界で一貫)
     for g, s, r in control:
@@ -402,7 +433,8 @@ def _rows(control, power, conf=None, face_order=None):
             rows.append({'面': b, '号線': g, '機器': 'L-F(R)', '端子': core, '型': '制御', '確度': c})
     for g, s, r in power:
         c = conf.get(g, '○')
+        term = sizes.get(g, '') or g           # サイズが取れれば併記、無ければ号線名
         for a, b in _boundaries(s, r, face_order):
-            rows.append({'面': a, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物', '確度': c})
-            rows.append({'面': b, '号線': g, '機器': '渡り用TB', '端子': g, '型': '太物', '確度': c})
+            rows.append({'面': a, '号線': g, '機器': '直接渡り(太物)', '端子': term, '型': '太物', '確度': c})
+            rows.append({'面': b, '号線': g, '機器': '直接渡り(太物)', '端子': term, '型': '太物', '確度': c})
     return rows

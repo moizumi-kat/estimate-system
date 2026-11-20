@@ -184,12 +184,13 @@ def test_rows_control_rf_lf_cores():
     assert {'面': '1', '号線': '106', '機器': 'R-F(P)', '端子': '白-2', '型': '制御', '確度': '○'} in rows
 
 
-def test_rows_power_watari_tb():
-    # 太物渡りは両面に 渡り用TB
-    rows = CC._rows(control=[], power=[('2G2', '1', '2')])
+def test_rows_power_direct():
+    # 太物渡りは両面に『直接渡り(太物)』(現場ルール: 2.0sq超は直接1本渡り・たまにTB)。
+    rows = CC._rows(control=[], power=[('2G2', '1', '2')], sizes={'2G2': '60sq'})
     kinds = {(r['面'], r['機器']) for r in rows}
-    assert ('1', '渡り用TB') in kinds and ('2', '渡り用TB') in kinds
+    assert ('1', '直接渡り(太物)') in kinds and ('2', '直接渡り(太物)') in kinds
     assert all(r['型'] == '太物' for r in rows)
+    assert all(r['端子'] == '60sq' for r in rows)       # サイズ併記
 
 
 def test_rows_core_number_per_signal_global():

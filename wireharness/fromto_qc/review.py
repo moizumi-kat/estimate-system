@@ -429,7 +429,7 @@ function renderCrossings(){
   }
   var body=cx.items.map(function(x){
     var relay = (x.relay&&x.relay.length)? ' <span class="tag">中継 面'+x.relay.join('・面')+'</span>' : '';
-    var conn = (x.type==='制御')? 'R-F(P)／L-F(R)' : '渡り用TB';
+    var conn = (x.type==='制御')? 'R-F(P)／L-F(R)' : '直接渡り(太物)';
     return '<tr'+(x.conf==='△'?' class="flag"':'')+'>'
       +'<td>'+esc(x.gousen)+'</td><td>'+esc(x.type)+'</td>'
       +'<td style="text-align:center">'+confBadge(x.conf)+'</td>'
@@ -437,9 +437,10 @@ function renderCrossings(){
       +'<td style="text-align:center">'+esc(x.boundaries)+'</td>'
       +'<td>'+esc(conn)+' <span class="muted">'+esc(x.core)+'</span></td></tr>';
   }).join('');
-  box.innerHTML='<h2>盤間渡り（R-F/L-F=制御 ／ 渡り用TB=太物）'
+  box.innerHTML='<h2>盤間渡り（R-F/L-F=制御[≤2.0sq] ／ 直接渡り=太物[>2.0sq]）'
     +'<span class="hint"> 面数 '+esc(cx.faces)+' ／ 渡り '+cx.items.length+' 件</span></h2>'
-    +'<p class="hint">盤をまたぐ線を分割し、送り面=R-F(P)/渡り用TB・受け面=L-F(R)/渡り用TB に接続（図面に描かれず製造で用意）。'
+    +'<p class="hint">現場ルール: 盤間渡りは <b>2.0sq以下＝コネクタ(R-F/L-F)</b>（シーケンス図の線は全てここ）、'
+    +'<b>2.0sq超＝直接1本渡り(太物)</b>（たまに渡りTB）。コネクタは送り面=R-F(P)・受け面=L-F(R)。'
     +'3面以上は各盤境界にコネクタを置き、中間面は受け＋再送で中継（コア番号は信号ごとに一貫）。'
     +'確度 ◎=端子信号と由来図面が一致／○=端子信号のみ／△=要確認。</p>'+banner
     +'<table><thead><tr><th>号線</th><th>型</th><th>確度</th><th>渡り(面の経路)</th>'
