@@ -235,6 +235,7 @@ _TEMPLATE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
   .badge.mfg{background:#e8f1ff;color:#1652c9;border:1px solid #bcd3f7}
   /* 盤間渡り */
   .xwarn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:7px;padding:7px 10px;margin:6px 0;color:#7a5c00}
+  .xnote{background:#eef4fb;border:1px solid #c7dbf0;border-radius:7px;padding:7px 10px;margin:6px 0;color:#355}
   .cf{font-weight:700;border-radius:10px;padding:1px 8px;font-size:12px}
   .cf.ok{background:#e9f7ee;color:var(--ok);border:1px solid #bfe6cc}
   .cf.mid{background:#eef3fe;color:#1652c9;border:1px solid #bcd3f7}
@@ -439,10 +440,12 @@ function renderCrossings(){
   }).join('');
   box.innerHTML='<h2>盤間渡り（R-F/L-F=制御[≤2.0sq] ／ 直接渡り=太物[>2.0sq]）'
     +'<span class="hint"> 面数 '+esc(cx.faces)+' ／ 渡り '+cx.items.length+' 件</span></h2>'
-    +'<p class="hint">現場ルール: 盤間渡りは <b>2.0sq以下＝コネクタ(R-F/L-F)</b>（シーケンス図の線は全てここ）、'
-    +'<b>2.0sq超＝直接1本渡り(太物)</b>（たまに渡りTB）。コネクタは送り面=R-F(P)・受け面=L-F(R)。'
+    +'<p class="hint">現場ルール(電線サイズ基準): <b>2.0sq以下＝コネクタ(R-F/L-F)</b>（シーケンス図の線は全てここ）、'
+    +'<b>2.0sq超＝直接1本渡り</b>（動力フィーダ≥8sq=太物／たまに渡りTB）。コネクタは送り面=R-F(P)・受け面=L-F(R)。'
     +'3面以上は各盤境界にコネクタを置き、中間面は受け＋再送で中継（コア番号は信号ごとに一貫）。'
-    +'確度 ◎=端子信号と由来図面が一致／○=端子信号のみ／△=要確認。</p>'+banner
+    +'確度 ◎=端子信号と由来図面が一致／○=端子信号のみ／△=要確認。</p>'
+    +'<div class="xnote">⏚ <b>アース(接地・主に5.5sq)</b>は 2.0sq超なので <b>直接渡り（コネクタ不使用）</b>＝各盤の接地端子(ET)を盤間で直接ボンディング。'
+    +'ハーネス工程が標準で施工するため、この表（コネクタ/太物）には出ません（色E/緑で区別・計上対象外）。</div>'+banner
     +'<table><thead><tr><th>号線</th><th>型</th><th>確度</th><th>渡り(面の経路)</th>'
     +'<th>境界(コネクタ)数</th><th>コネクタ:コア</th></tr></thead><tbody>'+body+'</tbody></table>';
 }
