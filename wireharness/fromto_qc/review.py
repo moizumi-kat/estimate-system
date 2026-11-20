@@ -413,6 +413,7 @@ $('btn-allok').addEventListener('click',function(){
 });
 
 /* ---------- 盤間渡り(R-F/L-F・渡り用TB)＋二重検証の確度 ---------- */
+var CROSS_SPEC='default';   // 盤間渡り仕様(仕様書による): default/power_tb/all。確認ゲートで人が選択。
 function confBadge(c){ var cls=c==='◎'?'ok':(c==='△'?'bad':'mid'); return '<span class="cf '+cls+'">'+esc(c)+'</span>'; }
 function renderCrossings(){
   var box=$('crossbox'); if(!box) return;
@@ -428,9 +429,16 @@ function renderCrossings(){
         +confl.map(function(c){return esc(c[0])+'（端子信号='+esc(c[1])+'／由来図面='+esc(c[2])+'）';}).join('、')+'）'):'')
       +' — △は人が型（制御=R-F/L-F か 太物=渡り用TB）を確定してください。</div>';
   }
+  // 盤間渡り仕様(仕様書による/図面に無い): 中継端子台(渡りTB)を使うかは案件の仕様書で決まる。
+  //   既定=制御 R-F/L-F・太物 直接渡り ／ 太物TB=太物を中継端子台に ／ 全TB=全渡りを中継端子台に。
+  function connOf(x){
+    if(CROSS_SPEC==='all') return '中継端子台(渡りTB)';
+    if(x.type==='制御') return 'R-F(P)／L-F(R)';
+    return (CROSS_SPEC==='power_tb')? '中継端子台(渡りTB)' : '直接渡り(太物)';
+  }
   var body=cx.items.map(function(x){
     var relay = (x.relay&&x.relay.length)? ' <span class="tag">中継 面'+x.relay.join('・面')+'</span>' : '';
-    var conn = (x.type==='制御')? 'R-F(P)／L-F(R)' : '直接渡り(太物)';
+    var conn = connOf(x);
     return '<tr'+(x.conf==='△'?' class="flag"':'')+'>'
       +'<td>'+esc(x.gousen)+'</td><td>'+esc(x.type)+'</td>'
       +'<td style="text-align:center">'+confBadge(x.conf)+'</td>'
@@ -438,16 +446,26 @@ function renderCrossings(){
       +'<td style="text-align:center">'+esc(x.boundaries)+'</td>'
       +'<td>'+esc(conn)+' <span class="muted">'+esc(x.core)+'</span></td></tr>';
   }).join('');
+  var opts=[['default','既定（制御=R-F/L-F ／ 太物=直接1本渡り）'],
+            ['power_tb','太物に中継端子台（渡りTB）を使用'],
+            ['all','全渡りに中継端子台（渡りTB）を使用']];
+  var sel='<div class="specsel" style="margin:8px 0;padding:8px;background:#f4f7fb;border-radius:6px">'
+    +'<b>盤間渡り仕様（仕様書による）:</b> <select id="crossspec">'
+    +opts.map(function(o){return '<option value="'+o[0]+'"'+(CROSS_SPEC===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')
+    +'</select> <span class="hint">※中継端子台(渡りTB)は図面に描かれず、案件の<b>仕様書</b>で決まります。該当する仕様をここで選択してください。</span></div>';
   box.innerHTML='<h2>盤間渡り（R-F/L-F=制御[≤2.0sq] ／ 直接渡り=太物[>2.0sq]）'
     +'<span class="hint"> 面数 '+esc(cx.faces)+' ／ 渡り '+cx.items.length+' 件</span></h2>'
     +'<p class="hint">現場ルール(電線サイズ基準): <b>2.0sq以下＝コネクタ(R-F/L-F)</b>（シーケンス図の線は全てここ）、'
-    +'<b>2.0sq超＝直接1本渡り</b>（動力フィーダ≥8sq=太物／たまに渡りTB）。コネクタは送り面=R-F(P)・受け面=L-F(R)。'
+    +'<b>2.0sq超＝直接1本渡り</b>（動力フィーダ≥8sq=太物）。コネクタは送り面=R-F(P)・受け面=L-F(R)。'
     +'3面以上は各盤境界にコネクタを置き、中間面は受け＋再送で中継（コア番号は信号ごとに一貫）。'
     +'確度 ◎=端子信号と由来図面が一致／○=端子信号のみ／△=要確認。</p>'
+    +sel
     +'<div class="xnote">⏚ <b>アース(接地・主に5.5sq)</b>は 2.0sq超なので <b>直接渡り（コネクタ不使用）</b>＝各盤の接地端子(ET)を盤間で直接ボンディング。'
     +'ハーネス工程が標準で施工するため、この表（コネクタ/太物）には出ません（色E/緑で区別・計上対象外）。</div>'+banner
     +'<table><thead><tr><th>号線</th><th>型</th><th>確度</th><th>渡り(面の経路)</th>'
-    +'<th>境界(コネクタ)数</th><th>コネクタ:コア</th></tr></thead><tbody>'+body+'</tbody></table>';
+    +'<th>境界(コネクタ)数</th><th>渡りの型:コア</th></tr></thead><tbody>'+body+'</tbody></table>';
+  var ss=$('crossspec');
+  if(ss){ ss.addEventListener('change',function(){ CROSS_SPEC=this.value; renderCrossings(); }); }
 }
 
 /* ---------- 工程遷移 ---------- */
