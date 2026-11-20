@@ -140,39 +140,79 @@ def face_of(dev_face, rel_concat, device, no):
     return None
 
 
+def _gousen_base(g):
+    """号線の末尾枝番(英字)を外した基底。237A/237B→237, 103D→103。
+    基底が数字でない(KA等)は分割せず元のまま(過剰グループ化を防ぐ)。"""
+    b = re.sub(r'[A-Za-z]+$', '', g)
+    return b if (b and b != g and b.isdigit()) else g
+
+
 def detect_crossings(wires, dev_face, bases=None):
     """各号線が繋ぐ機器の面集合を作り、2面以上に跨る号線(=盤間渡り)を返す。
     戻り: {号線: set(面)}（跨ぐものだけ）。
 
     **端子台(TB)の扱い(茂泉様確定):** シーケンス配線の端点 device='TB' は『汎用端子台』で、
     その端子番号(no)が物理ブロック名(例 TB22)と偶然一致して誤マッチし、別盤への偽渡りを
-    生む。回路のTB端子台は回路自身の盤にある(例 回路103→盤1のTB13)ので、TB端点は
-    物理ブロックに当てず、その号線の回路基底が属する盤へ寄せる(bases 指定時)。
-    回路基底が無い共通回路(操作8/10系等)のTBは盤不明=渡り判定に寄与しない(面内で完結)。"""
-    # 連結名フォールバック用(dev_face のキーを base 化)
+    生む(回路のTB端子台は回路自身の盤にある: 回路103→盤1のTB13)。そのため TB端点は物理
+    ブロックに当てず、原則その号線の回路基底が属する盤へ寄せる(bases 指定時)。
+
+    **集約端子台バス(茂泉様確定/5-12043 の 237 母線で裏取り):** 共通の中継端子台に多数の
+    号線(例 237A〜237J)が集まる母線は、その中継端子台がマスター盤に在り、各盤の機器から
+    盤間を渡ってそこへ集まる。基底グループ(237)の全メンバ(≥3)がTB端点を持ち、非TB側の
+    機器が2盤以上に跨るとき『集約バス』と判定し、TB端点を最上位(マスター)盤へ寄せる
+    → 各メンバが機器盤↔マスター盤で正しく渡りになる(237B〜Hの取りこぼし解消)。"""
     rel_concat = {(b, n): p for (b, n), p in dev_face.items()}
-    # 回路番号 → 盤 (52機器の配置から)。TB端点を回路の盤へ寄せるのに使う。
     circuit_panel = {k: p for (d, k), p in dev_face.items() if d == '52'}
     sbases = sorted((bases or []), key=len, reverse=True)
 
-    def _tb_panel(g):
+    def _circ_panel(g):
         for b in sbases:
             if g.startswith(b):
                 return circuit_panel.get(b)
         return None
 
-    g2p = collections.defaultdict(set)
+    # Pass1: 非TB端点の面・TB有無を号線ごと／基底グループのメンバを集計
+    non_tb = collections.defaultdict(set)
+    has_tb = collections.defaultdict(bool)
+    members = collections.defaultdict(set)
     for w in wires:
         g = w.get('gousen')
         if not g or g in COLORS:
             continue
+        members[_gousen_base(g)].add(g)
         for e in (w.get('from', {}), w.get('to', {})):
-            if _norm(e.get('device')) == 'TB':      # 汎用端子台=回路の盤へ(誤マッチ回避)
-                p = _tb_panel(g)
+            if _norm(e.get('device')) == 'TB':
+                has_tb[g] = True
             else:
                 p = face_of(dev_face, rel_concat, e.get('device'), e.get('no'))
-            if p:
-                g2p[g].add(p)
+                if p:
+                    non_tb[g].add(p)
+    # 集約バス判定: 全メンバ(≥3)がTB端点＋非TB面が2盤以上 → 中継TBはマスター(最上位)盤
+    bus_panel = {}
+    for base, ms in members.items():
+        if len(ms) < 3 or not all(has_tb.get(g) for g in ms):
+            continue
+        gp = set()
+        for g in ms:
+            gp |= non_tb.get(g, set())
+        if len(gp) >= 2:
+            bus_panel[base] = max(gp, key=_face_key)
+
+    def _tb_panel(g):
+        b = _gousen_base(g)
+        if b in bus_panel:
+            return bus_panel[b]          # 集約バスの中継端子台=マスター盤
+        return _circ_panel(g)            # 通常=回路の盤(無ければ盤不明=面内完結)
+
+    # Pass2: 面集合を確定(TB端点は _tb_panel を足す)
+    g2p = collections.defaultdict(set)
+    for g in set(list(non_tb) + list(has_tb)):
+        ps = set(non_tb.get(g, set()))
+        if has_tb.get(g):
+            tp = _tb_panel(g)
+            if tp:
+                ps.add(tp)
+        g2p[g] = ps
     return {g: ps for g, ps in g2p.items() if len(ps) >= 2}
 
 

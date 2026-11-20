@@ -82,6 +82,26 @@ def test_detect_tb_real_cross_via_devices():
     assert CC.detect_crossings(wires, dev_face, {'301'}) == {'C9': {'3', '5'}}
 
 
+def test_detect_collecting_tb_bus_to_master_panel():
+    # 集約端子台バス: 基底(237)の全メンバがTB端点を持ち、非TB機器が2盤に跨る(盤5の52-50x＋
+    # 盤6の52-601)→ 中継端子台はマスター(最上位=盤6)。各メンバが機器盤↔盤6で渡りになる。
+    dev_face = {('52', '503'): '5', ('52', '504'): '5', ('52', '601'): '6'}
+    wires = [_wire('237A', 'TB', '', '', '52', '601', ''),   # 盤6の52-601にも繋がる(=盤6到達)
+             _wire('237B', 'TB', '', '', '52', '503', ''),   # 盤5の52-503(単独では非跨ぎ)
+             _wire('237C', 'TB', '', '', '52', '504', '')]    # 盤5の52-504(同上)
+    cross = CC.detect_crossings(wires, dev_face)
+    # 237B/237C は 盤5 と 集約TB(盤6) で渡りになる(取りこぼし解消)
+    assert cross.get('237B') == {'5', '6'} and cross.get('237C') == {'5', '6'}
+
+
+def test_detect_non_bus_group_stays_local():
+    # 集約バスでない(非TBメンバを含む/単一盤)グループは従来どおり面内完結=非渡り。
+    dev_face = {('52', '103'): '1', ('TB', '22'): '2'}
+    wires = [_wire('103', '52', '103', '', 'CT', '103', ''),   # TB端点なし → 集約バス不成立
+             _wire('103D', 'TB', '22', '', '52', '103', '')]
+    assert CC.detect_crossings(wires, dev_face, {'103'}) == {}
+
+
 def test_detect_concat_name_fallback():
     # app の (DTAL,1) が DCT の DEVICE 'DTAL1' と連結名で一致
     dev_face = {('DTAL1', '2-I'): '2', ('OL', '12'): '1'}
