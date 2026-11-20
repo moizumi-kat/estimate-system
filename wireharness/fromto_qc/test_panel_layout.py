@@ -29,3 +29,17 @@ def test_layout_paths_excludes_dct():
     assert 'x/A-D001.DXF' in got and 'x/A-D002.dxf' in got
     assert 'x/A-D001-DCT.dxf' not in got        # DCT 除外
     assert 'x/A-E001.dxf' not in got            # スケルトンは対象外
+
+
+def test_pane_fn_boundaries():
+    # 内側境界で左→右に 1..N を割当(境界は上側の盤へ)
+    pane = PL._pane_fn([1300, 1900, 2500])
+    assert pane(700) == 1          # 最左
+    assert pane(1299) == 1 and pane(1300) == 2   # 境界ちょうどは右盤
+    assert pane(2000) == 3
+    assert pane(9999) == 4         # 最右(境界数+1)
+
+
+def test_pane_fn_single_boundary():
+    pane = PL._pane_fn([1000])
+    assert pane(500) == 1 and pane(1500) == 2

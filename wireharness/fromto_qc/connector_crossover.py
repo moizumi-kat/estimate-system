@@ -28,6 +28,7 @@ import collections
 import ezdxf
 
 from . import locator_map as LMAP
+from . import panel_layout as _PL
 
 COLORS = {'*', '赤', '白', '青', '緑', '黒', '黄', 'E', '', None, 'SLD'}
 # 主幹遮断器(太物の電源がここを通る)。
@@ -334,7 +335,10 @@ def generate(routed, dct_paths, skel_paths=None, seq_paths=None):
     }
     device→面 が作れない(盤情報なし)図面では空(回帰ゼロ)。"""
     wires = routed.get('wires', [])
-    dev_face = build_device_face(dct_paths)
+    # device→面 は『内部配置図(盤枠)ベース』を優先(茂泉様の読み方: 盤はロケーター図でなく
+    # 内部配置図/扉面の物理位置で決まる)。平の配置図D図面があり結果が得られればそれを採用、
+    # 無い製番(DCTのみ/G図面のみ)は従来のDCTロケーター式へフォールバック(回帰ゼロ)。
+    dev_face = _PL.build_device_face(dct_paths) or build_device_face(dct_paths)
     if not dev_face:
         return {'control': [], 'power': [], 'faces': 0,
                 'conf': {}, 'conflicts': [], 'rows': []}
