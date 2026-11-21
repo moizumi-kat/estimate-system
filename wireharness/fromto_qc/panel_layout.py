@@ -24,6 +24,9 @@ _SKIP_DEVICES = {'吊りﾎﾞﾙﾄ', 'ﾊﾝﾄﾞﾙ', 'TB取付金具', 'CAB
 # シーケンス機器名 → 内部配置図の機器名/同一視(名寄せ)。AM=電流計A、51/86X=遮断器52に付随。
 _DEVICE_ALIAS = {'AM': 'A'}
 _INTEGRATED_TO_52 = {'51', '86X'}   # 同一回路の52の盤を継承(電子式で遮断器に統合/付随)
+# サーマル等スターター付随機器: 回路の遮断器(52/MCCB)の盤を継承。内部配置図に描かれない
+# ことがある(例 5-12043 の OL-301/302/303 は未描画)ため、回路番号で盤を補う。
+_INTEGRATED_TO_BREAKER = {'OL'}
 # 盤枠矩形が載る層(内部配置/扉面の正確な盤x境界)。製番により無い(k-means代替)。
 _FRAME_LAYER = 'Dr_BOX'
 # 系統(DEVICE1)→盤 の投票に使う主機器・扉機器(位置が盤を素直に表す型)。
@@ -245,5 +248,10 @@ def build_device_face(dct_paths, n=None):
     by52 = {k: fc for (d, k), fc in df.items() if d == '52'}
     for dev in _INTEGRATED_TO_52:
         for k, fc in by52.items():
+            df.setdefault((dev, k), fc)
+    # OL(サーマル等)は同回路の遮断器(52/MCCB)の盤を継承(配置図に未描画でも回路番号で補う)
+    by_brk = {k: fc for (d, k), fc in df.items() if d in ('52', 'MCCB')}
+    for dev in _INTEGRATED_TO_BREAKER:
+        for k, fc in by_brk.items():
             df.setdefault((dev, k), fc)
     return df
