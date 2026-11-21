@@ -1231,6 +1231,19 @@ def produce_seiban(files, seiban='', out_dir='.', topology='connection', physica
             fb.setdefault('summary', {})['指摘件数'] = len(fb['items'])
     except Exception:
         pass
+    # ランプテスト母線(LTn)が接点記法で共通RCnに併合され盤をまたぐ図面不備アラーム
+    # (茂泉様要望・2026-11)。From-To は不変＝回帰ゼロ、人手確認の警告のみ加算。
+    try:
+        from . import design_check as _dcheck
+        from . import panel_layout as _pl
+        _df = _pl.build_device_face(dct)
+        lt_alarm = _dcheck.review_lamptest_bus(routed.get('wires'), _df)
+        if lt_alarm:
+            fb.setdefault('items', [])
+            fb['items'].extend(lt_alarm)
+            fb.setdefault('summary', {})['指摘件数'] = len(fb['items'])
+    except Exception:
+        pass
     corr = device_correspondence(files, seiban=seiban, out_dir=out_dir)
     amap = addr_map_from_correspondence(corr)
     _os.makedirs(out_dir, exist_ok=True)

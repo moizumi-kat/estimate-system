@@ -334,6 +334,70 @@ def review_design_items(seq_paths=None, skel_paths=None, layout_paths=None):
     return items
 
 
+def review_lamptest_bus(wires, dev_face):
+    """ランプテスト母線(LTn)が『接点のような描き方』で共通母線(RCn)に併合され、
+    盤をまたぐ場合の図面不備アラーム（茂泉様要望・2026-11／実データ裏取り済）。
+
+    背景(5-12043/117 で実測):
+      ・ランプテスト押ボタン 3-LTn のバス(LTn)は本来『連続バス』だが、図面では接点記号＋
+        飛び飛びの短線で描かれる(=バスなのに接点のような描き方)。このため幾何追跡は独立
+        号線 LTn を作れず、近接する共通母線 RCn へ併合する。これは 117 固有でなく、完璧な
+        5-12043 でも同一挙動(LT1..6 が RC1..6 へ併合)＝システムの一般挙動。
+      ・LTn が盤をまたぐ時だけ、併合により LTn の渡りが1件欠落する(117: LT2=盤1 86X-201 ↔
+        盤2 3-LT2 が RC2 に飲まれ渡りを失う)。盤をまたがない LTn(5-12043等)は欠落なし。
+    方針(◎誤答ゼロ): From-To 出力は一切変更せず(回帰ゼロ)、人手確認の警告のみ加える(安全側)。
+    検出(決定的): 3-LTn を含む号線が独立 LTn を持たず、かつ device→面 で2面(盤)以上に跨る号線。
+    戻り: design_feedback と同じ {分類,該当,号線,解決案,tier,rule} 形式。情報不足なら空。
+    """
+    if not wires or not dev_face:
+        return []
+
+    def _n(s):
+        return re.sub(r'\s', '', str(s or '')).upper()
+
+    # 共通参照リレー(全系統が別シートへ参照記号PARTS空で現れる型)。これらは盤跨ぎ判定から
+    # 除外する。例: 30X-2A が別シート(面2)に参照記号で描かれるだけで RC3 が面2跨ぎに見える
+    # 誤発火を防ぐ(LEARNING_NOTES 7-4 の既知の過検出源)。ランプ渡りの実体は 86X/51/MCCB 側。
+    _COMMON_REF = {'30X', '30Y', '28X', 'BZX', 'LTX'}
+
+    names = {str(w.get('gousen', '')) for w in wires}
+    by_g = collections.defaultdict(set)    # 号線 -> {(DEVICE正規化, no正規化)}
+    lt_in = collections.defaultdict(set)   # 号線 -> {ランプテスト番号n}
+    for w in wires:
+        g = str(w.get('gousen', ''))
+        for ep in (w.get('from') or {}, w.get('to') or {}):
+            dev = _n(ep.get('device'))
+            no = _n(ep.get('no'))
+            if not dev:
+                continue
+            by_g[g].add((dev, no))
+            m = re.fullmatch(r'LT(\d+)', no)
+            if dev == '3' and m:           # 押ボタン 3-LTn (ランプテスト)
+                lt_in[g].add(m.group(1))
+
+    items = []
+    seen = set()
+    for g, ns in lt_in.items():
+        for n in sorted(ns, key=lambda x: int(x)):
+            if f'LT{n}' in names:          # 独立母線 LTn が生成済み=分離OK(警告不要)
+                continue
+            # 共通参照リレー(30X等)は除外して盤跨ぎを判定(参照記号起因の誤発火防止)
+            faces = {dev_face.get((d, no)) for (d, no) in by_g[g] if d not in _COMMON_REF}
+            faces = sorted(f for f in faces if f)
+            if len(faces) >= 2 and (n, g) not in seen:
+                seen.add((n, g))
+                items.append({
+                    '分類': f'【図面不備・要確認】ランプテスト母線 LT{n} が接点記法で共通 {g} に併合',
+                    '該当': f'{g} 内・{len(faces)}面に跨る(面 {"/".join(faces)})',
+                    '号線': g,
+                    '解決案': (f'LT{n} は本来バスですが、図面で接点のように描かれているため独立母線に'
+                               f'なりません。盤をまたぐため LT{n} の渡り(R-F/L-F)が欠落します。'
+                               f'図面で LT{n} を連続したバス線として分離描画してください'
+                               f'（それだけで渡りは自動検出されます）。暫定は人手で渡りを追加。'),
+                    'tier': 1, 'rule': 'LTBUS'})
+    return items
+
+
 def load_cases():
     try:
         return json.load(open(CASES_PATH, encoding='utf-8'))
