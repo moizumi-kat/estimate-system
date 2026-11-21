@@ -210,6 +210,21 @@ def route_and_length(seq_paths, skel_paths=None, seiban='', dct_paths=None,
             pass
     _assign_tb_block(wires_out, dev_lays)
     _assign_maincircuit_tb(wires_out, kind=kind)
+    # 集約端子台バスの中継TB台番号を、マスター盤の共通リレー付き端子台(TB63等)へ補正(茂泉様確定)。
+    # 位置・面は内部配置図(D図面)のみで判定する(スケルトンE等は別座標系のため混ぜない)。
+    try:
+        from . import panel_layout as _pl
+        _d_lays = []
+        for _p in _pl._layout_paths(dct_paths):
+            try:
+                _L = Layout(_p)
+                if getattr(_L, 'devices', None):
+                    _d_lays.append(_L)
+            except Exception:
+                pass
+        _correct_bus_relay_tb(wires_out, _d_lays, _pl.build_device_face(dct_paths))
+    except Exception:
+        pass
     # L_OUTSIDE(端子台先)の回路番号なし参照記号から生じる「情報ゼロの重複配線」のみ除外。
     # = 号線が空 かつ 両端とも 番号・端子 が全て空(識別情報が一切ない)。
     # ※CPU/伝送ユニット等の端子間配線(端子名 シロ/伝送+ 等を持つ)は実配線なので残す(回帰防止)。
@@ -623,6 +638,111 @@ def _assign_tb_block(wires, lays):
             circ = bno or gnum or g
             if circ:
                 a['no'] = circ
+
+
+def _correct_bus_relay_tb(wires, lays, dev_face):
+    """集約端子台バスの中継TB台番号を、マスター盤の『共通リレー付き端子台』へ補正する。
+
+    茂泉様確定(5-12043 の 237=運転バスで裏取り): 多数の号線が共通の中継端子台に集まり、
+    信号元機器が複数盤に跨る母線(例 237A〜237J)は、その中継端子台がマスター盤(最上位)の
+    『共通監視リレー(30X/28X/BZX/LTX)の端子台』(内部配置図で右脇に共通リレーが並ぶ TB63/64)
+    に在る。幾何最近傍だと信号元盤(盤5)のストリップを拾うため、ここで台番号を補正する。
+    選定: マスター盤の共通リレー付きTBのうち、そのバスがマスター盤で繋ぐ遮断器に最も近いもの。
+    対象は『基底グループ(237)の全メンバ(≥3)がTB端点を持ち、非TB機器が2盤以上に跨る』母線のみ
+    (= detect_crossings の集約バス判定と同条件)。非該当の配線は一切不変=回帰ゼロ。"""
+    import math as _math
+    import re as _re
+    import collections as _c
+    from .geometry import norm as _n
+    if not lays or not dev_face:
+        return
+    dpos = {}
+    for L in lays:
+        for k, p in getattr(L, 'devices', {}).items():
+            dpos[k] = p
+    blocks = _tb_blocks(lays)
+    if not blocks:
+        return
+    _RELAY = _re.compile(r'^(30X|28X|BZX|LTX|2-?BZ)')
+    # 共通リレー付きTB: 近傍(<=260)に共通監視リレーがある台番号→位置(電源TBは除外される)
+    common_tb = {}
+    for tb, tp in blocks.items():
+        for k, p in dpos.items():
+            if _RELAY.match(k) and _math.hypot(p[0] - tp[0], p[1] - tp[1]) <= 260:
+                common_tb[tb] = tp
+                break
+    if not common_tb:
+        return
+
+    def _fk(f):
+        m = _re.match(r'^(\d+)', str(f))
+        return (int(m.group(1)) if m else 10 ** 9, str(f))
+
+    def _tb_face(tp):
+        # TBストリップは縦長なので『x距離のみ』で最近傍の52/MCCBを採り、その面を盤とする
+        # (2D距離だと別盤の低いyの遮断器を誤って拾うため)。
+        best, bf = 1e18, None
+        for k, p in dpos.items():
+            m = _re.match(r'^(52|MCCB)(\d.*)$', k)
+            if not m:
+                continue
+            d = abs(p[0] - tp[0])
+            if d < best:
+                f = dev_face.get((m.group(1), m.group(2)))
+                if f:
+                    best, bf = d, f
+        return bf
+    tbface = {tb: _tb_face(tp) for tb, tp in common_tb.items()}
+
+    def _base(g):
+        b = _re.sub(r'[A-Za-z]+$', '', g)
+        return b if (b and b != g and b.isdigit()) else g
+
+    non_tb_face = _c.defaultdict(set)
+    non_tb_pos = _c.defaultdict(dict)
+    has_tb = _c.defaultdict(bool)
+    members = _c.defaultdict(set)
+    for w in wires:
+        g = w.get('gousen', '')
+        if not g:
+            continue
+        members[_base(g)].add(g)
+        for e in (w.get('from', {}), w.get('to', {})):
+            if _n(e.get('device', '')) == 'TB':
+                has_tb[g] = True
+            else:
+                f = dev_face.get((_n(e.get('device')), _n(e.get('no'))))
+                if f:
+                    non_tb_face[g].add(f)
+                    nm = str(e.get('device', '')) + str(e.get('no', ''))
+                    if nm in dpos:
+                        non_tb_pos[g][f] = dpos[nm]
+    for base, ms in members.items():
+        if len(ms) < 3 or not all(has_tb.get(g) for g in ms):
+            continue
+        allf = set()
+        for g in ms:
+            allf |= non_tb_face[g]
+        if len(allf) < 2:
+            continue
+        master = max(allf, key=_fk)
+        cand = [(tb, common_tb[tb]) for tb in common_tb if tbface.get(tb) == master]
+        if not cand:
+            continue
+        mpos = None
+        for g in ms:
+            if master in non_tb_pos[g]:
+                mpos = non_tb_pos[g][master]
+                break
+        if mpos:
+            best = min(cand, key=lambda t: _math.hypot(t[1][0] - mpos[0], t[1][1] - mpos[1]))[0]
+        else:
+            best = cand[0][0]
+        for w in wires:
+            if w.get('gousen') in ms:
+                for e in (w.get('from', {}), w.get('to', {})):
+                    if _n(e.get('device', '')) == 'TB':
+                        e['no'] = best
 
 
 def _assign_maincircuit_tb(wires, kind='制御盤'):
