@@ -35,8 +35,8 @@ class _FakeMsp:
     def __init__(self, inserts):
         self._ins = inserts
 
-    def query(self, _kind):
-        return self._ins
+    def query(self, kind):
+        return self._ins if 'INSERT' in str(kind).upper() else []
 
 
 class _FakeDoc:

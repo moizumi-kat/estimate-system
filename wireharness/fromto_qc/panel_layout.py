@@ -223,6 +223,28 @@ def _design_boxes(doc):
             door_x[N] = x
             if xr:
                 door_r[N] = xr
+    # ブロックでなく直接 modelspace に描かれる板金外形(6-12015 等の変種)。
+    # ブロック由来の箱が無い種別だけ、直接ポリライン(B_BOX=内部/Dr_BOX=扉・高さ>1500)で補完。
+    if not inner_r or not door_r:
+        direct = {'B_BOX': [], 'DR_BOX': []}
+        for e in doc.modelspace().query('LWPOLYLINE'):
+            lay = str(e.dxf.layer).upper()
+            if lay not in ('B_BOX', 'DR_BOX'):
+                continue
+            try:
+                pts = [(p[0], p[1]) for p in e.get_points()]
+            except Exception:
+                continue
+            xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+            if xs and max(ys) - min(ys) > 1500 and max(xs) - min(xs) > 200:
+                direct[lay].append((min(xs), max(xs)))
+        if not inner_r and direct['B_BOX']:
+            for i, r in enumerate(sorted(direct['B_BOX']), 1):
+                inner_r[i] = r; inner_x[i] = r[0]
+        if not door_r and direct['DR_BOX']:
+            for i, r in enumerate(sorted(direct['DR_BOX']), 1):
+                door_r[i] = r; door_x[i] = r[0]
+
     if not inner_x and not door_x:
         return None
 
