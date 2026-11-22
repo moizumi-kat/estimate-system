@@ -110,6 +110,15 @@ def _app_real(name, indir):
                 continue
             key = 'TB' if dev.upper().startswith('TB') else _ndev(dev + no)
             g[(key, _fclass(term, dev))] += 1
+    # 盤間渡りコネクタ(R-F/L-F=制御・渡り用TB=太物)は route_and_length が out['crossings'] に
+    # 生成する(out['wires'] には入らない)。手本にも R-F(P)/L-F(R) 端点として載るので、
+    # 測定対象に含める(含めないと渡りコネクタが一律『未』になり機能一致を過小評価する)。
+    for r in (routed.get('crossings') or {}).get('rows', []):
+        dev = str(r.get('機器', '')); term = str(r.get('端子', '') or '')
+        if not dev:
+            continue
+        key = 'TB' if dev.upper().startswith('TB') else _ndev(dev)
+        g[(key, _fclass(term, dev))] += 1
     return g
 
 
