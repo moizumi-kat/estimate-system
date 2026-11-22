@@ -67,10 +67,13 @@ def _fclass(pin, dev):
 
 
 def _sheets(indir):
-    seq = sorted(glob.glob(indir + '/*-F*.DXF') + glob.glob(indir + '/*-F*.dxf'))
-    skel = sorted(glob.glob(indir + '/*-E*.DXF') + glob.glob(indir + '/*-E*.dxf'))
-    h = sorted(glob.glob(indir + '/*-H*.DXF') + glob.glob(indir + '/*-H*.dxf'))
-    dct = sorted(glob.glob(indir + '/*-DCT.DXF') + glob.glob(indir + '/*-DCT.dxf'))
+    # 区切りは '-' と '_' 両対応(製番により _H001 のように '_' 区切りがある)。
+    def g(pat):
+        return sorted(glob.glob(indir + '/*' + pat + '.DXF') + glob.glob(indir + '/*' + pat + '.dxf'))
+    seq = g('[-_]F[0-9]*')
+    skel = g('[-_]E[0-9]*')
+    h = g('[-_]H[0-9]*')
+    dct = g('[-_]DCT*')
     return (seq or h), skel, dct
 
 
