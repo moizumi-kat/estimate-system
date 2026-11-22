@@ -184,8 +184,9 @@ def _pane_fn(bounds):
 # InnerBox{N}=N面の内部盤、DoorBox{N}=N面の扉。各ブロックの挿入x＋幅で面のx域が決まる。
 _BOX_RE = re.compile(r'(Inner|Door)Box(\d+)', re.I)
 # 板金の箱外形(盤の筐体)が載る画層。茂泉様指示「内部配置図の板金の箱帯で盤境界を把握」。
-# 盤ブロック内の B_BOX ポリラインが各盤の実際の板金外形＝正確なx境界(盤ごとに幅が違ってよい)。
-_METAL_BOX_LAYERS = {'B_BOX'}
+# 内部盤(InnerBox)は B_BOX 層、扉盤(DoorBox)は Dr_BOX 層に各盤の実際の板金外形がある
+# ＝正確なx境界(盤ごとに幅が違ってよい)。両層を対象にする。
+_METAL_BOX_LAYERS = {'B_BOX', 'DR_BOX'}
 
 
 def _box_metal_xrange(ins):
