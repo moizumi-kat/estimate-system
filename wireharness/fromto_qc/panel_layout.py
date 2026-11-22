@@ -119,8 +119,10 @@ def panel_count(dct_paths):
     """盤数 N を推定。盤枠(_FRAME_LAYER の矩形)が最優先、次に目印(VM/VS)、
     最後に DCT の盤ラベル(N-M)の個数。どれも無ければ 0(=不明)。"""
     best = 0
-    # 設計盤ブロック(InnerBox/DoorBox)が最も確実: 面数 = 最大ブロック番号
-    for p in _layout_paths(dct_paths):
+    # 設計盤ブロック(InnerBox/DoorBox)が最も確実: 面数 = 最大ブロック番号。内部配置図を優先し、
+    # 無ければDCT図の盤箱も見る(茂泉様指示: DCTから面数が読めればその製番も検証対象)。
+    _box_paths = _layout_paths(dct_paths) or _dct_paths_only(dct_paths)
+    for p in _box_paths:
         doc = _read(p)
         if not doc:
             continue
@@ -129,6 +131,15 @@ def panel_count(dct_paths):
             nums = list(b.get('inner', {})) + list(b.get('door', {}))
             if nums:
                 best = max(best, max(nums))
+    if best < 1:
+        for p in _dct_paths_only(dct_paths):   # 内部配置図はあるが箱が無い→DCTの箱
+            doc = _read(p)
+            if doc:
+                b = _design_boxes(doc)
+                if b:
+                    nums = list(b.get('inner', {})) + list(b.get('door', {}))
+                    if nums:
+                        best = max(best, max(nums))
     if best >= 1:
         return best
     # 盤枠: 枠の数 = 盤数
@@ -264,6 +275,27 @@ def _design_boxes(doc):
     return {'inner': _fallback(inner_x, inner_r), 'door': _fallback(door_x, door_r)}
 
 
+def _dct_paths_only(dct_paths):
+    """DCT(相番号図)ファイルだけを返す。内部配置図(D図面)が無い製番の盤箱フォールバック用
+    (茂泉様指示: DCTから面数・各盤/扉の部品が読めればその製番も検証対象)。DCTにも設計の
+    盤箱ブロック(InnerBox/DoorBox)が入っている製番がある。"""
+    return [p for p in (dct_paths or []) if 'DCT' in str(p).upper()]
+
+
+def _box_docs(dct_paths):
+    """盤箱を読むためのドキュメント群。内部配置図(非DCT)を最優先し、そこに盤箱が無ければ
+    DCT図にフォールバック(内部配置図が無い製番向け)。戻り: [(path, doc)]。"""
+    docs = [(p, _read(p)) for p in _layout_paths(dct_paths)]
+    docs = [(p, d) for p, d in docs if d]
+    if any(_design_boxes(d) for _, d in docs):
+        return docs
+    dct = [(p, _read(p)) for p in _dct_paths_only(dct_paths)]
+    dct = [(p, d) for p, d in dct if d]
+    if any(_design_boxes(d) for _, d in dct):
+        return dct
+    return docs
+
+
 def _face_from_boxes(docs):
     """設計盤ブロック(InnerBox/DoorBox)で device→面 を作る(最優先・最確実)。
     各機器を x位置で内部盤/扉盤の域に入れ、面番号=ブロック番号。系統(DEVICE1)は
@@ -320,10 +352,7 @@ def build_device_place(dct_paths):
     茂泉様指示「それぞれの箱と扉に設置される機器の把握」。device→面 は番号のみだが、本関数は
     内部(箱)/扉の区別と面番号を返す(扉フラグ・扉側配線の根拠に使える)。
     戻り: {(DEVICE正規化, DEVICE1正規化): ('内部'|'扉', 面番号文字列)}。盤箱が無ければ空。"""
-    layouts = _layout_paths(dct_paths)
-    docs = [(p, _read(p)) for p in layouts]
-    docs = [(p, d) for p, d in docs if d]
-    allboxes = [(_design_boxes(d), d) for _, d in docs]
+    allboxes = [(_design_boxes(d), d) for _, d in _box_docs(dct_paths)]
     allboxes = [(b, d) for b, d in allboxes if b]
     if not allboxes:
         return {}
@@ -354,16 +383,16 @@ def build_device_face(dct_paths, n=None):
         (系統伝播はせず自位置)。グリッドが不確実なため伝播で誤差を増幅させない。
     別名(AM→A)と 51/86X→同回路52 の盤継承を補う。
     戻り: {(DEVICE正規化, DEVICE1正規化): 盤番号文字列}。N 不明や配置図無しなら空。"""
+    # 最優先: 設計盤ブロック(InnerBox/DoorBox の板金外形)で面を割当て(最確実)。内部配置図を
+    # 優先し、そこに盤箱が無ければDCT図の盤箱へフォールバック(内部配置図が無い製番向け)。
+    box_df = _face_from_boxes(_box_docs(dct_paths))
+    if box_df:
+        return _apply_inheritance(box_df)
     layouts = _layout_paths(dct_paths)
     if not layouts:
         return {}
     docs = [(p, _read(p)) for p in layouts]
     docs = [(p, d) for p, d in docs if d]
-    # 最優先: 設計内部配置図の盤ブロック(InnerBox/DoorBox)で面を割当て(最確実)。
-    # 茂泉様指示「DCTでなく設計からの内部配置図で盤境界を把握」。盤枠/k-means より優先。
-    box_df = _face_from_boxes(docs)
-    if box_df:
-        return _apply_inheritance(box_df)
     if n is None:
         n = panel_count(dct_paths)
     if n < 2:
