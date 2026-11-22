@@ -183,31 +183,62 @@ def _pane_fn(bounds):
 # 「DCTでなく設計からの内部配置図を参照」)。例 MCILU_JKN_InnerBox2_..., DoorBox3_...。
 # InnerBox{N}=N面の内部盤、DoorBox{N}=N面の扉。各ブロックの挿入x＋幅で面のx域が決まる。
 _BOX_RE = re.compile(r'(Inner|Door)Box(\d+)', re.I)
+# 板金の箱外形(盤の筐体)が載る画層。茂泉様指示「内部配置図の板金の箱帯で盤境界を把握」。
+# 盤ブロック内の B_BOX ポリラインが各盤の実際の板金外形＝正確なx境界(盤ごとに幅が違ってよい)。
+_METAL_BOX_LAYERS = {'B_BOX'}
+
+
+def _box_metal_xrange(ins):
+    """盤ブロックINSERTの板金外形(B_BOX層ポリライン)の world x範囲を返す。無ければ None。"""
+    xs = []
+    try:
+        for e in ins.virtual_entities():
+            if (e.dxftype() in ('LWPOLYLINE', 'POLYLINE')
+                    and str(e.dxf.layer).upper() in _METAL_BOX_LAYERS):
+                xs += [p[0] for p in e.get_points()]
+    except Exception:
+        return None
+    return (min(xs), max(xs)) if xs else None
 
 
 def _design_boxes(doc):
     """設計内部配置図の盤ブロック(InnerBox{N}/DoorBox{N})から面の x域を返す。
     戻り: {'inner': {N:(x0,x1)}, 'door': {N:(x0,x1)}}。ブロックが無ければ None。
-    盤は左から水平に並び各ブロックは等幅で連続するため、挿入x＋(隣接間隔=幅)で域を作る。"""
-    inner, door = {}, {}
+    各盤の境界は**板金の箱外形(B_BOX層)**の実x範囲で取る(盤ごとに幅が違っても正確)。
+    B_BOX が読めない場合のみ 挿入x＋(隣接間隔=幅) で代替。"""
+    inner_x, door_x, inner_r, door_r = {}, {}, {}, {}
     for ins in doc.modelspace().query('INSERT'):
         m = _BOX_RE.search(str(ins.dxf.name))
         if not m:
             continue
         N = int(m.group(2))
+        xr = _box_metal_xrange(ins)
         x = float(ins.dxf.insert[0])
-        (inner if m.group(1).lower() == 'inner' else door)[N] = x
-    if not inner and not door:
+        if m.group(1).lower() == 'inner':
+            inner_x[N] = x
+            if xr:
+                inner_r[N] = xr
+        else:
+            door_x[N] = x
+            if xr:
+                door_r[N] = xr
+    if not inner_x and not door_x:
         return None
 
-    def _ranges(d):
-        if not d:
+    def _fallback(xmap, rmap):
+        # B_BOX が全く読めない盤だけ 挿入x＋等幅 で補う(通常は不要)
+        if not xmap:
             return {}
-        xs = sorted(d.values())
-        difs = [b - a for a, b in zip(xs, xs[1:]) if b - a > 1]
-        w = min(difs) if difs else 600.0          # 盤幅＝最小隣接間隔(等幅連続)
-        return {N: (x, x + w) for N, x in d.items()}
-    return {'inner': _ranges(inner), 'door': _ranges(door)}
+        out = dict(rmap)
+        missing = [N for N in xmap if N not in out]
+        if missing:
+            xs = sorted(xmap.values())
+            difs = [b - a for a, b in zip(xs, xs[1:]) if b - a > 1]
+            w = min(difs) if difs else 600.0
+            for N in missing:
+                out[N] = (xmap[N], xmap[N] + w)
+        return out
+    return {'inner': _fallback(inner_x, inner_r), 'door': _fallback(door_x, door_r)}
 
 
 def _face_from_boxes(docs):
