@@ -119,7 +119,19 @@ def panel_count(dct_paths):
     """盤数 N を推定。盤枠(_FRAME_LAYER の矩形)が最優先、次に目印(VM/VS)、
     最後に DCT の盤ラベル(N-M)の個数。どれも無ければ 0(=不明)。"""
     best = 0
-    # 盤枠(最も確実): 枠の数 = 盤数
+    # 設計盤ブロック(InnerBox/DoorBox)が最も確実: 面数 = 最大ブロック番号
+    for p in _layout_paths(dct_paths):
+        doc = _read(p)
+        if not doc:
+            continue
+        b = _design_boxes(doc)
+        if b:
+            nums = list(b.get('inner', {})) + list(b.get('door', {}))
+            if nums:
+                best = max(best, max(nums))
+    if best >= 1:
+        return best
+    # 盤枠: 枠の数 = 盤数
     for p in _layout_paths(dct_paths):
         doc = _read(p)
         if not doc:
@@ -167,6 +179,88 @@ def _pane_fn(bounds):
     return pane
 
 
+# 設計の内部配置図に置かれる盤ブロック。盤の物理境界の最も確実な根拠(茂泉様指示:
+# 「DCTでなく設計からの内部配置図を参照」)。例 MCILU_JKN_InnerBox2_..., DoorBox3_...。
+# InnerBox{N}=N面の内部盤、DoorBox{N}=N面の扉。各ブロックの挿入x＋幅で面のx域が決まる。
+_BOX_RE = re.compile(r'(Inner|Door)Box(\d+)', re.I)
+
+
+def _design_boxes(doc):
+    """設計内部配置図の盤ブロック(InnerBox{N}/DoorBox{N})から面の x域を返す。
+    戻り: {'inner': {N:(x0,x1)}, 'door': {N:(x0,x1)}}。ブロックが無ければ None。
+    盤は左から水平に並び各ブロックは等幅で連続するため、挿入x＋(隣接間隔=幅)で域を作る。"""
+    inner, door = {}, {}
+    for ins in doc.modelspace().query('INSERT'):
+        m = _BOX_RE.search(str(ins.dxf.name))
+        if not m:
+            continue
+        N = int(m.group(2))
+        x = float(ins.dxf.insert[0])
+        (inner if m.group(1).lower() == 'inner' else door)[N] = x
+    if not inner and not door:
+        return None
+
+    def _ranges(d):
+        if not d:
+            return {}
+        xs = sorted(d.values())
+        difs = [b - a for a, b in zip(xs, xs[1:]) if b - a > 1]
+        w = min(difs) if difs else 600.0          # 盤幅＝最小隣接間隔(等幅連続)
+        return {N: (x, x + w) for N, x in d.items()}
+    return {'inner': _ranges(inner), 'door': _ranges(door)}
+
+
+def _face_from_boxes(docs):
+    """設計盤ブロック(InnerBox/DoorBox)で device→面 を作る(最優先・最確実)。
+    各機器を x位置で内部盤/扉盤の域に入れ、面番号=ブロック番号。系統(DEVICE1)は
+    主機器/扉機器の多数決で面を確定し系統機器へ継承(境界跨ぎ吸収)。盤ブロックが
+    1つも無ければ None。戻り: {(DEVICE正規化, DEVICE1正規化): 面番号文字列}。"""
+    allboxes = [(_design_boxes(d), d) for _, d in docs]
+    allboxes = [(b, d) for b, d in allboxes if b]
+    if not allboxes:
+        return None
+
+    def _panel_of(boxes, x):
+        for N, (x0, x1) in boxes['inner'].items():
+            if x0 <= x <= x1:
+                return N
+        for N, (x0, x1) in boxes['door'].items():
+            if x0 <= x <= x1:
+                return N
+        # 箱に入らない機器(例 DoorBox 無し製番の扉機器)は最近傍の箱へ寄せる(機器を落とさない)
+        cand = []
+        for grp in ('inner', 'door'):
+            for N, (x0, x1) in boxes[grp].items():
+                cand.append((min(abs(x - x0), abs(x - x1)), N))
+        return min(cand)[1] if cand else None
+
+    rows = []                       # (DEVICE, 系統, 面)
+    for boxes, doc in allboxes:
+        for d, k, x in _sheet_items(doc):
+            pn = _panel_of(boxes, x)
+            if pn is not None:
+                rows.append((d, k, pn))
+    if not rows:
+        return None
+    votes = collections.defaultdict(list)
+    for d, k, pn in rows:
+        if d in _VOTE_DEVICES and k:
+            votes[k].append(pn)
+    keito = {k: collections.Counter(v).most_common(1)[0][0] for k, v in votes.items()}
+    bytype = collections.defaultdict(list)
+    for d, k, pn in rows:
+        bytype[d].append((k, pn))
+    common = set()
+    for d, lst in bytype.items():
+        if (len(lst) >= 4 and len({p for _, p in lst}) == 1
+                and len({keito[k] for k, _ in lst if k in keito}) >= 3):
+            common.add(d)
+    df = {}
+    for d, k, pn in rows:
+        df[(d, k)] = str(keito[k]) if (k in keito and d not in common) else str(pn)
+    return df
+
+
 def build_device_face(dct_paths, n=None):
     """配置図(内部＋扉面)から device→面 を作る。茂泉様の読み方に沿う:
       - 盤枠(_FRAME_LAYER)があれば正確な盤x境界。無いシートは k-means(N)中点。
@@ -181,12 +275,17 @@ def build_device_face(dct_paths, n=None):
     layouts = _layout_paths(dct_paths)
     if not layouts:
         return {}
+    docs = [(p, _read(p)) for p in layouts]
+    docs = [(p, d) for p, d in docs if d]
+    # 最優先: 設計内部配置図の盤ブロック(InnerBox/DoorBox)で面を割当て(最確実)。
+    # 茂泉様指示「DCTでなく設計からの内部配置図で盤境界を把握」。盤枠/k-means より優先。
+    box_df = _face_from_boxes(docs)
+    if box_df:
+        return _apply_inheritance(box_df)
     if n is None:
         n = panel_count(dct_paths)
     if n < 2:
         return {}
-    docs = [(p, _read(p)) for p in layouts]
-    docs = [(p, d) for p, d in docs if d]
     has_frames = any(_frame_bounds(d) for _, d in docs)
     rows = []                       # (DEVICE, 系統, sheet_idx, 盤)
     for si, (p, doc) in enumerate(docs):
@@ -239,17 +338,19 @@ def build_device_face(dct_paths, n=None):
             df[(d, k)] = str(keito[k]) if (k in keito and d not in common) else str(pn)
     else:
         df = {(d, k): str(pn) for d, k, _si, pn in rows}
-    # 名寄せ: AM→A 等の別名で同キーを複製
+    return _apply_inheritance(df)
+
+
+def _apply_inheritance(df):
+    """別名(AM→A)・51/86X→同回路52・OL→同回路遮断器 の盤継承を補う(共通後処理)。"""
     for (d, k), fc in list(df.items()):
         for alias, real in _DEVICE_ALIAS.items():
             if d == _norm(real):
                 df.setdefault((_norm(alias), k), fc)
-    # 51/86X(電子式・付随)は同回路の52の盤を継承
     by52 = {k: fc for (d, k), fc in df.items() if d == '52'}
     for dev in _INTEGRATED_TO_52:
         for k, fc in by52.items():
             df.setdefault((dev, k), fc)
-    # OL(サーマル等)は同回路の遮断器(52/MCCB)の盤を継承(配置図に未描画でも回路番号で補う)
     by_brk = {k: fc for (d, k), fc in df.items() if d in ('52', 'MCCB')}
     for dev in _INTEGRATED_TO_BREAKER:
         for k, fc in by_brk.items():
