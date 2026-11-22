@@ -13,10 +13,22 @@ class _FakeDxf:
         self.insert = (x, 1250.0)
 
 
+class _FakeAttrDxf:
+    def __init__(self, tag, text):
+        self.tag = tag
+        self.text = text
+
+
+class _FakeAttr:
+    def __init__(self, tag, text):
+        self.dxf = _FakeAttrDxf(tag, text)
+
+
 class _FakeInsert:
-    def __init__(self, name, x):
+    def __init__(self, name, x, device=None, device1=''):
         self.dxf = _FakeDxf(name, x)
-        self.attribs = []
+        self.attribs = ([_FakeAttr('DEVICE', device), _FakeAttr('DEVICE1', device1)]
+                        if device else [])
 
 
 class _FakeMsp:

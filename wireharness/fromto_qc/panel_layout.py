@@ -293,6 +293,34 @@ def _face_from_boxes(docs):
     return df
 
 
+def build_device_place(dct_paths):
+    """各機器が『どの面の内部盤か扉か』を設計の盤箱(InnerBox/DoorBox の板金外形)で把握する。
+    茂泉様指示「それぞれの箱と扉に設置される機器の把握」。device→面 は番号のみだが、本関数は
+    内部(箱)/扉の区別と面番号を返す(扉フラグ・扉側配線の根拠に使える)。
+    戻り: {(DEVICE正規化, DEVICE1正規化): ('内部'|'扉', 面番号文字列)}。盤箱が無ければ空。"""
+    layouts = _layout_paths(dct_paths)
+    docs = [(p, _read(p)) for p in layouts]
+    docs = [(p, d) for p, d in docs if d]
+    allboxes = [(_design_boxes(d), d) for _, d in docs]
+    allboxes = [(b, d) for b, d in allboxes if b]
+    if not allboxes:
+        return {}
+    out = {}
+    for boxes, doc in allboxes:
+        for d, k, x in _sheet_items(doc):
+            place = None
+            for N, (x0, x1) in boxes['inner'].items():
+                if x0 <= x <= x1:
+                    place = ('内部', str(N)); break
+            if place is None:
+                for N, (x0, x1) in boxes['door'].items():
+                    if x0 <= x <= x1:
+                        place = ('扉', str(N)); break
+            if place is not None:
+                out[(d, k)] = place
+    return out
+
+
 def build_device_face(dct_paths, n=None):
     """配置図(内部＋扉面)から device→面 を作る。茂泉様の読み方に沿う:
       - 盤枠(_FRAME_LAYER)があれば正確な盤x境界。無いシートは k-means(N)中点。
