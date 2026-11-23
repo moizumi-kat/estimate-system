@@ -601,19 +601,20 @@ def _produce_nets(seiban_dir):
     from . import harness_sheet as HS
     seq = _seq_paths(seiban_dir)
     if not seq:
-        return [], {}, set()
+        return [], {}, set(), {}
     skel = _skel_paths(seiban_dir)
     try:
         sheet = HS.build_sheet(seq, skel_paths=skel,
                                seiban=os.path.basename(seiban_dir.rstrip('/')).split('_')[0])
     except Exception:
-        return [], {}, set()
+        return [], {}, set(), {}
 
     def msym(m):
         dev = (m.get('device') or '').strip(); no = (m.get('no') or '').strip()
         return f'{dev}-{no}' if (no and not re.fullmatch(r'[A-Za-z]+', no)) else dev
     nets = []
     node2net = collections.defaultdict(set)
+    dev2nets = collections.defaultdict(set)      # 機器sym → 出現ネット(端子によらず)。空欄端子の表示灯/押ボタン照合用。
     prod_syms = set()
     for row in (sheet or []):
         circs = set()
@@ -641,7 +642,10 @@ def _produce_nets(seiban_dir):
             nets.append(ns)
             for n in ns:
                 node2net[n].add(idx)
-    return nets, node2net, prod_syms
+            for (s, t) in members:
+                if not s.upper().startswith('TB'):
+                    dev2nets[_nsym(s, {})].add(idx)
+    return nets, node2net, prod_syms, dev2nets
 
 
 def score_production_net(seiban_dir):
@@ -649,7 +653,7 @@ def score_production_net(seiban_dir):
     素ロケーター文字は相手端点の盤(無ければファイルの盤)で一意の実機器へ解決。
     戻り: {seiban,truth,present,hit,recall,present_rate}。present=両端が本番出力に在る辺数(カバレッジ寄り指標)。"""
     lmap = locator_resolution(seiban_dir)
-    nets, node2net, prod_syms = _produce_nets(seiban_dir)
+    nets, node2net, prod_syms, dev2nets = _produce_nets(seiban_dir)
     dev_panel = _dev_panel_map(seiban_dir)
     letmap = _letter_panel_map(seiban_dir, dev_panel)
     if not letmap:
@@ -691,6 +695,21 @@ def score_production_net(seiban_dir):
                     cands.add(('TBS:' + dai, ''))
             return cands
         return {(ns, _fold_term(ns, term))}
+
+    _LAMP = re.compile(r'^(GL|RL|OL|WL|YL|PL|SL|BL)\d')
+    _BTN = re.compile(r'^(ON|OFF|BS|BT|PB|PBS|入|切)')
+
+    def ep_nets(ns, term, other_ns):
+        # この端点が本番で現れるネット集合。TBは候補ノード群の和。空欄端子の表示灯/押ボタンは
+        # 機器単位(端子不問)で照合する(手本は表示灯/押ボタンの端子を空欄で書く＝±側未指定・本番は+/-を付す)。
+        if ns.upper().startswith('TB'):
+            cs = node_cands(ns, term, other_ns)
+            nn = [node2net[c] for c in cs if c in node2net]
+            return set().union(*nn) if nn else set()
+        ft_ = _fold_term(ns, term)
+        if ft_ == '' and (_LAMP.match(ns.upper()) or _BTN.match(ns.upper())):
+            return set(dev2nets.get(_nsym(ns, {}), set()))
+        return set(node2net.get((ns, ft_), set()))
     tot = hit = present = 0
     for fi, f in enumerate(sorted(glob.glob(os.path.join(seiban_dir, 'FromToデータ_*.txt'))), 1):
         try:
@@ -758,10 +777,8 @@ def score_production_net(seiban_dir):
             if xp == yp:
                 continue
             tot += 1
-            xs = node_cands(na, a['term'], nb)
-            ys = node_cands(nb, b['term'], na)
-            xnets = set().union(*[node2net[x] for x in xs if x in node2net]) if any(x in node2net for x in xs) else set()
-            ynets = set().union(*[node2net[y] for y in ys if y in node2net]) if any(y in node2net for y in ys) else set()
+            xnets = ep_nets(na, a['term'], nb)
+            ynets = ep_nets(nb, b['term'], na)
             if xnets and ynets:
                 present += 1
                 if xnets & ynets:
