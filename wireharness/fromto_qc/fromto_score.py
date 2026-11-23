@@ -426,19 +426,19 @@ def _letter_panel_map(seiban_dir, dev_panel):
 
 
 def _produce_nets(seiban_dir):
-    """本番生成器 produce() の出力を正規化ネット(ノード集合のリスト)で返す。
-    戻り (nets, node2net, prod_syms)。TB→(TB,回路)・接点→NO/NC。配線図が無い等で不可なら空。"""
-    from . import harness_produce as HP
+    """本番生成器のネット(号線)を正規化ノード集合のリストで返す。
+    戻り (nets, node2net, prod_syms)。TB→(TB,回路)・接点→NO/NC。配線図が無い等で不可なら空。
+    採点は本番の『生成した結線』を測るので、不備ゲート(produce)でなく生成の核 `harness_sheet.build_sheet`
+    を直接使う(不備で sheet=None になって測れない製番=3-14022 等を回避。不備は主回路母線の確認で
+    ハーネス制御の生成品質とは独立)。"""
+    from . import harness_sheet as HS
     seq = _seq_paths(seiban_dir)
     if not seq:
         return [], {}, set()
     skel = _skel_paths(seiban_dir)
-    lay = (glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF')) +
-           glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.dxf')))
     try:
-        r = HP.produce(seq, skel_paths=skel,
-                       seiban=os.path.basename(seiban_dir.rstrip('/')).split('_')[0],
-                       layout_path=lay[0] if lay else None)
+        sheet = HS.build_sheet(seq, skel_paths=skel,
+                               seiban=os.path.basename(seiban_dir.rstrip('/')).split('_')[0])
     except Exception:
         return [], {}, set()
 
@@ -448,7 +448,7 @@ def _produce_nets(seiban_dir):
     nets = []
     node2net = collections.defaultdict(set)
     prod_syms = set()
-    for row in r.get('sheet', []):
+    for row in (sheet or []):
         circs = set()
         members = []
         for m in row.get('members', []):
