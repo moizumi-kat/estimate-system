@@ -22,6 +22,7 @@ from logging.handlers import RotatingFileHandler
 from flask import Flask, request, redirect, url_for, send_file, abort, Response, session
 
 from wireharness.fromto_qc import harness_produce as HP
+from wireharness.fromto_qc import device_register as DR
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 80 * 1024 * 1024  # 80MB(大容量の配置図DXFに対応)
@@ -240,6 +241,8 @@ def index():
         '<p>図面を登録→自動生成→確認UI（①設計不備→②確認→③確定）。</p></a>'
         '<a class="mcard" href="#seibans"><b><span class="n">4</span>ハーネスデータ出力</b>'
         '<p>生成済み製番のExcel等をダウンロード（下の一覧から）。</p></a>'
+        '<a class="mcard" href="/pinlib"><b><span class="n">5</span>機器ピン配の登録</b>'
+        '<p>端子番号は機器TYPEのピン配から選定。<b>未登録機器（要確認）をここで登録</b>（出所=裏取り必須）。</p></a>'
         '</div>')
     extra = (
         '<div class="card"><h2>設計不備の学習（修正前後の図面を登録）</h2>'
@@ -784,6 +787,67 @@ def devices_csv(token):
     if not os.path.exists(p):
         abort(404)
     return send_file(p, as_attachment=True, download_name='機器一覧.csv')
+
+
+@app.route('/pinlib', methods=['GET'])
+def pinlib():
+    """機器ピン配の登録画面(B): 登録済み一覧＋新規登録フォーム。
+    端子番号は機器TYPEのピン配から選ぶ。未登録機器はここで人が登録する(出所=裏取り必須)。"""
+    try:
+        pats = DR.list_patterns()
+    except Exception:
+        pats = {}
+    rows = ''.join(f'<tr><td><b>{_esc(n)}</b></td><td class="muted">{_esc(" ".join(p))}</td></tr>'
+                   for n, p in sorted(pats.items()))
+    msg = request.args.get('msg', '')
+    msg_html = f'<div class="card {"err" if "NG" in msg else "ok"}">{_esc(msg)}</div>' if msg else ''
+    form = '''
+    <form method="post" action="/pinlib/register" class="card">
+      <h2>新しい機器のピン配を登録</h2>
+      <p class="muted">端子は機器TYPE→ピン配から選びます。未登録機器を登録してください。
+        <b>出所（裏取り元）は必須</b>です（提供資料／メーカー展開図／手本 等。推測禁止）。</p>
+      <div class="row"><label>パターン名<br><input type="text" name="pattern_name" placeholder="例 meterswitch_BHN_V" required></label>
+        <label>照合(型式に含む文字)<br><input type="text" name="type_contains" placeholder="例 BHN-V"></label>
+        <label>照合(PARTS)<br><input type="text" name="parts" placeholder="例 VS"></label>
+        <label>極(任意)<br><input type="text" name="pole" placeholder="3P/2P"></label></div>
+      <div class="row"><label>全端子(カンマ区切り)<br><input type="text" name="pins" placeholder="例 1,5,6,8" required style="width:320px"></label></div>
+      <div class="row"><label>COM<br><input type="text" name="com" placeholder="1,4"></label>
+        <label>NO<br><input type="text" name="no" placeholder="5,8"></label>
+        <label>NC<br><input type="text" name="nc" placeholder="9,12"></label>
+        <label>コイル<br><input type="text" name="coil" placeholder="13,14"></label></div>
+      <div class="row"><label>説明<br><input type="text" name="desc" placeholder="例 電圧計切替(正興BHN-V)" style="width:320px"></label></div>
+      <div class="row"><label>出所(必須)<br><input type="text" name="source" placeholder="例 正興電機 BHN-V N-8 展開図" required style="width:420px"></label></div>
+      <div class="row"><button class="primary" type="submit">登録する ▶</button>
+        <a class="btn" href="/">← 戻る</a></div>
+    </form>'''
+    body = (msg_html + form
+            + '<div class="card"><h2>登録済みの機器ピン配</h2>'
+            + '<table><tr><th>パターン</th><th>端子</th></tr>' + rows + '</table></div>')
+    return _page(body, title='機器ピン配の登録')
+
+
+@app.route('/pinlib/register', methods=['POST'])
+def pinlib_register():
+    g = request.form.get
+
+    def _lst(k):
+        return [x.strip() for x in (g(k) or '').replace('、', ',').split(',') if x.strip()]
+    try:
+        r = DR.register_pattern(
+            (g('pattern_name') or '').strip(), _lst('pins'),
+            source=(g('source') or '').strip(), desc=(g('desc') or '').strip(),
+            com=_lst('com') or None, no=_lst('no') or None,
+            nc=_lst('nc') or None, coil=_lst('coil') or None,
+            match_type_contains=(g('type_contains') or '').strip() or None,
+            match_parts=(g('parts') or '').strip() or None,
+            match_pole=(g('pole') or '').strip() or None)
+    except Exception:
+        app.logger.exception('pinlib register failed')
+        return redirect(url_for('pinlib', msg='NG: 登録でエラーが発生しました'))
+    if r.get('ok'):
+        app.logger.info('pinlib registered pattern=%s', g('pattern_name'))
+        return redirect(url_for('pinlib', msg='登録しました（照合=%s）。' % (r.get('resolved_pattern') or '')))
+    return redirect(url_for('pinlib', msg='NG: ' + ' / '.join(r.get('problems', ['不明'])) ))
 
 
 @app.route('/api/health')
