@@ -482,8 +482,11 @@ def score_production_net(seiban_dir):
     dev_panel = _dev_panel_map(seiban_dir)
     letmap = _letter_panel_map(seiban_dir, dev_panel)
 
-    def is_ext(s):
-        return bool(re.search(r'R[-]?F|L[-]?F', str(s)))
+    from . import fromto_coverage as _fc
+
+    def is_ext(sym, term=''):
+        # 場外ケーブル(他盤へ渡る外部ケーブル)＝ハーネス範囲外。カバレッジと同じ判定(F<<・電線色-番号端子も)。
+        return _fc._is_external_key((str(sym), str(term)))
 
     def node(ns, term, other_ns):
         if ns.upper().startswith('TB'):
@@ -539,7 +542,7 @@ def score_production_net(seiban_dir):
         for w in wires:
             a, b = w['ends']
             ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
-            if is_ext(ra) or is_ext(rb):
+            if is_ext(ra, a['term']) or is_ext(rb, b['term']):
                 continue
             na = _nsym(resolve(ra, rb), lmap)
             nb = _nsym(resolve(rb, ra), lmap)
