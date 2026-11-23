@@ -425,6 +425,35 @@ def _letter_panel_map(seiban_dir, dev_panel):
     return out
 
 
+def _letter_assign_map(seiban_dir):
+    """DCTが無い製番(例 5-12043)用: locator_assign(内部配置図D001の実機器+位置)から
+    letter → {基番号: 実機器sym}。曖昧な素letter(A=1-A/2-A/…)を『相手端点の回路』で解消する材料。
+    キーは基番号(盤indexでない)だが、resolve_one の解決は主に (1)相手回路一致 で効くため、
+    候補集合さえ揃えば十分。DCTがある製番では呼ばない(_letter_panel_map を優先)。"""
+    out = collections.defaultdict(dict)
+    layout = (glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF')) +
+              glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.dxf')) +
+              glob.glob(os.path.join(seiban_dir, '図面データ_*G0*.DXF')) +
+              glob.glob(os.path.join(seiban_dir, '図面データ_*G0*.dxf')))
+    if not layout:
+        return out
+    try:
+        a = LA.assign(layout)
+    except Exception:
+        return out
+    for loc, actual in a.get('by_locator', {}).items():
+        parts = loc.split('-')
+        lt = parts[-1].upper()
+        b = parts[0] if len(parts) > 1 else '0'
+        if re.fullmatch(r'[A-Z]', lt):
+            try:
+                key = int(re.sub(r'\D', '', b) or '0')
+            except Exception:
+                key = 0
+            out[lt][key] = actual.upper()
+    return out
+
+
 def _produce_nets(seiban_dir):
     """本番生成器のネット(号線)を正規化ノード集合のリストで返す。
     戻り (nets, node2net, prod_syms)。TB→(TB,回路)・接点→NO/NC。配線図が無い等で不可なら空。
@@ -481,6 +510,9 @@ def score_production_net(seiban_dir):
     nets, node2net, prod_syms = _produce_nets(seiban_dir)
     dev_panel = _dev_panel_map(seiban_dir)
     letmap = _letter_panel_map(seiban_dir, dev_panel)
+    if not letmap:
+        # DCT(機器相番号)が無い製番は内部配置図D001の位置ベース採番で素letterを解決する。
+        letmap = _letter_assign_map(seiban_dir)
 
     from . import fromto_coverage as _fc
 
