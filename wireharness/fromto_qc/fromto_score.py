@@ -460,11 +460,17 @@ _TB_STRIP = True
 _tb_ctx_cache = {}
 
 
+def _spec_bases(s):
+    """TB形式文字列から基本形式トークン集合(BN75W 等)。スケルトンとD002の突合に使う。"""
+    return set(re.findall(r'BN[H]?\d+[LMW]+', str(s or '')))
+
+
 def _tb_strip_ctx(seiban_dir):
     """内部配置図Dから (lays, byface, circ2tb)。
       byface  : {回路群(1桁): [(台番号, pos)]}  ストリップ群。
-      circ2tb : {回路(3桁): 台番号}  茂泉様指摘=「その回路のMCCBが繋がるTB」。回路のMCCB/ELCBの
-                位置に、同じ回路群(面)内で最も近いストリップを割当てる(集約の例外は幾何では出ないので残る)。
+      circ2tb : {回路(3桁): 台番号}  茂泉様指摘=「その回路のMCCBが繋がるTB」。回路のMCCB/ELCBの位置に、
+                同じ面内で最も近いストリップを割当てる。さらに茂泉様指摘=スケルトンのTB形式(BN75W等)で
+                候補を絞ってから選ぶ(面内に同形式が複数ある時のみ幾何で決める)＝102/103等の取り違えを解消。
     Layout は製番ごとにキャッシュ。"""
     import math
     if seiban_dir in _tb_ctx_cache:
@@ -488,7 +494,36 @@ def _tb_strip_ctx(seiban_dir):
                 byface[m.group(1)].append((str(tb), pos))
     except Exception:
         pass
-    # 回路のMCCB/ELCB位置 → 同じ面内の最寄りストリップ台番号
+    # スケルトン(E図面)のTB形式: 回路 → {形式} / D002のTB形式: 台番号 → {形式}
+    circ_spec = collections.defaultdict(set)
+    tbspec = {}
+    for p in (glob.glob(os.path.join(seiban_dir, '図面データ_*E0*.dxf')) +
+              glob.glob(os.path.join(seiban_dir, '図面データ_*E0*.DXF'))):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {k.dxf.tag: (k.dxf.text or '').strip() for k in ins.attribs}
+            if a.get('DEVICE', '').upper() in ('TB', 'TB1', 'TB2') and \
+               re.fullmatch(r'\d{3}', a.get('DEVICE1', '')) and a.get('TYPE'):
+                circ_spec[a['DEVICE1']].update(_spec_bases(a['TYPE']))
+    for p in (glob.glob(os.path.join(seiban_dir, '図面データ_*D002.dxf')) +
+              glob.glob(os.path.join(seiban_dir, '図面データ_*D002.DXF'))):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {k.dxf.tag: (k.dxf.text or '').strip() for k in ins.attribs}
+            mm = re.fullmatch(r'TB(\d+)', a.get('DEVICE', '').upper())
+            if mm and a.get('TYPE_SPEC'):
+                tbspec[mm.group(1)] = _spec_bases(a['TYPE_SPEC'])
+    # 回路のMCCB/ELCB位置 → 面内(＋スケルトン形式一致)で最も近いストリップ台番号
     circ2tb = {}
     brk = {}
     for L in lays:
@@ -498,6 +533,11 @@ def _tb_strip_ctx(seiban_dir):
                 brk.setdefault(mm.group(2), pos)
     for c, pos in brk.items():
         cand = byface.get(c[0], [])
+        want = circ_spec.get(c, set())
+        if want:
+            filt = [t for t in cand if tbspec.get(t[0], set()) & want]
+            if filt:
+                cand = filt              # 形式が一致するストリップに限定(同形式が複数なら幾何で決める)
         if cand:
             circ2tb[c] = min(cand, key=lambda t: math.hypot(t[1][0] - pos[0], t[1][1] - pos[1]))[0]
     ctx = (lays, byface, circ2tb)
