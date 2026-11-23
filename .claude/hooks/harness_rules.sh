@@ -5,6 +5,7 @@
 set -euo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 LEDGER="$ROOT/wireharness/fromto_qc/生成ルール_承認済.md"
+KNOWHOW="$ROOT/wireharness/fromto_qc/技術ノウハウ_集約.md"
 if [ -f "$LEDGER" ]; then
   echo "===== 🔴 ハーネス承認済みルール台帳（毎回必読・茂泉様確定済） ====="
   echo "出典: wireharness/fromto_qc/生成ルール_承認済.md ／ 変更は承認が要る・回帰ゼロ厳守"
@@ -12,4 +13,13 @@ if [ -f "$LEDGER" ]; then
   cat "$LEDGER"
   echo
   echo "===== 台帳ここまで。これに反する測定・実装・質問をしないこと ====="
+fi
+if [ -f "$KNOWHOW" ]; then
+  echo
+  echo "===== 🔴 ハーネス技術ノウハウ集約（毎回必読・積み上げた知見／負の結果） ====="
+  echo "出典: wireharness/fromto_qc/技術ノウハウ_集約.md ／ 作業前にここで攻めどころと再試行禁止事項を確認"
+  echo
+  cat "$KNOWHOW"
+  echo
+  echo "===== ノウハウここまで。§7(効かなかった実験)は再試行しないこと ====="
 fi
