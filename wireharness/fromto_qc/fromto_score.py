@@ -266,3 +266,113 @@ def score_connectivity(seiban_dir):
             'truth': len(t), 'gen': len(g), 'hit': hit,
             'recall': hit / len(t) if t else 0.0,
             'precision': hit / len(g) if g else 0.0}
+
+
+# ---- ネット(電気的連結)単位の採点＝公式の物差し(機能同一／茂泉様確定2026-11) ----
+# 手本の1ネット内の「点対点の鎖順」は製造側の任意(端子番号・渡りピン・主回路相と同じ"製造付番は
+# 任意"原則がペア順にも及ぶ)。∴正しさは「2点が同じネットにあるか」で測る。ペア厳密は製造任意の
+# 鎖順/相/空欄端子を図面から一意復元できず原理的に不能。機能同一(ネット一致)が最終目的と一致する。
+def _letter_bases(seiban_dir):
+    """設計DCTの基別ロケーター地図。{(基,文字):実機器sym} と {基:その基の回路番号集合}。"""
+    base_letter = {}
+    base_circs = collections.defaultdict(set)
+    for p in glob.glob(os.path.join(seiban_dir, '機器相番号_*.dxf')):
+        try:
+            pairs = LM.extract_pairs(p)
+        except Exception:
+            continue
+        for loc, act in pairs:
+            b, lt = LM._split_locator(loc)
+            if b and lt:
+                dev = norm(act).upper()
+                base_letter[(b, lt.upper())] = dev
+                m = re.search(r'(\d{3})', dev)
+                if m:
+                    base_circs[b].add(m.group(1))
+    return base_letter, base_circs
+
+
+def _circ3(sym):
+    m = re.search(r'(\d{3})', dn.strip_marks(str(sym or '')))
+    return m.group(1) if m else ''
+
+
+def _resolve_truth_edges_net(seiban_dir, lmap):
+    """手本の conn-edge 集合。素ロケーター文字(A-O)を file→基(+相手端点の回路)で解決してから正規化。
+    基は曖昧(複数基に同じ文字)なため、(1)相手端点の回路が一意に指す基、無ければ(2)ファイルの優勢な基、
+    で確定。どちらも引けなければ素のまま(＝安全に未解決＝偽一致を作らない)。"""
+    base_letter, base_circs = _letter_bases(seiban_dir)
+    out = set()
+    for f in sorted(glob.glob(os.path.join(seiban_dir, 'FromToデータ_*.txt'))):
+        try:
+            wires = ft.parse(f)
+        except Exception:
+            continue
+        votes = collections.Counter()           # ファイルの優勢な基(回路番号の投票)
+        for w in wires:
+            for e in w['ends']:
+                c = _circ3(ft.endpoint_sym(e))
+                for b in base_circs:
+                    if c and c in base_circs[b]:
+                        votes[b] += 1
+        fbase = votes.most_common(1)[0][0] if votes else None
+
+        def res(e, comp):
+            s = ft.endpoint_sym(e).upper()
+            if re.fullmatch(r'[A-Z]', s):
+                cc = _circ3(ft.endpoint_sym(comp))
+                cand = [bb for bb in base_circs if cc and cc in base_circs[bb]]
+                bb = cand[0] if len(cand) == 1 else fbase
+                if bb and (bb, s) in base_letter:
+                    return base_letter[(bb, s)]
+            return ft.endpoint_sym(e)
+        for w in wires:
+            a, b = w['ends']
+            out.add(_conn_edge(_nedge(res(a, b), a['term'], res(b, a), b['term'], lmap)))
+    return out
+
+
+def _union_find_nets(conn_edges):
+    """conn-edge 集合 → (find関数, 全ノード集合)。"""
+    par = {}
+
+    def find(x):
+        par.setdefault(x, x)
+        while par[x] != x:
+            par[x] = par[par[x]]
+            x = par[x]
+        return x
+    nodes = set()
+    for e in conn_edges:
+        pts = list(e)
+        for p in pts:
+            nodes.add(p)
+        if len(pts) == 2:
+            par[find(pts[0])] = find(pts[1])
+    return find, nodes
+
+
+def score_connectivity_net(seiban_dir):
+    """【公式の物差し】ネット単位の機能同一採点。手本の各辺(a,b)について、生成側が a,b を同じネット
+    (連結成分)に入れていれば hit。製造任意の鎖順/相/空欄端子を吸収する。素ロケーター文字は file→基解決。
+    戻り: {seiban,truth,present,hit,recall,present_rate}。present=両端点とも生成側に存在する辺数
+    (＝機器カバレッジの指標。recall が低くても present が高ければ鎖順でなくカバレッジが律速)。"""
+    lmap = locator_resolution(seiban_dir)
+    gen = {_conn_edge(e) for e in generate_edges(seiban_dir, lmap)}
+    find, gnodes = _union_find_nets(gen)
+    truth = _resolve_truth_edges_net(seiban_dir, lmap)
+    tot = hit = present = 0
+    for e in truth:
+        pts = list(e)
+        if len(pts) != 2:
+            continue
+        tot += 1
+        a, b = pts
+        if a in gnodes and b in gnodes:
+            present += 1
+            if find(a) == find(b):
+                hit += 1
+    return {'seiban': os.path.basename(seiban_dir.rstrip('/')),
+            'truth': tot, 'present': present, 'hit': hit,
+            'recall': hit / tot if tot else 0.0,
+            'present_rate': present / tot if tot else 0.0}

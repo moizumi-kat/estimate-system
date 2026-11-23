@@ -43,7 +43,29 @@ def test_locator_resolution_falls_back_without_dct():
         FS.LA.assign, FS.ft.load_seiban = orig['assign'], orig['load']
 
 
+def test_union_find_nets_groups_connected():
+    # ネット採点の連結成分: A-B, B-C は1ネット, D-E は別ネット。
+    e = {frozenset((('A', '1'), ('B', '2'))),
+         frozenset((('B', '2'), ('C', '3'))),
+         frozenset((('D', '1'), ('E', '2')))}
+    find, nodes = FS._union_find_nets(e)
+    assert find(('A', '1')) == find(('C', '3'))          # A と C は同じネット(B経由)
+    assert find(('A', '1')) != find(('D', '1'))          # A と D は別ネット
+    assert ('A', '1') in nodes and ('E', '2') in nodes
+
+
+def test_net_recall_credits_any_chain_order():
+    # 手本が A-B-C を A-B,B-C の順で記録、生成が A-C,C-B の別鎖順でも同一ネット→全辺hit。
+    find, nodes = FS._union_find_nets(
+        {frozenset((('A', '1'), ('C', '3'))), frozenset((('C', '3'), ('B', '2')))})
+    truth = [frozenset((('A', '1'), ('B', '2'))), frozenset((('B', '2'), ('C', '3')))]
+    hit = sum(1 for e in truth for a, b in [tuple(e)] if find(a) == find(b))
+    assert hit == 2                                      # 鎖順が違っても機能同一=2辺とも一致
+
+
 if __name__ == '__main__':
     test_locator_resolution_prefers_dct()
     test_locator_resolution_falls_back_without_dct()
+    test_union_find_nets_groups_connected()
+    test_net_recall_credits_any_chain_order()
     print('fromto_score tests: OK')
