@@ -498,12 +498,26 @@ def score_production_net(seiban_dir):
 
         def resolve(sym, comp):
             s = sym.upper()
-            if re.fullmatch(r'[A-Z]', s) and s in letmap:
-                pan = dev_panel.get(_nsym(comp, lmap))
-                if not pan or pan not in letmap[s]:
-                    pan = fi if fi in letmap[s] else None
-                if pan and pan in letmap[s]:
-                    return letmap[s][pan]
+            if not (re.fullmatch(r'[A-Z]', s) and s in letmap):
+                return sym
+            # 候補＝そのロケーター文字の実機器(本番出力に在るものを優先)
+            vs = list(letmap[s].values())
+            cands = [v for v in vs if _nsym(v, {}) in prod_syms] or vs
+            if len(set(cands)) == 1:
+                return cands[0]
+            # (1) 相手端点の回路と一致する候補(最も確実: M↔回路201の機器 → 86X201)
+            cc = _circ_num(comp)
+            if cc:
+                m = [c for c in cands if _circ_num(c) == cc]
+                if len(set(m)) == 1:
+                    return m[0]
+            # (2) 相手端点の盤(F/H配線シート)で一意化
+            pan = dev_panel.get(_nsym(comp, {})) or dev_panel.get(_nsym(comp, lmap))
+            if pan and pan in letmap[s] and letmap[s][pan] in cands:
+                return letmap[s][pan]
+            # (3) ファイルの盤(最後の手当て)
+            if fi in letmap[s] and letmap[s][fi] in cands:
+                return letmap[s][fi]
             return sym
         for w in wires:
             a, b = w['ends']
