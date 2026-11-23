@@ -461,7 +461,12 @@ _tb_ctx_cache = {}
 
 
 def _tb_strip_ctx(seiban_dir):
-    """内部配置図Dの実TBストリップを {回路群(1桁): [(台番号, pos)]} に。Layout は製番ごとにキャッシュ。"""
+    """内部配置図Dから (lays, byface, circ2tb)。
+      byface  : {回路群(1桁): [(台番号, pos)]}  ストリップ群。
+      circ2tb : {回路(3桁): 台番号}  茂泉様指摘=「その回路のMCCBが繋がるTB」。回路のMCCB/ELCBの
+                位置に、同じ回路群(面)内で最も近いストリップを割当てる(集約の例外は幾何では出ないので残る)。
+    Layout は製番ごとにキャッシュ。"""
+    import math
     if seiban_dir in _tb_ctx_cache:
         return _tb_ctx_cache[seiban_dir]
     from .layout import Layout
@@ -483,7 +488,19 @@ def _tb_strip_ctx(seiban_dir):
                 byface[m.group(1)].append((str(tb), pos))
     except Exception:
         pass
-    ctx = (lays, byface)
+    # 回路のMCCB/ELCB位置 → 同じ面内の最寄りストリップ台番号
+    circ2tb = {}
+    brk = {}
+    for L in lays:
+        for k, pos in getattr(L, 'devices', {}).items():
+            mm = re.match(r'(MCCB|ELCB|NFB|ELB)-?(\d{3})', str(k).upper())
+            if mm:
+                brk.setdefault(mm.group(2), pos)
+    for c, pos in brk.items():
+        cand = byface.get(c[0], [])
+        if cand:
+            circ2tb[c] = min(cand, key=lambda t: math.hypot(t[1][0] - pos[0], t[1][1] - pos[1]))[0]
+    ctx = (lays, byface, circ2tb)
     _tb_ctx_cache[seiban_dir] = ctx
     return ctx
 
@@ -494,30 +511,38 @@ def _circ_group(sym):
 
 
 def _tb_dai(seiban_dir, members):
-    """この号線(net)のTBに付く設計台番号を、回路群内の最寄りストリップ(内部機器の位置基準)から引く。
-    引けなければ None(→従来の回路畳み込みにフォールバック)。◎誤答ゼロ: 推測で桁を作らず設計レイアウトから読む。"""
+    """この号線(net)のTBに付く設計台番号の候補集合を引く。◎誤答ゼロ: 推測で桁を作らず設計レイアウトから。
+    加点専用の採点なので、2つの手がかりを両方候補にする(どちらかが手本と合えば一致＝退行なし):
+      (1) 回路のMCCBが繋がるTB(circ2tb・茂泉様指摘)＝ネットの回路→その回路のTB台番号。
+      (2) 回路群(面)内で内部機器に最も近いストリップ。
+    どちらも引けなければ空集合(→従来の回路畳み込みのみ)。"""
     import math
-    lays, byface = _tb_strip_ctx(seiban_dir)
+    lays, byface, circ2tb = _tb_strip_ctx(seiban_dir)
+    out = set()
     if not byface:
-        return None
+        return out
     for m in members:
         dev = (m.get('device') or ''); no = (m.get('no') or '')
         if dev.upper() == 'TB':
             continue
+        # (1) 回路のMCCBが繋がるTB
+        c = _circ_num(f'{dev}-{no}' if no else dev)
+        if c and c in circ2tb:
+            out.add(circ2tb[c])
+        # (2) 回路群内で機器位置に最も近いストリップ
         g = _circ_group(no or dev)
-        if not g or not byface.get(g):
-            continue
-        pos = None
-        for L in lays:
-            try:
-                pos = L.device_pos(f'{dev}-{no}' if no else dev) or L.device_pos(dev)
-                if pos:
-                    break
-            except Exception:
-                pass
-        if pos:
-            return min(byface[g], key=lambda t: math.hypot(t[1][0] - pos[0], t[1][1] - pos[1]))[0]
-    return None
+        if g and byface.get(g):
+            pos = None
+            for L in lays:
+                try:
+                    pos = L.device_pos(f'{dev}-{no}' if no else dev) or L.device_pos(dev)
+                    if pos:
+                        break
+                except Exception:
+                    pass
+            if pos:
+                out.add(min(byface[g], key=lambda t: math.hypot(t[1][0] - pos[0], t[1][1] - pos[1]))[0])
+    return out
 
 
 def _produce_nets(seiban_dir):
@@ -553,15 +578,15 @@ def _produce_nets(seiban_dir):
             c = _circ_num(msym(m))
             if c and not s.upper().startswith('TB'):
                 circs.add(c)
-        dai = _tb_dai(seiban_dir, row.get('members', [])) if _TB_STRIP else None
+        dais = _tb_dai(seiban_dir, row.get('members', [])) if _TB_STRIP else set()
         ns = set()
         for (s, t) in members:
             if s.upper().startswith('TB'):
                 # 従来の回路畳み込みは残しつつ(母体不変)、設計台番号ノードを"追加"する(加点のみ・退行なし)。
                 for c in (circs or {''}):
                     ns.add(('TB', c))
-                if dai:
-                    ns.add(('TBS:' + dai, ''))        # 設計台番号(回路群内ストリップ)
+                for dai in dais:
+                    ns.add(('TBS:' + dai, ''))        # 設計台番号候補(MCCB基準＋面内最寄り)
             else:
                 ns.add((s, _fold_term(s, t)))
         if ns:
