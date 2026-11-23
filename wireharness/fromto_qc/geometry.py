@@ -223,7 +223,12 @@ class DrawingModel:
             ins = e.dxf.insert
             deg = e.dxf.rotation or 0
             names = []
-            for k in ('TERMINAL1', 'TERMINAL2', 'TERMINAL3', 'TERMINAL4', 'TERMINAL5', 'TERMINAL6'):
+            # TERMINAL1, TERMINAL2, … を番号順に全て読む（6固定だと大型機器＝インバータ等が
+            # 端子7以降を失い、TB座標に names[-1] が当たって全端子が同名化＝誤結線。INV は
+            # TERMINAL1..23 を持つ）。≤6端子の機器は TERMINAL7+ が無く従来どおり＝回帰ゼロ。
+            tkeys = sorted((k for k in a if re.fullmatch(r'TERMINAL\d+', k)),
+                           key=lambda k: int(k[8:]))
+            for k in tkeys:
                 if a.get(k):
                     names += [x.strip() for x in a[k].split(',')]
             added = []
