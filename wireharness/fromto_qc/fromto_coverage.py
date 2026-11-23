@@ -50,6 +50,9 @@ def _seq_devices(paths):
     return bases, syms
 
 
+_DOOR_SW = {'入', '切', 'ON', 'OFF', 'BS', 'BT', 'PB', 'PBS'}   # 扉操作SW(ON/OFF/押ボタン)=扉外形図の標準機器
+
+
 def classify_sym(sym, bases, syms, loc):
     """機器記号 → 差分種類。loc: {ロケーター文字: 実機器}。"""
     base = sym.split('-')[0]
@@ -61,8 +64,20 @@ def classify_sym(sym, bases, syms, loc):
         if act in syms or actbase in bases:
             return 'in_dxf'          # ロケーター経由で実機器が設計DXFに在る
         return 'locator'
-    if re.fullmatch(r'[A-Z]', base):
-        return 'locator'
+    if re.fullmatch(r'[A-Z]', base) or re.fullmatch(r'\d[A-O]', base):
+        return 'locator'          # 素ロケーター(A) ＋ 回路前置ロケーター(1A〜1O)
+    # 計測/モニタのユニット(本体/パルス/増設/表示設定ﾕﾆｯﾄ)は設計DXFに長名で在る＝識別可能(名称形違いのみ)。
+    if 'ﾕﾆｯﾄ' in sym or 'ユニット' in sym:
+        return 'unit'
+    # 複合遮断器(MCCB.ELCB-303.304 等)も遮断器＝識別可能。
+    if re.match(r'(MCCB|ELCB|NFB|ELB)', base):
+        return 'in_dxf'
+    # 扉操作SW(入=ON/切=OFF/押ボタン)は配線図(シーケンスDXF)に無く扉外形図の標準機器＝識別可能(本番も生成)。
+    if base in _DOOR_SW:
+        return 'door'
+    # LT1〜LT4 は端子でなくライン/バス(社内確定)＝識別可能な母線。
+    if re.fullmatch(r'LT\d*', base):
+        return 'door'
     if fixed_points.is_fixed(sym):
         return 'fixed'
     if base in ('MCCB', 'ELCB') and re.search(r'[○◎]|LG|CE|CG|LE', sym):
@@ -76,7 +91,21 @@ def classify_sym(sym, bases, syms, loc):
     return 'other'
 
 
-_RANK = ['other', 'new', 'multi', 'ct_phase', 'breaker_mark', 'fixed', 'locator', 'in_dxf']
+_RANK = ['other', 'new', 'multi', 'ct_phase', 'breaker_mark', 'unit', 'door', 'fixed', 'locator', 'in_dxf']
+
+# 場外接続ケーブル(他盤へ渡る外部ケーブル)＝ハーネス工程の対象外。端子が電線色-番号(白-1/赤-2…)、
+# または機器が R-F/L-F/F<< 等のケーブル参照。カバレッジ(両端識別)はこれを分母から除外する(正しい範囲)。
+_COLOR_PIN = re.compile(r'^(白|赤|黒|青|緑|黄|茶|橙|灰|桃|紫|だいだい)-?\d')
+
+
+def _is_external_key(key):
+    """④エッジの端点キー(sym,term) が場外接続ケーブルか。"""
+    sym = str(key[0]); term = str(key[1] if len(key) > 1 else '')
+    if _COLOR_PIN.match(term):
+        return True
+    if re.search(r'R[-]?F|L[-]?F', sym) or '<<' in sym:
+        return True
+    return False
 
 
 def analyze_seiban(seiban_dir, seq_glob=('図面データ_*.DXF', '図面データ_*.dxf'),
@@ -104,13 +133,21 @@ def analyze_seiban(seiban_dir, seq_glob=('図面データ_*.DXF', '図面デー�
     dev_cat = collections.Counter(classify_sym(s, bases, syms, loc) for s in ft_syms)
     edge_cat = collections.Counter()
     for e in r['edges']:
+        if any(_is_external_key(k) for k in e):
+            edge_cat['external'] += 1          # 場外ケーブル＝対象外(分母から除外)
+            continue
         cs = [classify_sym(k[0], bases, syms, loc) for k in e]
         if all(c == 'in_dxf' for c in cs):
             edge_cat['both_in_dxf'] += 1
         else:
             edge_cat[min(cs, key=lambda c: _RANK.index(c) if c in _RANK else 0)] += 1
+    ext = edge_cat.get('external', 0)
+    other = edge_cat.get('other', 0)
+    in_scope = len(r['edges']) - ext            # ハーネス範囲(場外ケーブル除外)
+    coverage = (in_scope - other) / in_scope if in_scope else 0.0
     return {'seiban': os.path.basename(seiban_dir.rstrip('/')),
             'wires': len(r['wires']), 'edges': len(r['edges']),
+            'external': ext, 'in_scope': in_scope, 'coverage': coverage,
             'ft_syms': len(ft_syms), 'dev_cat': dict(dev_cat), 'edge_cat': dict(edge_cat),
             'locator_pairs': len(loc)}
 
