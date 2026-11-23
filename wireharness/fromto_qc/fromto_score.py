@@ -489,12 +489,14 @@ def score_production_net(seiban_dir):
         return _fc._is_external_key((str(sym), str(term)))
 
     def is_main(sym, term):
-        # 主回路(太物＝1人目工程)。電力機器の主端子(1-6)または LUG/LUGTB。ハーネス(3人目=制御)の範囲外。
+        # 主回路(太物＝1人目工程)。電力機器の主端子(1-6)/LUG/主回路TB(回路+相 101U等)。ハーネス(制御)の範囲外。
         s = str(sym).upper()
         if 'LUG' in s:
             return True
         if re.match(r'(MCCB|ELCB|NFB|ELB|LBS|52|51|ACR|DCR|INV)', s) and str(term) in ('1', '2', '3', '4', '5', '6'):
             return True
+        if s.startswith('TB') and re.fullmatch(r'\d{3}[UVWE]?', str(term)):
+            return True                        # 主回路TB(回路+相/接地 101U/101E 等)
         return False
 
     def node(ns, term, other_ns):
