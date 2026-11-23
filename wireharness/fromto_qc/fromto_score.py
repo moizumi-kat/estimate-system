@@ -43,6 +43,18 @@ def _seq_paths(seiban_dir):
     return sorted(set(out))
 
 
+def _skel_paths(seiban_dir):
+    """スケルトン(E系列)図面のパス。受変電/動力盤のEシートには主回路＋補助接点の実配線が
+    端子粒度で描かれており(L_MAIN/TEMPLATE)、手本ハーネスにもその結線が入る。本番の
+    `harness_sheet.build_sheet` は seq＋skel(E) を trace_nodes で辿っているのに、採点の
+    `generate_edges` は従来 F/H のみを辿り E を落としていた(＝本番より少なく測る物差しの誤り)。
+    採点を本番に合わせるため E も辿る。分電盤(E無し)は空＝影響なし。"""
+    out = []
+    for p in ('図面データ_*E*.DXF', '図面データ_*E*.dxf'):
+        out += glob.glob(os.path.join(seiban_dir, p))
+    return sorted(set(out))
+
+
 def locator_resolution(seiban_dir):
     """{ロケーター表記(大文字): 設計実機器sym(大文字)}。
     優先順位(◎誤答ゼロ):
@@ -141,7 +153,9 @@ def generate_edges(seiban_dir, lmap=None):
     """統合生成の正規化エッジ集合を返す(制御＋主回路＋SPD)。"""
     if lmap is None:
         lmap = locator_resolution(seiban_dir)
-    seq = _seq_paths(seiban_dir)
+    # 本番(build_sheet)に合わせ、配線シート(F/H)に加えスケルトン(E)も辿る。Eには主回路＋
+    # 補助接点の実配線が端子粒度で描かれ手本にも入る(F-only は本番より少なく測っていた)。
+    seq = sorted(set(_seq_paths(seiban_dir)) | set(_skel_paths(seiban_dir)))
     draws = (glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF')) +
              glob.glob(os.path.join(seiban_dir, '図面データ_*E*.DXF')) +
              glob.glob(os.path.join(seiban_dir, '図面データ_*G0*.DXF')))
