@@ -30,3 +30,4 @@ wireharness/fromto_qc/confirmed/
 wireharness/fromto_qc/terminal_feedback/
 wireharness/fromto_qc/terminal_corrections.json
 wireharness/_data/
+wireharness/fromto_qc/terminal_library.json.bak_*

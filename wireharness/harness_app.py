@@ -789,65 +789,131 @@ def devices_csv(token):
     return send_file(p, as_attachment=True, download_name='機器一覧.csv')
 
 
+def _pinlib_form(action, v, submit_label, name_ro=False):
+    """登録/編集フォーム(共通)。v=プリフィル値dict。name_ro=True でパターン名を変更不可。"""
+    def iv(k):
+        return _esc(str(v.get(k, '') or ''))
+    ro = ' readonly' if name_ro else ''
+    return f'''
+    <form method="post" action="{action}" class="card">
+      <h2>{_esc(submit_label)}</h2>
+      <p class="muted">端子は機器TYPE→ピン配から選びます。<b>メーカ名・型式・出所（裏取り元）は必須</b>
+        （提供資料／メーカー展開図／手本 等。推測禁止）。型式は照合キーにも使われます。</p>
+      <div class="row"><label>パターン名<br><input type="text" name="pattern_name" value="{iv('pattern_name')}" placeholder="例 meterswitch_BHN_V" required{ro}></label>
+        <label>メーカ名(必須)<br><input type="text" name="maker" value="{iv('maker')}" placeholder="例 正興電機" required></label>
+        <label>型式(必須)<br><input type="text" name="model" value="{iv('model')}" placeholder="例 BHN-V-RKK-N-8" required></label></div>
+      <div class="row"><label>照合(型式に含む文字・空なら型式を使用)<br><input type="text" name="type_contains" value="{iv('type_contains')}" placeholder="例 BHN-V" style="width:220px"></label>
+        <label>照合(PARTS)<br><input type="text" name="parts" value="{iv('parts')}" placeholder="例 VS"></label>
+        <label>極(任意)<br><input type="text" name="pole" value="{iv('pole')}" placeholder="3P/2P"></label></div>
+      <div class="row"><label>全端子(カンマ区切り・必須)<br><input type="text" name="pins" value="{iv('pins')}" placeholder="例 1,5,6,8" required style="width:320px"></label></div>
+      <div class="row"><label>COM<br><input type="text" name="com" value="{iv('com')}" placeholder="1,4"></label>
+        <label>NO<br><input type="text" name="no" value="{iv('no')}" placeholder="5,8"></label>
+        <label>NC<br><input type="text" name="nc" value="{iv('nc')}" placeholder="9,12"></label>
+        <label>コイル<br><input type="text" name="coil" value="{iv('coil')}" placeholder="13,14"></label></div>
+      <div class="row"><label>説明<br><input type="text" name="desc" value="{iv('desc')}" placeholder="例 電圧計切替(正興BHN-V)" style="width:320px"></label></div>
+      <div class="row"><label>出所(必須)<br><input type="text" name="source" value="{iv('source')}" placeholder="例 正興電機 BHN-V N-8 展開図" required style="width:420px"></label></div>
+      <div class="row"><button class="primary" type="submit">{_esc(submit_label)} ▶</button>
+        <a class="btn" href="/pinlib">一覧へ</a></div>
+    </form>'''
+
+
 @app.route('/pinlib', methods=['GET'])
 def pinlib():
-    """機器ピン配の登録画面(B): 登録済み一覧＋新規登録フォーム。
-    端子番号は機器TYPEのピン配から選ぶ。未登録機器はここで人が登録する(出所=裏取り必須)。"""
+    """機器ピン配の登録画面(B): 登録済み一覧(編集・削除)＋新規登録フォーム。"""
     try:
         pats = DR.list_patterns()
     except Exception:
         pats = {}
-    rows = ''.join(f'<tr><td><b>{_esc(n)}</b></td><td class="muted">{_esc(" ".join(p))}</td></tr>'
-                   for n, p in sorted(pats.items()))
+    rows = ''
+    for n, p in sorted(pats.items()):
+        mm = _esc(' '.join(x for x in (p.get('maker'), p.get('model')) if x))
+        if p.get('user_added'):
+            act = (f'<a class="btn" href="/pinlib/edit/{_esc(n)}">編集</a> '
+                   f'<form method="post" action="/pinlib/delete" style="display:inline" '
+                   f'onsubmit="return confirm(\'{_esc(n)} を削除しますか？\')">'
+                   f'<input type="hidden" name="pattern_name" value="{_esc(n)}">'
+                   f'<button type="submit">削除</button></form>')
+        else:
+            act = f'<a class="btn" href="/pinlib/edit/{_esc(n)}">編集</a> <span class="muted">組込</span>'
+        rows += (f'<tr><td><b>{_esc(n)}</b></td><td>{mm}</td>'
+                 f'<td class="muted">{_esc(" ".join(p.get("pins", [])))}</td><td>{act}</td></tr>')
     msg = request.args.get('msg', '')
     msg_html = f'<div class="card {"err" if "NG" in msg else "ok"}">{_esc(msg)}</div>' if msg else ''
-    form = '''
-    <form method="post" action="/pinlib/register" class="card">
-      <h2>新しい機器のピン配を登録</h2>
-      <p class="muted">端子は機器TYPE→ピン配から選びます。未登録機器を登録してください。
-        <b>出所（裏取り元）は必須</b>です（提供資料／メーカー展開図／手本 等。推測禁止）。</p>
-      <div class="row"><label>パターン名<br><input type="text" name="pattern_name" placeholder="例 meterswitch_BHN_V" required></label>
-        <label>照合(型式に含む文字)<br><input type="text" name="type_contains" placeholder="例 BHN-V"></label>
-        <label>照合(PARTS)<br><input type="text" name="parts" placeholder="例 VS"></label>
-        <label>極(任意)<br><input type="text" name="pole" placeholder="3P/2P"></label></div>
-      <div class="row"><label>全端子(カンマ区切り)<br><input type="text" name="pins" placeholder="例 1,5,6,8" required style="width:320px"></label></div>
-      <div class="row"><label>COM<br><input type="text" name="com" placeholder="1,4"></label>
-        <label>NO<br><input type="text" name="no" placeholder="5,8"></label>
-        <label>NC<br><input type="text" name="nc" placeholder="9,12"></label>
-        <label>コイル<br><input type="text" name="coil" placeholder="13,14"></label></div>
-      <div class="row"><label>説明<br><input type="text" name="desc" placeholder="例 電圧計切替(正興BHN-V)" style="width:320px"></label></div>
-      <div class="row"><label>出所(必須)<br><input type="text" name="source" placeholder="例 正興電機 BHN-V N-8 展開図" required style="width:420px"></label></div>
-      <div class="row"><button class="primary" type="submit">登録する ▶</button>
-        <a class="btn" href="/">← 戻る</a></div>
-    </form>'''
-    body = (msg_html + form
+    body = (msg_html + _pinlib_form('/pinlib/register', {}, '新しい機器のピン配を登録')
             + '<div class="card"><h2>登録済みの機器ピン配</h2>'
-            + '<table><tr><th>パターン</th><th>端子</th></tr>' + rows + '</table></div>')
+            + '<table><tr><th>パターン</th><th>メーカ/型式</th><th>端子</th><th>操作</th></tr>'
+            + rows + '</table></div>')
     return _page(body, title='機器ピン配の登録')
 
 
-@app.route('/pinlib/register', methods=['POST'])
-def pinlib_register():
+def _pinlib_args():
     g = request.form.get
 
     def _lst(k):
         return [x.strip() for x in (g(k) or '').replace('、', ',').split(',') if x.strip()]
+    return dict(
+        pattern_name=(g('pattern_name') or '').strip(), pins=_lst('pins'),
+        source=(g('source') or '').strip(), desc=(g('desc') or '').strip(),
+        maker=(g('maker') or '').strip(), model=(g('model') or '').strip(),
+        com=_lst('com') or None, no=_lst('no') or None, nc=_lst('nc') or None, coil=_lst('coil') or None,
+        match_type_contains=(g('type_contains') or '').strip() or None,
+        match_parts=(g('parts') or '').strip() or None, match_pole=(g('pole') or '').strip() or None)
+
+
+@app.route('/pinlib/register', methods=['POST'])
+def pinlib_register():
+    a = _pinlib_args()
+    if not a['maker'] or not a['model']:
+        return redirect(url_for('pinlib', msg='NG: メーカ名・型式は必須です'))
     try:
-        r = DR.register_pattern(
-            (g('pattern_name') or '').strip(), _lst('pins'),
-            source=(g('source') or '').strip(), desc=(g('desc') or '').strip(),
-            com=_lst('com') or None, no=_lst('no') or None,
-            nc=_lst('nc') or None, coil=_lst('coil') or None,
-            match_type_contains=(g('type_contains') or '').strip() or None,
-            match_parts=(g('parts') or '').strip() or None,
-            match_pole=(g('pole') or '').strip() or None)
+        r = DR.register_pattern(a.pop('pattern_name'), a.pop('pins'), **a)
     except Exception:
         app.logger.exception('pinlib register failed')
         return redirect(url_for('pinlib', msg='NG: 登録でエラーが発生しました'))
     if r.get('ok'):
-        app.logger.info('pinlib registered pattern=%s', g('pattern_name'))
         return redirect(url_for('pinlib', msg='登録しました（照合=%s）。' % (r.get('resolved_pattern') or '')))
-    return redirect(url_for('pinlib', msg='NG: ' + ' / '.join(r.get('problems', ['不明'])) ))
+    return redirect(url_for('pinlib', msg='NG: ' + ' / '.join(r.get('problems', ['不明']))))
+
+
+@app.route('/pinlib/edit/<name>', methods=['GET'])
+def pinlib_edit(name):
+    gp = DR.get_pattern(name)
+    if not gp:
+        return redirect(url_for('pinlib', msg='NG: %s は存在しません' % name))
+    p = gp['pattern']; rule = (gp['rules'] or [{}])[0]
+    v = {'pattern_name': name, 'maker': p.get('maker', ''), 'model': p.get('model', ''),
+         'pins': ','.join(p.get('pins', [])), 'com': ','.join(p.get('com', [])),
+         'no': ','.join(p.get('no', [])), 'nc': ','.join(p.get('nc', [])),
+         'coil': ','.join(p.get('coil', [])), 'source': p.get('source', ''),
+         'desc': p.get('desc', ''), 'type_contains': rule.get('type_contains', ''),
+         'parts': rule.get('parts', ''), 'pole': rule.get('pole', '')}
+    note = '' if p.get('user_added') else '<div class="card muted">※組込みパターンです。内容の修正はできますが削除はできません。</div>'
+    body = note + _pinlib_form('/pinlib/update', v, 'この機器ピン配を更新', name_ro=True)
+    return _page(body, title='機器ピン配の編集：' + _esc(name))
+
+
+@app.route('/pinlib/update', methods=['POST'])
+def pinlib_update():
+    a = _pinlib_args()
+    if not a['maker'] or not a['model']:
+        return redirect(url_for('pinlib', msg='NG: メーカ名・型式は必須です'))
+    try:
+        r = DR.update_pattern(a.pop('pattern_name'), a.pop('pins'), **a)
+    except Exception:
+        app.logger.exception('pinlib update failed')
+        return redirect(url_for('pinlib', msg='NG: 更新でエラーが発生しました'))
+    return redirect(url_for('pinlib', msg=('更新しました。' if r.get('ok') else 'NG: ' + ' / '.join(r.get('problems', ['不明'])))))
+
+
+@app.route('/pinlib/delete', methods=['POST'])
+def pinlib_delete():
+    name = (request.form.get('pattern_name') or '').strip()
+    try:
+        r = DR.delete_pattern(name)
+    except Exception:
+        app.logger.exception('pinlib delete failed')
+        return redirect(url_for('pinlib', msg='NG: 削除でエラーが発生しました'))
+    return redirect(url_for('pinlib', msg=('削除しました（%s）。' % name if r.get('ok') else 'NG: ' + ' / '.join(r.get('problems', ['不明'])))))
 
 
 @app.route('/api/health')

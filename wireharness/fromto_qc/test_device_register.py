@@ -32,6 +32,18 @@ def test_register_rejects_no_match_rule():
     assert not r['ok']
 
 
+def test_maker_model_in_preview_and_list_format():
+    # メーカ名/型式がピン配に入り、型式が照合キーにもなる。
+    r = DR.register_pattern('t2', ['1', '5', '6', '8'], source='手本', maker='正興電機',
+                            model='BHN-V', apply=False)
+    pdef = r['preview']['pattern']['t2']
+    assert pdef.get('maker') == '正興電機' and pdef.get('model') == 'BHN-V'
+    assert r['preview']['match'].get('type_contains') == 'BHN-V'   # 型式→照合キー
+    # list_patterns は dict 形式(pins/maker/model/user_added)
+    lp = DR.list_patterns()
+    assert 'relay_RU4S' in lp and 'pins' in lp['relay_RU4S'] and 'user_added' in lp['relay_RU4S']
+
+
 if __name__ == '__main__':
     test_validate_pinout_ok_and_bad()
     test_register_requires_source()
