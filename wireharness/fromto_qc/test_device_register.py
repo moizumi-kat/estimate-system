@@ -13,22 +13,17 @@ def test_validate_pinout_ok_and_bad():
     assert not ok3 and any('重複' in p for p in probs3)
 
 
-def test_register_requires_source():
-    r = DR.register_pattern('relay_test', ['1', '4', '5', '8'], source='', apply=False)
-    assert not r['ok'] and any('source' in p or '出所' in p for p in r['problems'])
-
-
-def test_register_preview_ok():
-    # 出所あり・照合規則あり・apply=False → プレビューが返り、ファイルは書き換えない。
+def test_register_preview_ok_no_source():
+    # 出所は不要。照合規則(型式)あり・apply=False → プレビューが返り、ファイルは書き換えない。
     r = DR.register_pattern('meterswitch_BHN_V_test', ['1', '5', '6', '8'],
-                            source='正興電機 BHN-V N-8 展開図', desc='電圧計切替(試験)',
+                            source='', desc='電圧計切替(試験)', maker='正興電機',
                             match_type_contains='BHN-V', apply=False)
     assert r['ok'], r
     assert 'preview' in r and 'meterswitch_BHN_V_test' in r['preview']['pattern']
 
 
 def test_register_rejects_no_match_rule():
-    r = DR.register_pattern('x_test', ['1', '2'], source='資料', apply=False)
+    r = DR.register_pattern('x_test', ['1', '2'], source='', apply=False)
     assert not r['ok']
 
 
@@ -46,7 +41,7 @@ def test_maker_model_in_preview_and_list_format():
 
 if __name__ == '__main__':
     test_validate_pinout_ok_and_bad()
-    test_register_requires_source()
-    test_register_preview_ok()
+    test_register_preview_ok_no_source()
     test_register_rejects_no_match_rule()
+    test_maker_model_in_preview_and_list_format()
     print('device_register tests: OK')

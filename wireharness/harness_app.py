@@ -242,7 +242,7 @@ def index():
         '<a class="mcard" href="#seibans"><b><span class="n">4</span>ハーネスデータ出力</b>'
         '<p>生成済み製番のExcel等をダウンロード（下の一覧から）。</p></a>'
         '<a class="mcard" href="/pinlib"><b><span class="n">5</span>機器ピン配の登録</b>'
-        '<p>端子番号は機器TYPEのピン配から選定。<b>未登録機器（要確認）をここで登録</b>（出所=裏取り必須）。</p></a>'
+        '<p>端子番号は機器TYPEのピン配から選定。<b>未登録機器（要確認）をここで登録</b>（メーカ名・型式が必須）。</p></a>'
         '</div>')
     extra = (
         '<div class="card"><h2>設計不備の学習（修正前後の図面を登録）</h2>'
@@ -797,8 +797,8 @@ def _pinlib_form(action, v, submit_label, name_ro=False):
     return f'''
     <form method="post" action="{action}" class="card">
       <h2>{_esc(submit_label)}</h2>
-      <p class="muted">端子は機器TYPE→ピン配から選びます。<b>メーカ名・型式・出所（裏取り元）は必須</b>
-        （提供資料／メーカー展開図／手本 等。推測禁止）。型式は照合キーにも使われます。</p>
+      <p class="muted">端子は機器TYPE→ピン配から選びます。<b>メーカ名・型式は必須</b>
+        （提供資料／メーカー展開図／手本 等で確認。推測禁止）。型式は照合キーにも使われます。</p>
       <div class="row"><label>パターン名<br><input type="text" name="pattern_name" value="{iv('pattern_name')}" placeholder="例 meterswitch_BHN_V" required{ro}></label>
         <label>メーカ名(必須)<br><input type="text" name="maker" value="{iv('maker')}" placeholder="例 正興電機" required></label>
         <label>型式(必須)<br><input type="text" name="model" value="{iv('model')}" placeholder="例 BHN-V-RKK-N-8" required></label></div>
@@ -811,7 +811,6 @@ def _pinlib_form(action, v, submit_label, name_ro=False):
         <label>NC<br><input type="text" name="nc" value="{iv('nc')}" placeholder="9,12"></label>
         <label>コイル<br><input type="text" name="coil" value="{iv('coil')}" placeholder="13,14"></label></div>
       <div class="row"><label>説明<br><input type="text" name="desc" value="{iv('desc')}" placeholder="例 電圧計切替(正興BHN-V)" style="width:320px"></label></div>
-      <div class="row"><label>出所(必須)<br><input type="text" name="source" value="{iv('source')}" placeholder="例 正興電機 BHN-V N-8 展開図" required style="width:420px"></label></div>
       <div class="row"><button class="primary" type="submit">{_esc(submit_label)} ▶</button>
         <a class="btn" href="/pinlib">一覧へ</a></div>
     </form>'''

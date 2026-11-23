@@ -5,7 +5,7 @@
 人がその機器のピン配を登録できるようにする(B)。本モジュールは terminal_library.json へ
 安全に追記する(バックアップ＋検証＋冪等)。Web UI(harness_app/terminal_app)から呼ぶ。
 
-登録の出所(source)は必ず残す(提供資料/手本/メーカー資料など。推測登録を避け、裏取りを明示)。
+メーカ名・型式は必須(推測登録を避け、提供資料/手本/メーカー資料で裏取りした上で登録する)。
 """
 import json
 import os
@@ -59,7 +59,7 @@ def validate_pinout(pins, com=None, no=None, nc=None, coil=None):
 
 def _build_pdef(pins, source, desc, com, no, nc, coil, maker, model):
     label = ' '.join(x for x in (maker, model) if x)
-    full_desc = (desc or model or '') + (f'（{label}）' if label else '') + f'（出所: {source}）'
+    full_desc = (desc or model or '') + (f'（{label}）' if label else '') + (f'（出所: {source}）' if source else '')
     pdef = {'desc': full_desc, 'pins': [str(x) for x in pins], 'stud': 'socket', 'z': 55,
             'maker': maker or '', 'model': model or '', 'source': source, 'user_added': True}
     for nm, arr in (('com', com), ('no', no), ('nc', nc), ('coil', coil)):
@@ -96,12 +96,10 @@ def register_pattern(pattern_name, pins, source, desc='', com=None, no=None, nc=
                      coil=None, match_type_contains=None, match_parts=None, match_pole=None,
                      maker='', model='', apply=True):
     """機器ピン配を1件登録(terminal_library.json へ追記)。
-      pattern_name, pins(必須), source(出所・必須), maker(メーカ名), model(型式),
+      pattern_name, pins(必須), maker(メーカ名)・model(型式)(必須), source(任意・出所メモ),
       com/no/nc/coil(任意), match_type_contains / match_parts(+match_pole)=照合規則。
     apply=False ならプレビュー。戻り: dict(ok, problems, backup?).
     """
-    if not source or not str(source).strip():
-        return {'ok': False, 'problems': ['source(出所)は必須です。裏取り元を記載してください']}
     if not match_type_contains and not match_parts and not model:
         return {'ok': False, 'problems': ['照合規則(型式に含む文字 か PARTS)が必要です']}
     ok, probs = validate_pinout(pins, com, no, nc, coil)
@@ -134,8 +132,6 @@ def register_pattern(pattern_name, pins, source, desc='', com=None, no=None, nc=
 def update_pattern(pattern_name, pins, source, desc='', com=None, no=None, nc=None, coil=None,
                    match_type_contains=None, match_parts=None, match_pole=None, maker='', model=''):
     """既存パターンの内容・照合規則を差し替える(編集)。◎誤答ゼロ: 検証してから保存・バックアップ。"""
-    if not source or not str(source).strip():
-        return {'ok': False, 'problems': ['source(出所)は必須です']}
     ok, probs = validate_pinout(pins, com, no, nc, coil)
     if not ok:
         return {'ok': False, 'problems': probs}
