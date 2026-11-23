@@ -27,7 +27,8 @@ from . import terminals as T
 
 
 def device_types(draw_paths):
-    """図面群から {機器sym(_nsym): TYPE文字列}。本体ブロック優先（接点記号 _LS_* は除外）。"""
+    """図面群から {機器sym(_nsym): (PARTS, TYPE)}。本体ブロック優先（接点記号 _LS_* は除外）。
+    PARTS(機器カテゴリ MCCB/AM/CP 等)と TYPE(型式)の両方でピン配パターンを引けるようにする。"""
     out = {}
     for p in draw_paths:
         try:
@@ -40,22 +41,37 @@ def device_types(draw_paths):
             a = {k.dxf.tag: (k.dxf.text or '').strip() for k in ins.attribs}
             dev = a.get('DEVICE', ''); d1 = a.get('DEVICE1', '')
             sym = FS._nsym(f'{dev}-{d1}' if d1 else dev, {})
-            ty = a.get('TYPE', '')
-            if sym and ty:
-                out.setdefault(sym, ty)
+            pr = a.get('PARTS', ''); ty = a.get('TYPE', '')
+            if sym and (pr or ty):
+                out.setdefault(sym, (pr, ty))
     return out
 
 
-def _pattern_pins(type_str):
-    """TYPE → (pattern名, ピン集合)。レジストリ未登録なら (None, set())。"""
+def pattern_all_pins(pdef):
+    """パターン定義から全端子番号を集める。パターンにより端子は pins / rows / main_rows /
+    aux / coil / no / nc / com / blocks / coords の各フィールドに入るため、全部をまとめる。"""
+    pins = set()
+    for k in ('pins', 'coil', 'aux', 'no', 'nc', 'com'):
+        for x in (pdef.get(k) or []):
+            pins.add(str(x))
+    for k in ('rows', 'main_rows', 'blocks'):
+        for row in (pdef.get(k) or []):
+            for x in row:
+                pins.add(str(x))
+    for x in (pdef.get('coords') or {}):
+        pins.add(str(x))
+    return pins
+
+
+def _pattern_pins(type_str, parts=''):
+    """(TYPE, PARTS) → (pattern名, 全端子集合)。レジストリ未登録なら (None, set())。"""
     try:
-        pat = T.resolve_pattern('', type_str or '')
+        pat = T.resolve_pattern(parts or '', type_str or '')
     except Exception:
         pat = None
     if not pat:
         return None, set()
-    p = T.library()['patterns'].get(pat) or {}
-    return pat, set(str(x) for x in p.get('pins', []))
+    return pat, pattern_all_pins(T.library()['patterns'].get(pat) or {})
 
 
 def audit_seiban(seiban_dir):
@@ -81,15 +97,15 @@ def audit_seiban(seiban_dir):
             if not re.fullmatch(r'\d+', t):
                 cls['non_numeric'] += 1
                 continue
-            ty = dev_type.get(sym)
-            if not ty:
+            pr, ty = dev_type.get(sym, ('', ''))
+            if not pr and not ty:
                 cls['untyped'] += 1
                 untyped[(re.match(r'[A-Za-z]*', sym).group(0) or sym[:4])] += 1
                 continue
-            pat, pins = _pattern_pins(ty)
+            pat, pins = _pattern_pins(ty, pr)
             if not pat:
                 cls['unregistered'] += 1
-                unregistered[ty] += 1
+                unregistered[f'{pr}|{ty}'] += 1
                 continue
             if t in pins:
                 cls['ok_pin'] += 1
