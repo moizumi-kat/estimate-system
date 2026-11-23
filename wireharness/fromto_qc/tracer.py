@@ -19,6 +19,12 @@ TOL = 18
 CROSS_DOT = '_crossPoint1'
 
 
+def _is_cross_dot(name):
+    """接続ドット(交差結線マーカー)か。ブロック名の大小表記ゆれ(_crossPoint1/_CROSSPOINT1)を吸収。
+    同一図面内に両表記が混在する(実データ確認)ため大小無視で判定しないと接続ドットを取りこぼす。"""
+    return str(name).lower() == CROSS_DOT.lower()
+
+
 def _pt_seg(p, a, b):
     (px, py), (ax, ay), (bx, by) = p, a, b
     dx, dy = bx - ax, by - ay
@@ -264,7 +270,7 @@ def _build_components(path, tol=TOL, control_only=False):
         m.segments = m._wire_segments()
     segs = [(p1, p2) for (p1, p2) in m.segments]
     dots = [(e.dxf.insert.x, e.dxf.insert.y) for e in m.msp
-            if e.dxftype() == 'INSERT' and e.dxf.name == CROSS_DOT]
+            if e.dxftype() == 'INSERT' and _is_cross_dot(e.dxf.name)]
     par = list(range(len(segs)))
 
     def find(a):
@@ -614,7 +620,7 @@ def trace_detail(path, tol=TOL, gap_max=95):
     m = DrawingModel(path)
     segs = [(p1, p2) for (p1, p2) in m.segments]
     dots = [(e.dxf.insert.x, e.dxf.insert.y) for e in m.msp
-            if e.dxftype() == 'INSERT' and e.dxf.name == CROSS_DOT]
+            if e.dxftype() == 'INSERT' and _is_cross_dot(e.dxf.name)]
     par = list(range(len(segs)))
 
     def find(a):
