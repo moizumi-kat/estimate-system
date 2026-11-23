@@ -488,6 +488,15 @@ def score_production_net(seiban_dir):
         # 場外ケーブル(他盤へ渡る外部ケーブル)＝ハーネス範囲外。カバレッジと同じ判定(F<<・電線色-番号端子も)。
         return _fc._is_external_key((str(sym), str(term)))
 
+    def is_main(sym, term):
+        # 主回路(太物＝1人目工程)。電力機器の主端子(1-6)または LUG/LUGTB。ハーネス(3人目=制御)の範囲外。
+        s = str(sym).upper()
+        if 'LUG' in s:
+            return True
+        if re.match(r'(MCCB|ELCB|NFB|ELB|LBS|52|51|ACR|DCR|INV)', s) and str(term) in ('1', '2', '3', '4', '5', '6'):
+            return True
+        return False
+
     def node(ns, term, other_ns):
         if ns.upper().startswith('TB'):
             return ('TB', _circ_num(other_ns) or _circ_num(ns))
@@ -544,6 +553,8 @@ def score_production_net(seiban_dir):
             ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
             if is_ext(ra, a['term']) or is_ext(rb, b['term']):
                 continue
+            if is_main(ra, a['term']) and is_main(rb, b['term']):
+                continue                       # 主回路(太物)の電力経路はハーネス(制御)範囲外
             na = _nsym(resolve(ra, rb), lmap)
             nb = _nsym(resolve(rb, ra), lmap)
             x = node(na, a['term'], nb)
