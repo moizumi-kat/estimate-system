@@ -43,7 +43,10 @@ def device_types(draw_paths):
             sym = FS._nsym(f'{dev}-{d1}' if d1 else dev, {})
             pr = a.get('PARTS', ''); ty = a.get('TYPE', '')
             if sym and (pr or ty):
-                out.setdefault(sym, (pr, ty))
+                cur = out.get(sym)
+                # PARTS/TYPE の両方を持つブロックを優先(順序非依存)。既存に無い情報があれば補う。
+                if cur is None or (not cur[0] and pr) or (not cur[1] and ty):
+                    out[sym] = (pr or (cur[0] if cur else ''), ty or (cur[1] if cur else ''))
     return out
 
 
@@ -120,6 +123,48 @@ def audit_seiban(seiban_dir):
         'not_in_pinout': not_in_pinout.most_common(),
         'verifiable_rate': cls['ok_pin'] / max(1, sum(cls[k] for k in ('ok_pin', 'not_in_pinout', 'unregistered', 'untyped'))),
     }
+
+
+def flag_unverified(members, dev_type):
+    """生成シートのメンバー列に『端子の裏取り状態』を注記する(A: 要確認の出力)。
+    各メンバー(dict: device/no/terminal)に pin_confirm を付ける:
+      ''                … 裏取りOK(TYPE既知・登録ピン配に実在) / 対象外(空端子・TB・非数字)
+      '要確認(未登録:型)' … 機器TYPEがレジストリ未登録でピンを検証できない
+      '要確認(TYPE無)'   … 機器TYPEが図面から取れない
+      '要確認(ピン配外:N)' … TYPE既知だが端子Nがそのピン配に無い(＝付番誤りの疑い)
+    推測番号を黙って出さず、現場に『要確認』を提示する(値は候補として残す)。dev_type={sym:(parts,type)}。"""
+    n_flag = 0
+    for m in members:
+        m['pin_confirm'] = ''
+        dev = (m.get('device') or ''); no = (m.get('no') or '')
+        sym = FS._nsym(f'{dev}-{no}' if no else dev, {})
+        t = (m.get('terminal') or '').strip()
+        if not t or sym.upper().startswith('TB') or not re.fullmatch(r'\d+', t):
+            continue
+        pr, ty = dev_type.get(sym, ('', ''))
+        if not pr and not ty:
+            m['pin_confirm'] = '要確認(TYPE無)'; n_flag += 1; continue
+        pat, pins = _pattern_pins(ty, pr)
+        if not pat:
+            m['pin_confirm'] = f'要確認(未登録:{ty or pr})'; n_flag += 1; continue
+        if t not in pins:
+            m['pin_confirm'] = f'要確認(ピン配外:{t})'; n_flag += 1
+    return n_flag
+
+
+def flag_sheet(sheet, seiban_dir_or_paths):
+    """produce/build_sheet のシート(行→members)全体に裏取り状態を注記。戻り: 要確認にした端子数。
+    seiban_dir_or_paths: 製番ディレクトリ(str)か、図面パスのリスト。"""
+    if isinstance(seiban_dir_or_paths, (list, tuple)):
+        draws = [p for p in seiban_dir_or_paths if p]
+    else:
+        draws = (sorted(glob.glob(os.path.join(seiban_dir_or_paths, '図面データ_*.dxf'))) +
+                 sorted(glob.glob(os.path.join(seiban_dir_or_paths, '図面データ_*.DXF'))))
+    dt = device_types(draws)
+    n = 0
+    for row in (sheet or []):
+        n += flag_unverified(row.get('members', []), dt)
+    return n
 
 
 def format_report(rep):

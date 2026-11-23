@@ -112,10 +112,24 @@ def produce(seq_paths, skel_paths=None, seiban='', layout_path=None, strict=True
     da = analyze_defects(seq_paths, skel_paths=skel_paths, seiban=seiban, layout_path=layout_path)
     sheet = harness_sheet.build_sheet(seq_paths, skel_paths=skel_paths, seiban=seiban)
     n_wires = sum(len(r['wires']) for r in sheet)
+    # A(要確認の出力): 端子番号が機器TYPE→ピン配で裏取りできない端子に『要確認』を付す
+    # (推測番号を黙って出さない＝現場混乱ゼロ・茂泉様方針)。値は候補として残す。
+    n_confirm = 0
+    try:
+        import os as _os2
+        from . import pin_audit as _pa
+        # 機器TYPE/PARTSは全図面(F/E/D)の本体ブロックに在るので、製番ディレクトリ全体を監査する。
+        _allp = [p for p in (list(seq_paths) + list(skel_paths or []) +
+                             ([layout_path] if layout_path else [])) if p]
+        _dir = _os2.path.dirname(_allp[0]) if _allp else ''
+        n_confirm = _pa.flag_sheet(sheet, _dir if _dir else _allp)
+    except Exception:
+        n_confirm = 0
     status = 'ok' if not da['defects'] else 'has_defects'
     out = {'seiban': seiban, 'status': status,
            'defects': da['defects'], 'external': da['external'],
            'summary': {**da['summary'], '生成号線': len(sheet), '生成渡り(電線)': n_wires,
+                       '端子要確認': n_confirm,
                        '判定': ('不備なし→出力' if status == 'ok' else '不備あり→修正案を提示')}}
     if status == 'ok' or not strict:
         out['sheet'] = sheet
