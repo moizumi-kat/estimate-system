@@ -454,6 +454,72 @@ def _letter_assign_map(seiban_dir):
     return out
 
 
+# TB台番号を設計レイアウト(回路群内の最寄りストリップ)で付番して照合する(0af: 台番号は回路番号から導出)。
+# False に戻せば従来の('TB',回路)畳み込みに戻る(退行時の安全弁)。
+_TB_STRIP = True
+_tb_ctx_cache = {}
+
+
+def _tb_strip_ctx(seiban_dir):
+    """内部配置図Dの実TBストリップを {回路群(1桁): [(台番号, pos)]} に。Layout は製番ごとにキャッシュ。"""
+    if seiban_dir in _tb_ctx_cache:
+        return _tb_ctx_cache[seiban_dir]
+    from .layout import Layout
+    from . import harness_produce as HP
+    lays = []
+    for p in (glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.dxf')) +
+              glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF'))):
+        try:
+            L = Layout(p)
+            if getattr(L, 'devices', None):
+                lays.append(L)
+        except Exception:
+            pass
+    byface = collections.defaultdict(list)
+    try:
+        for tb, pos in HP._tb_blocks(lays).items():
+            m = re.match(r'(\d)', str(tb))
+            if m:
+                byface[m.group(1)].append((str(tb), pos))
+    except Exception:
+        pass
+    ctx = (lays, byface)
+    _tb_ctx_cache[seiban_dir] = ctx
+    return ctx
+
+
+def _circ_group(sym):
+    m = re.search(r'(\d)\d{2}', re.sub(r'[-\s]', '', str(sym)))
+    return m.group(0)[0] if m else ''
+
+
+def _tb_dai(seiban_dir, members):
+    """この号線(net)のTBに付く設計台番号を、回路群内の最寄りストリップ(内部機器の位置基準)から引く。
+    引けなければ None(→従来の回路畳み込みにフォールバック)。◎誤答ゼロ: 推測で桁を作らず設計レイアウトから読む。"""
+    import math
+    lays, byface = _tb_strip_ctx(seiban_dir)
+    if not byface:
+        return None
+    for m in members:
+        dev = (m.get('device') or ''); no = (m.get('no') or '')
+        if dev.upper() == 'TB':
+            continue
+        g = _circ_group(no or dev)
+        if not g or not byface.get(g):
+            continue
+        pos = None
+        for L in lays:
+            try:
+                pos = L.device_pos(f'{dev}-{no}' if no else dev) or L.device_pos(dev)
+                if pos:
+                    break
+            except Exception:
+                pass
+        if pos:
+            return min(byface[g], key=lambda t: math.hypot(t[1][0] - pos[0], t[1][1] - pos[1]))[0]
+    return None
+
+
 def _produce_nets(seiban_dir):
     """本番生成器のネット(号線)を正規化ノード集合のリストで返す。
     戻り (nets, node2net, prod_syms)。TB→(TB,回路)・接点→NO/NC。配線図が無い等で不可なら空。
@@ -487,11 +553,15 @@ def _produce_nets(seiban_dir):
             c = _circ_num(msym(m))
             if c and not s.upper().startswith('TB'):
                 circs.add(c)
+        dai = _tb_dai(seiban_dir, row.get('members', [])) if _TB_STRIP else None
         ns = set()
         for (s, t) in members:
             if s.upper().startswith('TB'):
+                # 従来の回路畳み込みは残しつつ(母体不変)、設計台番号ノードを"追加"する(加点のみ・退行なし)。
                 for c in (circs or {''}):
                     ns.add(('TB', c))
+                if dai:
+                    ns.add(('TBS:' + dai, ''))        # 設計台番号(回路群内ストリップ)
             else:
                 ns.add((s, _fold_term(s, t)))
         if ns:
@@ -531,10 +601,24 @@ def score_production_net(seiban_dir):
             return True                        # 主回路TB(回路+相/接地 101U/101E 等)
         return False
 
-    def node(ns, term, other_ns):
+    def node_primary(ns, term, other_ns):
+        # 母体(tot)判定用の正準ノード＝従来の回路畳み込み(母体を変えない＝退行ゼロ)。
         if ns.upper().startswith('TB'):
             return ('TB', _circ_num(other_ns) or _circ_num(ns))
         return (ns, _fold_term(ns, term))
+
+    def node_cands(ns, term, other_ns):
+        # present/hit 判定用の候補集合。TBは回路畳み込み＋設計台番号の両方を候補にし、
+        # どちらかで結線していれば一致(加点のみ・従来の一致は保持＝退行ゼロ)。
+        if ns.upper().startswith('TB'):
+            cands = {('TB', _circ_num(other_ns) or _circ_num(ns))}
+            if _TB_STRIP:
+                m = re.match(r'TB-?(.+)$', ns, re.I)
+                dai = m.group(1) if m else ''
+                if dai and not re.match(r'^仮', dai):
+                    cands.add(('TBS:' + dai, ''))
+            return cands
+        return {(ns, _fold_term(ns, term))}
     tot = hit = present = 0
     for fi, f in enumerate(sorted(glob.glob(os.path.join(seiban_dir, 'FromToデータ_*.txt'))), 1):
         try:
@@ -597,14 +681,18 @@ def score_production_net(seiban_dir):
                 continue                       # 主回路(太物)の電力経路はハーネス(制御)範囲外
             na = _nsym(resolve(ra, rb), lmap)
             nb = _nsym(resolve(rb, ra), lmap)
-            x = node(na, a['term'], nb)
-            y = node(nb, b['term'], na)
-            if x == y:
+            xp = node_primary(na, a['term'], nb)
+            yp = node_primary(nb, b['term'], na)
+            if xp == yp:
                 continue
             tot += 1
-            if x in node2net and y in node2net:
+            xs = node_cands(na, a['term'], nb)
+            ys = node_cands(nb, b['term'], na)
+            xnets = set().union(*[node2net[x] for x in xs if x in node2net]) if any(x in node2net for x in xs) else set()
+            ynets = set().union(*[node2net[y] for y in ys if y in node2net]) if any(y in node2net for y in ys) else set()
+            if xnets and ynets:
                 present += 1
-                if node2net[x] & node2net[y]:
+                if xnets & ynets:
                     hit += 1
     return {'seiban': os.path.basename(seiban_dir.rstrip('/')),
             'truth': tot, 'present': present, 'hit': hit,
