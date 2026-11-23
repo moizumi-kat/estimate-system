@@ -216,6 +216,55 @@ def detect_crossings(wires, dev_face, bases=None):
     return {g: ps for g, ps in g2p.items() if len(ps) >= 2}
 
 
+def detect_box_door_crossings(wires, dev_place, dev_face=None, rel_concat=None):
+    """【案件オプション】同一盤内で 箱体(内部)↔扉 を跨ぐ号線を返す(茂泉様知見: 案件によっては
+    同じ盤でも箱体と扉の間をコネクタにする)。既定では呼ばれない=回帰ゼロ。盤間渡り(detect_crossings)
+    とは別枠で、同一面内の 内部↔扉 のみを対象にする。
+    dev_place: {(DEVICE正規化,DEVICE1正規化):('内部'|'扉',面)}（build_device_place）。
+    dev_face/rel_concat: 配置図に無い扉機器(RL/GL/入/切等)の面補完用。
+    戻り: {号線: 面}（同一盤の箱体↔扉を跨ぐもの）。"""
+    from .layout import DOOR_BASE
+    dev_face = dev_face or {}
+    rel_concat = rel_concat if rel_concat is not None else {(b, n): p for (b, n), p in dev_face.items()}
+
+    def _base(dv):
+        return re.sub(r'[0-9]+$', '', _norm(dv))
+
+    def _place(dv, no):
+        k = (_norm(dv), _norm(no))
+        if k in dev_place:                       # 配置図で内部/扉が判明
+            return dev_place[k]
+        f = face_of(dev_face, rel_concat, dv, no)  # 面だけ判明
+        if f is None:
+            return None
+        base = _base(dv)
+        if _norm(dv) in DOOR_BASE or base in DOOR_BASE:
+            return ('扉', f)                      # 扉付け機器(表示灯/押ボタン/計器/切替)は扉
+        return ('内部', f)                        # それ以外で面がある機器は箱体(内部)扱い
+
+    g2places = collections.defaultdict(set)
+    for w in wires:
+        g = w.get('gousen')
+        if not g or g in COLORS:
+            continue
+        for e in (w.get('from', {}), w.get('to', {})):
+            if _norm(e.get('device')) == 'TB':
+                continue
+            pl = _place(e.get('device'), e.get('no'))
+            if pl:
+                g2places[g].add(pl)
+    out = {}
+    for g, places in g2places.items():
+        byface = collections.defaultdict(set)
+        for loc, f in places:
+            byface[f].add(loc)
+        for f, locs in byface.items():
+            if '内部' in locs and '扉' in locs:   # 同一盤で箱体↔扉を跨ぐ
+                out[g] = f
+                break
+    return out
+
+
 def classify(gousen, wires):
     """渡り号線の型を返す: 'power'(太物→渡り用TB) か 'control'(制御→R-F/L-F)。
 
