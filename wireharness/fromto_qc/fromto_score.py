@@ -533,17 +533,23 @@ def score_production_net(seiban_dir):
             if fi in letmap[s] and letmap[s][fi] in cands:
                 return letmap[s][fi]
             return sym
-        # 反復解決(pass1)：実機器を相手に持つ辺で各文字→実機器を投票で確定し、
-        # letter↔letter 辺にも適用する(ファイル内で同じ文字＝同じ実機器)。
-        vote = collections.defaultdict(collections.Counter)
-        for w in wires:
-            a, b = w['ends']
-            ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
-            for sym, comp in ((ra, rb), (rb, ra)):
-                dev = resolve_one(sym, comp)
-                if dev != sym:
-                    vote[sym.upper()][dev] += 1
-        letter_map = {s: c.most_common(1)[0][0] for s, c in vote.items() if c}
+        # 反復解決(多段伝播)：実機器を相手に持つ辺で各文字→実機器を投票で確定し、確定した文字を
+        # 次段で"相手"として使って letter↔letter 辺も解く(ファイル内で同じ文字＝同じ実機器)。固定点まで。
+        letter_map = {}
+        for _ in range(6):
+            vote = collections.defaultdict(collections.Counter)
+            for w in wires:
+                a, b = w['ends']
+                ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
+                for sym, comp in ((ra, rb), (rb, ra)):
+                    comp_eff = letter_map.get(comp.upper(), comp)   # 解決済み文字は実機器として相手に使う
+                    dev = resolve_one(sym, comp_eff)
+                    if dev != sym:
+                        vote[sym.upper()][dev] += 1
+            new_map = {s: c.most_common(1)[0][0] for s, c in vote.items() if c}
+            if new_map == letter_map:
+                break
+            letter_map = new_map
 
         def resolve(sym, comp):
             s = sym.upper()
