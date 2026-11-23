@@ -496,7 +496,7 @@ def score_production_net(seiban_dir):
         except Exception:
             continue
 
-        def resolve(sym, comp):
+        def resolve_one(sym, comp):
             s = sym.upper()
             if not (re.fullmatch(r'[A-Z]', s) and s in letmap):
                 return sym
@@ -519,6 +519,23 @@ def score_production_net(seiban_dir):
             if fi in letmap[s] and letmap[s][fi] in cands:
                 return letmap[s][fi]
             return sym
+        # 反復解決(pass1)：実機器を相手に持つ辺で各文字→実機器を投票で確定し、
+        # letter↔letter 辺にも適用する(ファイル内で同じ文字＝同じ実機器)。
+        vote = collections.defaultdict(collections.Counter)
+        for w in wires:
+            a, b = w['ends']
+            ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
+            for sym, comp in ((ra, rb), (rb, ra)):
+                dev = resolve_one(sym, comp)
+                if dev != sym:
+                    vote[sym.upper()][dev] += 1
+        letter_map = {s: c.most_common(1)[0][0] for s, c in vote.items() if c}
+
+        def resolve(sym, comp):
+            s = sym.upper()
+            if re.fullmatch(r'[A-Z]', s) and s in letter_map:
+                return letter_map[s]
+            return resolve_one(sym, comp)
         for w in wires:
             a, b = w['ends']
             ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
