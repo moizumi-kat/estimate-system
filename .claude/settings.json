@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "allow": [
+      "mcp__Dropbox__create_file",
+      "mcp__Dropbox__create_folder"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
