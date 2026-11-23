@@ -167,7 +167,10 @@ def generate_edges(seiban_dir, lmap=None):
             continue
         for e in edges:
             (da, ta), (db, tb) = tuple(e)
-            if ta == '?' or tb == '?':
+            # '?' は未解決端子。ただし端子台(TB)の '?' は台番号未付番で正常(＝_conn_edge が相手回路へ
+            # 正規化して畳む)ので落とさない。非TBの '?'(真に未解決の接点)だけ落とす。
+            if (ta == '?' and not str(da).upper().startswith('TB')) or \
+               (tb == '?' and not str(db).upper().startswith('TB')):
                 continue
             gen.add(_nedge(da, ta, db, tb, lmap))
     for w in main_circuit.generate(draws) + fixed_wiring.generate(draws):
