@@ -63,9 +63,18 @@ def test_net_recall_credits_any_chain_order():
     assert hit == 2                                      # 鎖順が違っても機能同一=2辺とも一致
 
 
+def test_fold_term_contacts_to_nonc():
+    # 接点は NO/NC に畳む(機能等価)。主回路端子・空欄はそのまま(大文字化/空白除去)。
+    assert FS._fold_term('86X101', '13') == 'NO'        # a接点
+    assert FS._fold_term('86X101', '11') == 'NC'        # b接点
+    assert FS._fold_term('MCCB101', '1') == '1'         # 主回路端子はそのまま
+    assert FS._fold_term('GL101', '') == ''             # 空欄はそのまま
+
+
 if __name__ == '__main__':
     test_locator_resolution_prefers_dct()
     test_locator_resolution_falls_back_without_dct()
     test_union_find_nets_groups_connected()
     test_net_recall_credits_any_chain_order()
+    test_fold_term_contacts_to_nonc()
     print('fromto_score tests: OK')

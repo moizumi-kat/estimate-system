@@ -379,3 +379,149 @@ def score_connectivity_net(seiban_dir):
             'truth': tot, 'present': present, 'hit': hit,
             'recall': hit / tot if tot else 0.0,
             'present_rate': present / tot if tot else 0.0}
+
+
+# ---- 本番生成器(harness_produce.produce)をネット採点する【②実生成一致＝本番の実力】 ----
+# ★採点はスタブ generate_edges でなく本番出力で行う(0x・茂泉様確定)。素ロケーター文字は
+#   『相手端点の盤(F/H配線シート)で一意の実機器』＋ファイルの盤で解決(歴史的手法「F盤内候補へ絞る」)。
+def _fold_term(sym, term):
+    f = _cp.function(term, sym)
+    return f if f in ('NO', 'NC') else _nterm(term)
+
+
+def _dev_panel_map(seiban_dir):
+    """実機器sym(_nsym) → 盤index(F/H配線シート順 1,2,…)。素ロケーター文字を盤で一意化するため。"""
+    out = {}
+    for i, p in enumerate(_seq_paths(seiban_dir), 1):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {k.dxf.tag: (k.dxf.text or '').strip() for k in ins.attribs}
+            s = a.get('DEVICE', '') + a.get('DEVICE1', '')
+            if s:
+                out.setdefault(_nsym(s, {}), i)
+    return out
+
+
+def _letter_panel_map(seiban_dir, dev_panel):
+    """DCT: letter → {盤index: 実機器sym}。同じ文字が複数盤にある曖昧を盤で解消する。"""
+    out = collections.defaultdict(dict)
+    for p in glob.glob(os.path.join(seiban_dir, '機器相番号_*.dxf')):
+        try:
+            pairs = LM.extract_pairs(p)
+        except Exception:
+            continue
+        for loc, act in pairs:
+            b, lt = LM._split_locator(loc)
+            if b and lt:
+                dev = norm(act).upper()
+                pan = dev_panel.get(_nsym(dev, {}))
+                if pan:
+                    out[lt.upper()][pan] = dev
+    return out
+
+
+def _produce_nets(seiban_dir):
+    """本番生成器 produce() の出力を正規化ネット(ノード集合のリスト)で返す。
+    戻り (nets, node2net, prod_syms)。TB→(TB,回路)・接点→NO/NC。配線図が無い等で不可なら空。"""
+    from . import harness_produce as HP
+    seq = _seq_paths(seiban_dir)
+    if not seq:
+        return [], {}, set()
+    skel = _skel_paths(seiban_dir)
+    lay = (glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF')) +
+           glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.dxf')))
+    try:
+        r = HP.produce(seq, skel_paths=skel,
+                       seiban=os.path.basename(seiban_dir.rstrip('/')).split('_')[0],
+                       layout_path=lay[0] if lay else None)
+    except Exception:
+        return [], {}, set()
+
+    def msym(m):
+        dev = (m.get('device') or '').strip(); no = (m.get('no') or '').strip()
+        return f'{dev}-{no}' if (no and not re.fullmatch(r'[A-Za-z]+', no)) else dev
+    nets = []
+    node2net = collections.defaultdict(set)
+    prod_syms = set()
+    for row in r.get('sheet', []):
+        circs = set()
+        members = []
+        for m in row.get('members', []):
+            s = _nsym(msym(m), {})
+            prod_syms.add(s)
+            members.append((s, m.get('terminal') or ''))
+            c = _circ_num(msym(m))
+            if c and not s.upper().startswith('TB'):
+                circs.add(c)
+        ns = set()
+        for (s, t) in members:
+            if s.upper().startswith('TB'):
+                for c in (circs or {''}):
+                    ns.add(('TB', c))
+            else:
+                ns.add((s, _fold_term(s, t)))
+        if ns:
+            idx = len(nets)
+            nets.append(ns)
+            for n in ns:
+                node2net[n].add(idx)
+    return nets, node2net, prod_syms
+
+
+def score_production_net(seiban_dir):
+    """【本番採点＝②実生成一致】本番 produce() 出力をネット単位で採点。場外ケーブル(R-F/L-F)は対象外。
+    素ロケーター文字は相手端点の盤(無ければファイルの盤)で一意の実機器へ解決。
+    戻り: {seiban,truth,present,hit,recall,present_rate}。present=両端が本番出力に在る辺数(カバレッジ寄り指標)。"""
+    lmap = locator_resolution(seiban_dir)
+    nets, node2net, prod_syms = _produce_nets(seiban_dir)
+    dev_panel = _dev_panel_map(seiban_dir)
+    letmap = _letter_panel_map(seiban_dir, dev_panel)
+
+    def is_ext(s):
+        return bool(re.search(r'R[-]?F|L[-]?F', str(s)))
+
+    def node(ns, term, other_ns):
+        if ns.upper().startswith('TB'):
+            return ('TB', _circ_num(other_ns) or _circ_num(ns))
+        return (ns, _fold_term(ns, term))
+    tot = hit = present = 0
+    for fi, f in enumerate(sorted(glob.glob(os.path.join(seiban_dir, 'FromToデータ_*.txt'))), 1):
+        try:
+            wires = ft.parse(f)
+        except Exception:
+            continue
+
+        def resolve(sym, comp):
+            s = sym.upper()
+            if re.fullmatch(r'[A-Z]', s) and s in letmap:
+                pan = dev_panel.get(_nsym(comp, lmap))
+                if not pan or pan not in letmap[s]:
+                    pan = fi if fi in letmap[s] else None
+                if pan and pan in letmap[s]:
+                    return letmap[s][pan]
+            return sym
+        for w in wires:
+            a, b = w['ends']
+            ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
+            if is_ext(ra) or is_ext(rb):
+                continue
+            na = _nsym(resolve(ra, rb), lmap)
+            nb = _nsym(resolve(rb, ra), lmap)
+            x = node(na, a['term'], nb)
+            y = node(nb, b['term'], na)
+            if x == y:
+                continue
+            tot += 1
+            if x in node2net and y in node2net:
+                present += 1
+                if node2net[x] & node2net[y]:
+                    hit += 1
+    return {'seiban': os.path.basename(seiban_dir.rstrip('/')),
+            'truth': tot, 'present': present, 'hit': hit,
+            'recall': hit / tot if tot else 0.0,
+            'present_rate': present / tot if tot else 0.0}
