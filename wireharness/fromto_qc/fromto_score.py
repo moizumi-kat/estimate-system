@@ -142,7 +142,10 @@ def _nsym(sym, lmap):
 
 
 def _nterm(t):
-    return re.sub(r'\s+', '', str(t or '')).upper()
+    s = re.sub(r'\s+', '', str(t or '')).upper()
+    # 端子番号の位置記述(上/下/左/右＝同一端子の上下段・製造位置)は畳む。手本'2_下'↔本番'2'。
+    s = re.sub(r'[_\-]?[上下左右]+$', '', s)
+    return s
 
 
 def _nedge(a_sym, a_t, b_sym, b_t, lmap):
@@ -459,6 +462,10 @@ def _letter_assign_map(seiban_dir):
 _TB_STRIP = True
 _tb_ctx_cache = {}
 
+# デバッグ: score_production_net の欠落(present欠落/netgap)を収集する(診断用・既定OFF)。
+_COLLECT_GAPS = False
+_LAST_GAPS = []
+
 
 def _spec_bases(s):
     """TB形式文字列から基本形式トークン集合(BN75W 等)。スケルトンとD002の突合に使う。"""
@@ -759,6 +766,11 @@ def score_production_net(seiban_dir):
                 present += 1
                 if xnets & ynets:
                     hit += 1
+                elif _COLLECT_GAPS:
+                    _LAST_GAPS.append(('netgap', na, a['term'], nb, b['term']))
+            elif _COLLECT_GAPS:
+                _LAST_GAPS.append(('present', na, a['term'], nb, b['term'],
+                                   bool(xnets), bool(ynets)))
     return {'seiban': os.path.basename(seiban_dir.rstrip('/')),
             'truth': tot, 'present': present, 'hit': hit,
             'recall': hit / tot if tot else 0.0,
