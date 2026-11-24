@@ -94,6 +94,68 @@ def _main_control_powers(draw_paths):
     return out
 
 
+def _monitoring_relays(draw_paths):
+    """分電盤の遠方監視結線: 監視回路の分岐遮断器 → R-RY リレーを『生成』する。
+
+    由来(推測でなく図面符号化): 制御図(H003等)に、各監視回路の番号を持つ `X_RY_NO` ブロック
+    (属性 NO=回路番号)が、その回路を監視する R-RY リレー(属性 DEVICE1='Rxx')の近傍に置かれる。
+    ∴ 回路↔リレーの対応は図面に符号化されている。各 NO ラベルを最寄りリレーへ割付け、
+    リレーが複数回路から取られた場合は距離最小の回路が占有(=リレー共有ゼロ＝過併合しない)。
+
+    単線図では分岐の入力が母線(銅帯＝1人目/主回路・対象外)・出力が別シート号線参照のため、
+    トレーサ(build_sheet)は監視ブレーカを単機器ネットとして落とす。ここで遮断器→リレーを起こすと
+    監視ブレーカがネットに入り、手本の『分岐遮断器:2/4 → R-RY』(≤5.5sq=ハーネス対象)を生成できる。
+
+    返り: [{from:'MCCB-17:2', to:'R-RY-R6', circuit:'17', phase:'', confidence:'要確認'}]
+    `X_RY_NO` ブロックの無い盤(制御盤/受変電)では空 ＝ 回帰ゼロ。"""
+    relays = []       # (Rid, (x,y))
+    nolabels = []     # (circuit, (x,y))
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            pos = (float(ins.dxf.insert[0]), float(ins.dxf.insert[1]))
+            if re.fullmatch(r'R\d+', a.get('DEVICE1', '')):
+                relays.append((a['DEVICE1'], pos))
+            if ins.dxf.name == 'X_RY_NO' and re.fullmatch(r'\d+', a.get('NO', '')):
+                nolabels.append((a['NO'], pos))
+    if not nolabels or not relays:
+        return []
+    # 各 NO ラベル→最寄りリレー。リレーは距離最小の回路が占有(共有防止)。
+    relay_claim = {}   # Rid -> (circuit, dist2)
+    for no, npos in nolabels:
+        best = None
+        bd = None
+        for rid, rpos in relays:
+            dd = (rpos[0] - npos[0]) ** 2 + (rpos[1] - npos[1]) ** 2
+            if bd is None or dd < bd:
+                bd = dd
+                best = rid
+        if best is not None and (best not in relay_claim or bd < relay_claim[best][1]):
+            relay_claim[best] = (no, bd)
+    circ2relays = {}
+    for rid, (c, _d) in relay_claim.items():
+        circ2relays.setdefault(c, []).append(rid)
+    brk = _breakers(draw_paths)
+    wires = []
+    for circ in sorted(circ2relays, key=lambda c: (len(c), c)):
+        bsym = brk.get(circ)
+        if not bsym:
+            continue
+        rels = sorted(circ2relays[circ], key=lambda r: int(r[1:]))
+        # 手本は遮断器:2/4 の2出力を監視リレーへ。同一回路のリレー群のみに結ぶ(回路間はまたがない)。
+        for i, rid in enumerate(rels):
+            term = '2' if i % 2 == 0 else '4'
+            wires.append({'from': f'{bsym}:{term}', 'to': f'R-RY-{rid}',
+                          'circuit': circ, 'phase': '', 'confidence': '要確認'})
+    return wires
+
+
 def generate(draw_paths, load_factor=None, seiban=None):
     """主回路の From-To 辺を生成。戻り: [{from,to,circuit,phase,confidence}]。
     confidence は tb_phase の判定(確定/要確認)を引き継ぐ。
@@ -162,4 +224,6 @@ def generate(draw_paths, load_factor=None, seiban=None):
     if earth_pts:
         wires.append({'from': earth_pts[-1][0], 'to': 'BOX-ET:',
                       'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
+    # 分電盤の遠方監視結線(監視分岐遮断器→R-RY)。X_RY_NO 符号を持つ盤でのみ生成(他盤は空=回帰ゼロ)。
+    wires.extend(_monitoring_relays(draw_paths))
     return wires

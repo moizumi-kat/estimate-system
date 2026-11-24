@@ -679,7 +679,10 @@ def _produce_nets(seiban_dir, add_main_circuit=False):
         # 主回路ハーネス線(LUG→遮断器→TB・接地)を生成してネット追加(トレーサが出せない相別配線)。
         try:
             from . import main_circuit as _mc
-            draws = sorted(set(skel) |
+            # skel/D0*(受変電・制御盤の主回路図)に加え、seq(展開接続図 H00x)も渡す。
+            # 分電盤は主回路・遠方監視とも H00x にあり、skel/D0* が無い(seqのみ)ため。
+            # 監視結線は X_RY_NO 符号を持つ盤のみ生成＝他盤は不変(回帰は実測で確認)。
+            draws = sorted(set(skel) | set(seq) |
                            set(glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF'))) |
                            set(glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.dxf'))))
             mcw = _mc.generate(draws, seiban=os.path.basename(seiban_dir.rstrip('/')).split('_')[0])
