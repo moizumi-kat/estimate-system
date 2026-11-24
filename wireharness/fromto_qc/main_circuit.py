@@ -94,6 +94,63 @@ def _main_control_powers(draw_paths):
     return out
 
 
+def _incoming_lug(draw_paths):
+    """分電盤の引込ハーネス(圧着端子 LUG ＋ 警報電源ヒューズ F-AL)を生成する。
+
+    分電盤は母線=銅帯で単線図に相配線が無く build_phase_map=0 のため、受変電のような
+    相ルールでの引込合成が効かない。だが引込金物は図面に在る(裏取り済):
+      - 引込端子台(DEVICE=TB, TERMINAL に R・T・(N/S))＝CVT引込。付属の圧着端子(ブロック名の BNH..LW)が手本 LUG。
+      - 警報電源ヒューズ(DEVICE=F で近傍に '警報' テキスト)＝手本 F-AL。号線 1R→1R1。
+      - 主幹(DEVICE=MCCB/ELCB, DEVICE1='1', 漏電付=NF..NCVZ/SPEC4='AL')＝手本は電源側 MCCB-1 / 漏電側 ELCB-1(同一物)。
+    手本一致の引込結線を生成(いずれも ≤5.5sq=ハーネス対象):
+      MCCB-1:N → LUG-2 ／ LUG-1 → F-AL<n>:1 ／ F-AL<n>:2 → ELCB-1:ECAc
+    引込TB(R,N,T)・警報F・主幹1 が揃わない盤では空 ＝ 回帰ゼロ。呼出側で分電盤(phase_map空)のみ発火。"""
+    incoming_tb = False
+    main_no = None
+    fuses = []            # (pos, DEVICE1)
+    alarms = []           # '警報' テキスト位置
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        msp = doc.modelspace()
+        for e in msp:
+            if e.dxftype() in ('TEXT', 'MTEXT'):
+                t = (e.plain_text() if e.dxftype() == 'MTEXT' else e.dxf.text) or ''
+                if '警報' in t:
+                    alarms.append((float(e.dxf.insert[0]), float(e.dxf.insert[1])))
+        for ins in msp.query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            dev = d.get('DEVICE', ''); dv1 = d.get('DEVICE1', '')
+            pos = (float(ins.dxf.insert[0]), float(ins.dxf.insert[1]))
+            term = d.get('TERMINAL', '').upper()
+            if dev == 'TB' and 'R' in term and 'T' in term and ('N' in term or 'S' in term):
+                incoming_tb = True
+            if dev in ('MCCB', 'ELCB') and dv1 == '1':
+                main_no = '1'
+            if dev == 'F':
+                fuses.append((pos, dv1 or '1'))
+    # 警報電源ヒューズ: DEVICE=F で '警報' テキスト近傍(<=400)
+    fuse_no = None
+    if alarms:
+        for pos, dv1 in fuses:
+            nd = min(((pos[0] - ax) ** 2 + (pos[1] - ay) ** 2) ** 0.5 for ax, ay in alarms)
+            if nd <= 400:
+                fuse_no = dv1
+                break
+    if not (incoming_tb and main_no and fuse_no):
+        return []
+    fsym = f'F-AL{fuse_no}'
+    return [
+        {'from': f'MCCB-{main_no}:N', 'to': 'LUG-2:', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+        {'from': 'LUG-1:', 'to': f'{fsym}:1', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+        {'from': f'{fsym}:2', 'to': f'ELCB-{main_no}:ECAc', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+    ]
+
+
 def _monitoring_relays(draw_paths):
     """分電盤の遠方監視結線: 監視回路の分岐遮断器 → R-RY リレーを『生成』する。
 
@@ -226,4 +283,8 @@ def generate(draw_paths, load_factor=None, seiban=None):
                       'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
     # 分電盤の遠方監視結線(監視分岐遮断器→R-RY)。X_RY_NO 符号を持つ盤でのみ生成(他盤は空=回帰ゼロ)。
     wires.extend(_monitoring_relays(draw_paths))
+    # 分電盤の引込ハーネス(LUG＋警報電源ヒューズF-AL)。母線=銅帯で phase_map が空(=分電盤)のときだけ生成。
+    # 受変電/制御盤は phase_map 非空＝非発火＝回帰ゼロ。
+    if not pm:
+        wires.extend(_incoming_lug(draw_paths))
     return wires
