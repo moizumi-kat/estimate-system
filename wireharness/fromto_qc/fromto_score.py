@@ -138,7 +138,44 @@ def _nsym(sym, lmap):
     base = s.split('-')[0]
     if re.fullmatch(r'[A-Z]', base) and base in lmap:
         s = lmap[base]
-    return dn.canon(s)                     # ハイフン等の表記ゆれを吸収(FX-1≡FX1)
+    c = dn.canon(s)                        # ハイフン等の表記ゆれを吸収(FX-1≡FX1)
+    # フルネーム別名(PARTS由来・1:1検証済)。lmapに canon(フル名)→機器名 が在れば適用。
+    # 単文字キー(ロケーター)とは衝突しない(キーが別空間)＝後方互換(退行ゼロ)。
+    if lmap:
+        a = lmap.get(c)
+        if a and a != c:
+            return a
+    return c
+
+
+def _parts_alias(seiban_dir):
+    """図面ブロックの PARTS(人の呼称) → 機器名(DEVICE[-DEVICE1]) の1:1別名を作る。
+    手本は一部機器を DEVICE コードでなく PARTS(人の呼称)で記す(例 'CPU' を '伝送ﾕﾆｯﾄ')。
+    由来は図面属性＝推測でない。曖昧回避のため **1つの PARTS が1機器に限る** ものだけ採用
+    (MCCB/ELCB 等の裸クラス名は多機器に対応＝除外)。将来の分電盤でも同機構で吸収。"""
+    import glob as _glob
+    parts2dev = {}
+    for p in sorted(set(_glob.glob(os.path.join(seiban_dir, '図面データ_*.dxf'))) |
+                    set(_glob.glob(os.path.join(seiban_dir, '図面データ_*.DXF')))):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            pt = d.get('PARTS', ''); dev = d.get('DEVICE', ''); dv1 = d.get('DEVICE1', '')
+            if not pt or not dev:
+                continue
+            raw = dev + ('-' + dv1 if dv1 and not re.fullmatch(r'[A-Za-z]+', dv1) else '')
+            devn = dn.canon(dn.strip_marks(raw).upper())
+            key = dn.canon(dn.strip_marks(pt).upper())
+            if key == devn:
+                continue               # PARTS==DEVICE は別名不要
+            parts2dev.setdefault(key, set()).add(devn)
+    # 1:1 のみ採用(多対1=曖昧は捨てる＝◎誤答回避)
+    return {k: next(iter(v)) for k, v in parts2dev.items() if len(v) == 1}
 
 
 def _nterm(t):
@@ -727,6 +764,7 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
       (端子番号は現場で人が入力する前提＝採点では所与とみなす)。TB台番号/接点機能は従来どおり。
       公式②との差＝端子番号当ての損失(人手入力で解消)。残差＝カバレッジ＋ネット構成の実課題。"""
     lmap = locator_resolution(seiban_dir)
+    _pa = _parts_alias(seiban_dir)         # PARTS(人の呼称)→機器名 1:1別名(手本 '伝送ﾕﾆｯﾄ'↔本番 'CPU' 等)
     nets, node2net, prod_syms, dev2nets = _produce_nets(seiban_dir, add_main_circuit=add_main_circuit)
     dev_panel = _dev_panel_map(seiban_dir)
     letmap = _letter_panel_map(seiban_dir, dev_panel)
@@ -780,7 +818,8 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
         ft_ = _fold_term(ns, term)
         if dev_level or (ft_ == '' and (_LAMP.match(ns.upper()) or _BTN.match(ns.upper()))):
             # 『端子番号は入力済み』前提: 端子番号は所与とみなし機器単位で照合(診断用の上限)。
-            return set(dev2nets.get(_nsym(ns, {}), set()))
+            # _pa=PARTS別名で手本の人呼称(伝送ﾕﾆｯﾄ)を本番機器名(CPU)へ正規化(1:1検証済のみ)。
+            return set(dev2nets.get(_nsym(ns, _pa), set()))
         return set(node2net.get((ns, ft_), set()))
     tot = hit = present = 0
     for fi, f in enumerate(sorted(glob.glob(os.path.join(seiban_dir, 'FromToデータ_*.txt'))), 1):
