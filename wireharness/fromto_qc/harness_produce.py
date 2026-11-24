@@ -104,12 +104,32 @@ def _main_circuit_rows(seq_paths, skel_paths, seiban):
     build_sheet 行スキーマで返す。単線図は3相を1本で描くためトレーサ(trace_nodes)は相別配線を
     出せない＝人は極数から相を起こす。境界を手本に合わせた今(≤5.5sq=ハーネス対象)、本番でも
     main_circuit.generate で起こして成果物に載せる(0ai/0aj/0ak)。サイズ/色は図面に無く要確認(空欄)。"""
+    import os as _os
+    import re as _re
     from . import main_circuit as _mc
     draws = list(skel_paths or []) + list(seq_paths or [])
     try:
+        # 出力側(遮断器:2/4/6→TB)は接触器の無い給電回路のみ(電動機回路は熱動51経由で出さない=誤機器回避)。
         wires = _mc.generate(draws, seiban=seiban)
     except Exception:
         return []
+    # TB台番号は 0af の circ2tb(回路のMCCB位置→面内最寄りストリップ＋スケルトン形式)で付与(手本一致)。
+    circ2tb = {}
+    try:
+        from . import fromto_score as _fs
+        _dir = _os.path.dirname((draws or [''])[0]) if draws else ''
+        if _dir:
+            _, _, circ2tb = _fs._tb_strip_ctx(_dir)
+    except Exception:
+        circ2tb = {}
+
+    def _fix_tb(ep):
+        sym, term = (str(ep).split(':', 1) + [''])[:2]
+        if sym.upper().startswith('TB'):
+            m = _re.match(r'(\d{3})', str(term))
+            if m and m.group(1) in circ2tb:
+                return f'TB-{circ2tb[m.group(1)]}:{term}'
+        return ep
 
     def _mem(ep):
         sym, term = (str(ep).split(':', 1) + [''])[:2]
@@ -118,7 +138,7 @@ def _main_circuit_rows(seq_paths, skel_paths, seiban):
                 'x': 0.0, 'y': 0.0, 'unfilled_tb': False}
     rows = []
     for w in wires:
-        ma, mb = _mem(w.get('from', '')), _mem(w.get('to', ''))
+        ma, mb = _mem(_fix_tb(w.get('from', ''))), _mem(_fix_tb(w.get('to', '')))
         rows.append({'gousen': (f"{w.get('circuit','')}{w.get('phase','')}" or 'MC'),
                      'kind': '', 'size': '',
                      'members': [ma, mb],

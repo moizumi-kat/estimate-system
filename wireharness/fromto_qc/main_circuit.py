@@ -37,17 +37,40 @@ def _breakers(draw_paths):
     return out
 
 
+def _contactors(draw_paths):
+    """接触器(52)がある回路番号の集合。出力側(→TB)の負荷機器が遮断器か否かを分ける。
+    接触器のある回路=電動機回路＝出力は熱動51/接触器52経由(遮断器:2→TBでない)。"""
+    out = set()
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            if d.get('DEVICE', '').upper() == '52' and re.fullmatch(r'\d+', str(d.get('DEVICE1', ''))):
+                out.add(str(d['DEVICE1']))
+    return out
+
+
 def generate(draw_paths, load_factor=None, seiban=None):
     """主回路の From-To 辺を生成。戻り: [{from,to,circuit,phase,confidence}]。
     confidence は tb_phase の判定(確定/要確認)を引き継ぐ。
     load_factor: 製番ごとの負荷率(太物判定の確定に使う)。明示されなければ、seiban が
-      与えられたとき seiban_config から製番ごとの入力を自動参照する。"""
+      与えられたとき seiban_config から製番ごとの入力を自動参照する。
+
+    出力側(遮断器:2/4/6→TB)は【接触器(52)の無い給電回路のみ】生成する(手本一致＝遮断器:2→TB)。
+    接触器のある電動機回路の出力は熱動51/接触器52経由で、図面にTYPE'51'が無く負荷機器を一意に
+    決められない(手本は51/52で記録)→推測で誤機器を出さない(◎誤答ゼロ)。入力(LUG→遮断器)と接地は常に生成。"""
     if load_factor is None and seiban:
         from . import seiban_config
         load_factor = seiban_config.load_factor(seiban)
     pm = tb_phase.build_phase_map(draw_paths, load_factor=load_factor)
     brk = _breakers(draw_paths)
     strip = tb_strip.assign(draw_paths, load_factor=load_factor)   # 回路→台番号
+    contactors = _contactors(draw_paths)                           # 接触器のある回路(電動機)=出力側を出さない
 
     def tbsym(circ):
         s = strip.get(circ)
@@ -68,8 +91,9 @@ def generate(draw_paths, load_factor=None, seiban=None):
                 continue
             wires.append({'from': 'LUG:', 'to': f'{bsym}:{_IN[ph]}',
                           'circuit': circ, 'phase': ph, 'confidence': conf})
-            wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'{tb}:{circ}{ph}',
-                          'circuit': circ, 'phase': ph, 'confidence': conf})
+            if circ not in contactors:       # 給電回路のみ 遮断器:2/4/6→TB(電動機回路は熱動51経由で出さない)
+                wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'{tb}:{circ}{ph}',
+                              'circuit': circ, 'phase': ph, 'confidence': conf})
     # 接地: 各回路のE端子を回路順に数珠つなぎし、末端を接地箱(BOX-ET)へ。
     for i in range(len(earth_pts) - 1):
         wires.append({'from': earth_pts[i][0], 'to': earth_pts[i + 1][0],
