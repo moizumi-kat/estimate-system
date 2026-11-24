@@ -3638,6 +3638,11 @@ def select_from_extracted(data):
             if _set_expand and sel.get('code','')[:2]=='43' and \
                sel.get('code','')[:4] in {c[:4] for c in _set_expand if c[:2]=='43'}:
                 continue
+            # セット内包のM)LUG(盤頭端子): 17系/11系セットは盤頭端子をexpandに"LUG?"プレースホルダで内包。
+            # 図面にM)LUGが明示され個別選定(40/50/60系LUG)されても、セットに含まれるので抑制(二重計上防止)。
+            if _set_expand and ('LUG?' in _set_expand or any(str(x).startswith('LUG') for x in _set_expand)) \
+               and str(byCode.get(sel.get('code',''),{}).get('name','')).startswith(('M)LUG','LUG')):
+                continue
             # コンデンサ/段積VCSセット: 単体PF(436系)はVCS/SCに内包→個別計上しない(7-4・二重計上防止)。
             if _vcs_set and sel.get('code','')[:3]=='436':
                 continue
