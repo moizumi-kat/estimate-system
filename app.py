@@ -2094,6 +2094,14 @@ def _compact_branch(name, panel):
     if is_space:
         code = '60029' if is_elb else '60028'
         return (code,'○','コンパクト空きスペース(2P50AF・%s)要確認'%('ELB' if is_elb else 'MCB')) if code in byCode else None
+    # コンパクト.P(プラグイン型)の2P1E/2E 30A分岐(ginza2手本=60041〜60044)。
+    # 名称に「コンパクト.P/ｺﾝﾊﾟｸﾄ.P/プラグイン」＋「2E/1E(素子)」があれば .P系(30A)で確定。
+    _plugin = bool(re.search(r'ｺﾝﾊﾟｸﾄ\.?[PＰ]|コンパクト\.?[PＰ]|プラグイン', name))
+    _el2 = bool(re.search(r'2\s*[EＥ](?![A-Za-z])', name)); _el1 = bool(re.search(r'1\s*[EＥ](?![A-Za-z])', name))
+    if _plugin and (_el2 or _el1):
+        pcode = ('60044' if is_elb else '60042') if _el2 else ('60043' if is_elb else '60041')
+        if pcode in byCode:
+            return pcode, '◎', 'コンパクト.P(プラグイン)2P%s30A・%s'%('2E' if _el2 else '1E', 'ELB' if is_elb else 'MCB')
     code = '60014' if is_elb else '60012'
     if code not in byCode: return None
     return code, '◎', 'コンパクト分岐(2P50AF・%s)実見積書4案件で確定'%('ELB' if is_elb else 'MCB')
@@ -2193,7 +2201,11 @@ def _apply_breaker_variant(code, name):
     quals=[]
     if re.search(r'電子式', nm_in): quals.append('電子式')
     if re.search(r'高性能', nm_in): quals.append('高性能')
-    if re.search(r'漏電ｱﾗｰﾑ|漏電アラーム', nm_in): quals.append('漏電アラーム')
+    # 漏電アラーム: 長音がﾊｲﾌﾝ(漏電ｱﾗ-ﾑ)/全角(アラーム)等の表記ゆれを吸収
+    if re.search(r'漏電\s*[ｱア][ﾗラ]', nm_in): quals.append('漏電アラーム')
+    # EL(漏電)＋中欠(中性線欠相)=欠相・漏電 変種(例『M)MCB(EL･中欠)』→x01)
+    if re.search(r'(?<![A-Za-z])EL(?![A-Za-z])|漏電', nm_in) and re.search(r'中欠|中性線欠相', nm_in):
+        quals.append('欠相・漏電')
     if not quals: return code
     base=byCode[code].get('name','')
     if any(q in base for q in quals): return code   # 既に合致
@@ -2340,7 +2352,9 @@ def _main_elb_code(name, panel, meta):
     図面に明記されない社内標準のため◎にせず、素のM)ELBを○(最善推定・変種要確認)で返す。"""
     n=norm(name); pn=norm(panel)
     is_main = n.startswith('m)') or ('主幹' in name) or ('主開閉器' in name) or (str(meta.get('main','')).startswith('M)'))
-    is_elb = ('elb' in n) or ('elcb' in n) or ('漏電' in n)
+    # 「漏電」でも名称にMCB明示があれば主幹ELBにしない(例『M)MCB(漏電ｱﾗ-ﾑ)』=漏電アラーム付MCB・
+    #  『M)MCB(EL･中欠)』=欠相・漏電MCB。_mcb_code+_apply_breaker_variantで x01 変種を選ぶ)。
+    is_elb = ('elb' in n) or ('elcb' in n) or ('漏電' in n and 'mcb' not in n)
     if not (is_main and is_elb): return None
     af,_at=_amp_af(n)
     if not af:
