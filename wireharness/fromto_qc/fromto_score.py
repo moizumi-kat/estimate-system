@@ -617,12 +617,16 @@ def _tb_dai(seiban_dir, members):
     return out
 
 
-def _produce_nets(seiban_dir):
+def _produce_nets(seiban_dir, add_main_circuit=False):
     """本番生成器のネット(号線)を正規化ノード集合のリストで返す。
     戻り (nets, node2net, prod_syms)。TB→(TB,回路)・接点→NO/NC。配線図が無い等で不可なら空。
     採点は本番の『生成した結線』を測るので、不備ゲート(produce)でなく生成の核 `harness_sheet.build_sheet`
     を直接使う(不備で sheet=None になって測れない製番=3-14022 等を回避。不備は主回路母線の確認で
-    ハーネス制御の生成品質とは独立)。"""
+    ハーネス制御の生成品質とは独立)。
+
+    add_main_circuit=True: 主回路ハーネス線(LUG→遮断器→TB・接地)を main_circuit.generate で起こして
+      ネットに追加する。単線図は3相を1本で描くためトレーサ(build_sheet)は相別配線を出せないが、
+      手本(≤5.5sq)には入る＝境界を手本に合わせた今、本番も生成すべき分。既定Falseで従来不変。"""
     from . import harness_sheet as HS
     seq = _seq_paths(seiban_dir)
     if not seq:
@@ -670,10 +674,47 @@ def _produce_nets(seiban_dir):
             for (s, t) in members:
                 if not s.upper().startswith('TB'):
                     dev2nets[_nsym(s, {})].add(idx)
+
+    if add_main_circuit:
+        # 主回路ハーネス線(LUG→遮断器→TB・接地)を生成してネット追加(トレーサが出せない相別配線)。
+        try:
+            from . import main_circuit as _mc
+            draws = sorted(set(skel) |
+                           set(glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.DXF'))) |
+                           set(glob.glob(os.path.join(seiban_dir, '図面データ_*D0*.dxf'))))
+            mcw = _mc.generate(draws, seiban=os.path.basename(seiban_dir.rstrip('/')).split('_')[0])
+        except Exception:
+            mcw = []
+
+        def _mc_nodes(endpoint):
+            sym, term = (str(endpoint).split(':', 1) + [''])[:2]
+            s = _nsym(sym, {})
+            if s.upper().startswith('TB'):
+                out = {('TB', _circ_num(term) or _circ_num(sym))}
+                m = re.match(r'TB-?(.+)$', s, re.I)
+                dai = m.group(1) if m else ''
+                if dai and not re.match(r'^仮', dai):
+                    out.add(('TBS:' + dai, ''))
+                return out, None
+            return {(s, _fold_term(s, term))}, s
+        for w in mcw:
+            na_, da = _mc_nodes(w.get('from', ''))
+            nb_, db = _mc_nodes(w.get('to', ''))
+            ns = set(na_) | set(nb_)
+            if not ns:
+                continue
+            idx = len(nets)
+            nets.append(ns)
+            for n in ns:
+                node2net[n].add(idx)
+            for dd in (da, db):
+                if dd:
+                    prod_syms.add(dd)
+                    dev2nets[dd].add(idx)
     return nets, node2net, prod_syms, dev2nets
 
 
-def score_production_net(seiban_dir, dev_level=False):
+def score_production_net(seiban_dir, dev_level=False, add_main_circuit=False):
     """【本番採点＝②実生成一致】本番 produce() 出力をネット単位で採点。場外ケーブル(R-F/L-F)は対象外。
     素ロケーター文字は相手端点の盤(無ければファイルの盤)で一意の実機器へ解決。
     戻り: {seiban,truth,present,hit,recall,present_rate}。present=両端が本番出力に在る辺数(カバレッジ寄り指標)。
@@ -683,7 +724,7 @@ def score_production_net(seiban_dir, dev_level=False):
       (端子番号は現場で人が入力する前提＝採点では所与とみなす)。TB台番号/接点機能は従来どおり。
       公式②との差＝端子番号当ての損失(人手入力で解消)。残差＝カバレッジ＋ネット構成の実課題。"""
     lmap = locator_resolution(seiban_dir)
-    nets, node2net, prod_syms, dev2nets = _produce_nets(seiban_dir)
+    nets, node2net, prod_syms, dev2nets = _produce_nets(seiban_dir, add_main_circuit=add_main_circuit)
     dev_panel = _dev_panel_map(seiban_dir)
     letmap = _letter_panel_map(seiban_dir, dev_panel)
     if not letmap:
