@@ -94,6 +94,10 @@ def generate(draw_paths, load_factor=None, seiban=None):
             if circ not in contactors:       # 給電回路のみ 遮断器:2/4/6→TB(電動機回路は熱動51経由で出さない)
                 wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'{tb}:{circ}{ph}',
                               'circuit': circ, 'phase': ph, 'confidence': conf})
+            elif ph in ('U', 'W'):           # 電動機回路: 遮断器出力→接触器入力(U:2→1 / W:6→5)。
+                # V(4→3)は変流器(CT)経由で直結でないため出さない(手本一致・◎誤答ゼロ)。接触器=52-回路。
+                wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'52-{circ}:{_IN[ph]}',
+                              'circuit': circ, 'phase': ph, 'confidence': conf})
     # 接地: 各回路のE端子を回路順に数珠つなぎし、末端を接地箱(BOX-ET)へ。
     for i in range(len(earth_pts) - 1):
         wires.append({'from': earth_pts[i][0], 'to': earth_pts[i + 1][0],
