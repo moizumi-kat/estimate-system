@@ -151,6 +151,44 @@ def _incoming_lug(draw_paths):
     ]
 
 
+def _spd_wiring(draw_paths):
+    """分電盤のSPD主回路結線(主幹出力 → SPD分離器 → SPD)を生成する。
+
+    SPD保護は図面に在る(SPD分離器＝DEVICEに'分離器'／SPDユニット＝DEVICE='SPD')。手本一致の標準結線:
+      MCCB-1:2/4/6 → SPD-分離器1:上 ／ SPD-分離器1:下 → SPD-<n>:1/2/3上 (いずれも 5.5sq=ハーネス対象)。
+    主幹・SPD分離器・SPDユニットが揃わない盤では空＝回帰ゼロ。呼出側で分電盤(phase_map空)のみ発火。"""
+    main_no = None
+    has_sep = False
+    spd_no = None
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            dev = d.get('DEVICE', ''); dv1 = d.get('DEVICE1', '')
+            if dev in ('MCCB', 'ELCB') and dv1 == '1':
+                main_no = '1'
+            if '分離器' in dev:
+                has_sep = True
+            if dev == 'SPD' and dv1:
+                spd_no = dv1
+    if not (main_no and has_sep and spd_no):
+        return []
+    sep = 'SPD-分離器1'
+    wires = []
+    for t in ('2', '4', '6'):
+        wires.append({'from': f'MCCB-{main_no}:{t}', 'to': f'{sep}:上',
+                      'circuit': '', 'phase': '', 'confidence': '要確認'})
+    for t in ('1', '2', '3'):
+        wires.append({'from': f'{sep}:下', 'to': f'SPD-{spd_no}:{t}上',
+                      'circuit': '', 'phase': '', 'confidence': '要確認'})
+    return wires
+
+
 def _monitoring_relays(draw_paths):
     """分電盤の遠方監視結線: 監視回路の分岐遮断器 → R-RY リレーを『生成』する。
 
@@ -287,4 +325,5 @@ def generate(draw_paths, load_factor=None, seiban=None):
     # 受変電/制御盤は phase_map 非空＝非発火＝回帰ゼロ。
     if not pm:
         wires.extend(_incoming_lug(draw_paths))
+        wires.extend(_spd_wiring(draw_paths))
     return wires
