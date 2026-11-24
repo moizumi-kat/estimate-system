@@ -2142,6 +2142,9 @@ def _panel_kind_byname(panel, mark_default=False):
     _lj=re.search(r'(^|[^a-zａ-ｚ])[a-zａ-ｚ]?\d*[lｌjｊsｓ][ｰ\-－]?(?:[a-zａ-ｚ][ｰ\-－]?)?\d', pn)  # 1L-1,1L-T1,1S-1(分電盤)
     if '制御' in pn: return 'ctrl'
     if '分電' in pn: return 'bunden'
+    # 警報盤=集合警報/制御一式・端子台付きの制御盤(50系)。盤名の「15L」等のLで分電盤誤分類しない
+    # (kandanomori手本=警報盤の遮断器は50系=50508/50522・制御一式21310)。
+    if re.search(r'警報盤', pn): return 'ctrl'
     # 「LP」(LP+数字)=Lighting Panel。"P"は「Panel」で制御のPではない(茂泉様確定)。LP盤は
     # 分電盤+制御盤の一体盤で、区画(制御50/分電60)は負荷内容で決まる(照明→分電/ポンプ等モーター→制御)。
     # ∴ LP名は曖昧(_default)とし、select側が負荷内容で判定したヒントに委ねる。ヒント無しは分電を既定。
