@@ -151,6 +151,39 @@ def _incoming_lug(draw_paths):
     ]
 
 
+def _submain_ab(draw_paths):
+    """分電盤(1φ3W)の子主幹 ○A/○B への主幹送りを生成する。
+
+    由来(図面符号・推測でない): 主幹の下流に2台の2P子主幹(NF63-SV等)が在り、`X_RY_NO` ブロック
+    (属性 NO='A'/'B')が各直下でラベルする(監視リレーと同じ符号機構)。1φ3W(R-N-T)標準で主幹→子主幹:
+      MCCB-1:1(R) → MCCB-○A:1 ／ MCCB-1:3(N) → MCCB-○A:3 ／ MCCB-1:5(T) → MCCB-○B:1 ／ MCCB-○A:3(N) → MCCB-○B:3
+    (いずれも 3.5sq=ハーネス対象)。NO='A'/'B' ラベルと主幹1 が揃わない盤では空＝回帰ゼロ。"""
+    labels = set()
+    main_no = None
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            if ins.dxf.name == 'X_RY_NO' and d.get('NO', '') in ('A', 'B'):
+                labels.add(d['NO'])
+            if d.get('DEVICE', '') in ('MCCB', 'ELCB') and d.get('DEVICE1', '') == '1':
+                main_no = '1'
+    if not (main_no and 'A' in labels and 'B' in labels):
+        return []
+    m = f'MCCB-{main_no}'
+    return [
+        {'from': f'{m}:1', 'to': 'MCCB-○A:1', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+        {'from': f'{m}:3', 'to': 'MCCB-○A:3', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+        {'from': f'{m}:5', 'to': 'MCCB-○B:1', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+        {'from': 'MCCB-○A:3', 'to': 'MCCB-○B:3', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+    ]
+
+
 def _spd_wiring(draw_paths):
     """分電盤のSPD主回路結線(主幹出力 → SPD分離器 → SPD)を生成する。
 
@@ -326,4 +359,5 @@ def generate(draw_paths, load_factor=None, seiban=None):
     if not pm:
         wires.extend(_incoming_lug(draw_paths))
         wires.extend(_spd_wiring(draw_paths))
+        wires.extend(_submain_ab(draw_paths))
     return wires
