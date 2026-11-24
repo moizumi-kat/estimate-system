@@ -151,6 +151,41 @@ def _incoming_lug(draw_paths):
     ]
 
 
+def _earth_tails(draw_paths):
+    """分電盤のアース尾線(SPDユニット・伝送ユニットの接地)を生成する。
+
+    手本の接地は「空欄 MCCB:/ELCB: の数珠つなぎ＋バー集約」(分電盤固有の総称表記)で、鎖本体は
+    番号付き生成と一致しない＝生成しない(◎誤答回避・茂泉様確認済)。安全に出せるのは、両端が
+    実在機器＋図面由来バー名の尾線2本のみ:
+      SPD-<n>:E → SPD-ET-(MCCB):   (SPDユニットの接地 → 「SPD端子(MCCB) ET端子」バー)
+      CPU:E → BOX:                 (伝送ユニットの接地 → *BOXET 接地箱端子)
+    SPDユニット/伝送ユニットが無い盤では空＝回帰ゼロ。呼出側で分電盤(phase_map空)のみ発火。"""
+    spd_no = None
+    has_cpu = False
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            dev = d.get('DEVICE', ''); dv1 = d.get('DEVICE1', '')
+            if dev == 'SPD' and dv1:
+                spd_no = dv1
+            if dev == 'CPU':
+                has_cpu = True
+    wires = []
+    if spd_no:
+        wires.append({'from': f'SPD-{spd_no}:E', 'to': 'SPD-ET-(MCCB):',
+                      'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+    if has_cpu:
+        wires.append({'from': 'CPU:E', 'to': 'BOX:',
+                      'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+    return wires
+
+
 def _submain_ab(draw_paths):
     """分電盤(1φ3W)の子主幹 ○A/○B への主幹送りを生成する。
 
@@ -360,4 +395,5 @@ def generate(draw_paths, load_factor=None, seiban=None):
         wires.extend(_incoming_lug(draw_paths))
         wires.extend(_spd_wiring(draw_paths))
         wires.extend(_submain_ab(draw_paths))
+        wires.extend(_earth_tails(draw_paths))
     return wires
