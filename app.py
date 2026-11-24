@@ -1861,6 +1861,7 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
             else:  # 配電盤(haiden) 3P。名称にDT明記(MC-DT等)→直接DT(47系ST-20)。無印は既定ST型(盤内最大をpost-passでDT昇格)。
                 _st=[(30,'47020'),(60,'47021'),(100,'47022'),(200,'47023'),(300,'47024'),(400,'47025'),(600,'47026'),(800,'47027'),(1000,'47028'),(1200,'47029'),(1600,'47030'),(2000,'47031')]
                 _explicit_dt=bool(re.search(r'(?<![a-z])dt(?![a-z])', _ns, re.I))  # MC-DT/○○DT等の明記
+                _explicit_st=bool(re.search(r'(?<![a-z])st(?![a-z])', _ns, re.I))  # (ST)明記(ginza2手本=全MCTTにST/DT明示)
                 for a,c in _st:
                     if amp<=a and c in byCode:
                         if _explicit_dt:
@@ -1869,8 +1870,9 @@ def select_one(name, panel='', prev_is_main=False, volt='', symbol='', kw='', gr
                                 r=R(dtc,('◎' if amp==a else '○'),'MCTT 3P-DT %dA(DT明記)%s'%(a,'' if amp==a else '(容量繰上)'))
                                 r['_mctt']={'amp':a,'st':c,'dt':dtc,'explicit_dt':True}  # DT明記もタグ付け(18100計上・昇格pool対象)
                                 return r
-                        r=R(c,('◎' if amp==a else '○'),'MCTT 3P-ST %dA%s'%(a,'' if amp==a else '(容量繰上)'))
-                        r['_mctt']={'amp':a,'st':c,'dt':str(int(c)-20)}
+                        # (ST)明記はST確定(◎)=盤内最大のDT昇格対象から外す。無印はST既定で昇格poolに残す。
+                        r=R(c,('◎' if (amp==a or _explicit_st) else '○'),'MCTT 3P-ST %dA%s%s'%(a,'(ST明記)' if _explicit_st else '','' if amp==a else '(容量繰上)'))
+                        r['_mctt']={'amp':a,'st':c,'dt':str(int(c)-20),'explicit_st':_explicit_st}
                         return r
         return R('47005','○','MCTT(電源切替器)・極数/容量は確認ゲートで確定(既定3P)')
     # 手動電源切替器DT(68系): 極数×容量。極数/容量が読めれば確定、読めなければ△(既定3P60A提示)。
@@ -3724,9 +3726,12 @@ def select_from_extracted(data):
         # 電灯盤(動力の語なし)は全てST維持(実見積書で電灯盤=全ST)。
         _mrows=[r for r in rows if r.get('_mctt')]
         if _mrows and '動力' in norm(p.get('panel','')) and _mctt_kind(p.get('panel',''))=='haiden':
-            _mx=max(_mrows, key=lambda r: r['_mctt']['amp'])
-            _dt=_mx['_mctt']['dt']
-            if _dt in byCode:
+            # (ST)/(DT)が図面に明記された行は昇格対象から除外(手本=ginza2は全MCTTにST/DT明示→昇格しない)。
+            # 無印(explicitでない)行だけを「盤内最大=主電源切替」としてDT昇格する。
+            _promote=[r for r in _mrows if not r['_mctt'].get('explicit_st') and not r['_mctt'].get('explicit_dt')]
+            _mx=max(_promote, key=lambda r: r['_mctt']['amp']) if _promote else None
+            _dt=_mx['_mctt']['dt'] if _mx else None
+            if _mx and _dt in byCode:
                 _up='容量繰上' in str(_mx.get('note',''))
                 _mx['code']=_dt; _mx['name']=byCode[_dt].get('name','')
                 _mx['conf']='○' if _up else '◎'
