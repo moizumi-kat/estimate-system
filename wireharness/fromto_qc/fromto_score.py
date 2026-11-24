@@ -178,6 +178,28 @@ def _parts_alias(seiban_dir):
     return {k: next(iter(v)) for k, v in parts2dev.items() if len(v) == 1}
 
 
+def _parts_full(seiban_dir):
+    """図面ブロックの (canon(PARTS), canon(機器名)) 全ペア。部分一致別名(人の略称)の照合用。"""
+    import glob as _glob
+    pairs = set()
+    for p in sorted(set(_glob.glob(os.path.join(seiban_dir, '図面データ_*.dxf'))) |
+                    set(_glob.glob(os.path.join(seiban_dir, '図面データ_*.DXF')))):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            pt = d.get('PARTS', ''); dev = d.get('DEVICE', ''); dv1 = d.get('DEVICE1', '')
+            if not pt or not dev:
+                continue
+            raw = dev + ('-' + dv1 if dv1 and not re.fullmatch(r'[A-Za-z]+', dv1) else '')
+            pairs.add((dn.canon(dn.strip_marks(pt).upper()), dn.canon(dn.strip_marks(raw).upper())))
+    return pairs
+
+
 def _nterm(t):
     s = re.sub(r'\s+', '', str(t or '')).upper()
     # 端子番号の位置記述(上/下/左/右＝同一端子の上下段・製造位置)は畳む。手本'2_下'↔本番'2'。
@@ -766,6 +788,20 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
     lmap = locator_resolution(seiban_dir)
     _pa = _parts_alias(seiban_dir)         # PARTS(人の呼称)→機器名 1:1別名(手本 '伝送ﾕﾆｯﾄ'↔本番 'CPU' 等)
     nets, node2net, prod_syms, dev2nets = _produce_nets(seiban_dir, add_main_circuit=add_main_circuit)
+    _pfull = [(cp, dv) for (cp, dv) in _parts_full(seiban_dir) if dv in dev2nets]  # 部分一致別名(略称)用・生成済のみ
+
+    def _dev_resolve(ns):
+        """手本の機器トークンを本番 dev2nets のキーへ。exact(_pa)→不一致なら部分一致(略称)フォールバック。
+        略称: トークン(canon,≥4字)が あるPARTS(canon)の部分文字列で、該当機器が唯一かつ生成済のときのみ採用。"""
+        k = _nsym(ns, _pa)
+        if k in dev2nets:
+            return k
+        tk = dn.canon(dn.strip_marks(str(ns)).upper())
+        if len(tk) >= 4:
+            hits = {dv for cp, dv in _pfull if tk in cp}
+            if len(hits) == 1:
+                return next(iter(hits))
+        return k
     dev_panel = _dev_panel_map(seiban_dir)
     letmap = _letter_panel_map(seiban_dir, dev_panel)
     if not letmap:
@@ -818,8 +854,8 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
         ft_ = _fold_term(ns, term)
         if dev_level or (ft_ == '' and (_LAMP.match(ns.upper()) or _BTN.match(ns.upper()))):
             # 『端子番号は入力済み』前提: 端子番号は所与とみなし機器単位で照合(診断用の上限)。
-            # _pa=PARTS別名で手本の人呼称(伝送ﾕﾆｯﾄ)を本番機器名(CPU)へ正規化(1:1検証済のみ)。
-            return set(dev2nets.get(_nsym(ns, _pa), set()))
+            # _dev_resolve=PARTS別名(1:1)＋略称部分一致で手本の人呼称を本番機器名へ正規化。
+            return set(dev2nets.get(_dev_resolve(ns), set()))
         return set(node2net.get((ns, ft_), set()))
     tot = hit = present = 0
     for fi, f in enumerate(sorted(glob.glob(os.path.join(seiban_dir, 'FromToデータ_*.txt'))), 1):
