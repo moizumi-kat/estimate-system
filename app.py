@@ -3708,7 +3708,7 @@ def select_from_extracted(data):
         # ※TR盤(受変電40系)はM)LUGが低圧セット(17系)のexpandに内包されるので対象外(二重計上防止)。
         _kind=_panel_kind(p.get('panel',''))
         if _kind in ('ctrl','bunden'):
-            _add=[]
+            _add=[]; _maxfa=0
             for r in rows:
                 if r.get('load_detail'): continue
                 cnm=str(byCode.get(str(r.get('code','')),{}).get('name',''))
@@ -3716,10 +3716,24 @@ def select_from_extracted(data):
                     fa=re.search(r'(\d{2,4})\s*A', cnm)
                     if fa:
                         lc=_lug_code('M)LUG 3P %sA'%fa.group(1), p.get('panel',''), {'main':'M)LUG'})
-                        if lc: _add.append((lc, fa.group(1)))
-            for lc,fa in _add:
+                        if lc: _add.append((lc, '主幹%sA'%fa.group(1)))
+                elif re.match(r'B\)(MCB|ELB)|^(MCB|ELB|MCCB|ELCB)', cnm):  # 分岐/一般遮断器→最大容量を主幹容量の代理に
+                    fa=re.search(r'(\d{2,4})\s*A', cnm)
+                    if fa:
+                        try: _maxfa=max(_maxfa, int(fa.group(1)))
+                        except Exception: pass
+            # 【2026-11 主幹容量から自動付帯(茂泉様確定)】主幹(M)が未検出の分電/制御盤でも、遮断器があれば
+            #   盤頭に主幹端子M)LUGが要る(手本=ほぼ全分電/制御盤に1)。主幹容量が読めないので最大遮断器容量を
+            #   代理に自動付帯(○・容量/員数/要否は人が確認)。◎にしない=◎誤答ゼロ。遮断器無しの盤は非発火。
+            if not _add and _maxfa>0:
+                lc=_lug_code('M)LUG 3P %dA'%_maxfa, p.get('panel',''), {'main':'M)LUG'})
+                if lc: _add.append((lc, '主幹未明示→最大遮断器%dAで推定'%_maxfa))
+            # 既存のM)LUG行(断路スイッチ頭/TR二次等)があれば二重計上しない(安全側)。
+            if any('LUG' in str(byCode.get(str(r.get('code','')),{}).get('name','')) for r in rows):
+                _add=[]
+            for lc,desc in _add:
                 rows.append(dict(code=lc,name=byCode[lc].get('name',''),conf='○',
-                                 note='盤頭の主幹端子M)LUG(主幹%sA・系統=盤種%s系)'%(fa,lc[:2]),
+                                 note='盤頭の主幹端子M)LUG(%s・系統=盤種%s系・員数/要否は要確認)'%(desc,lc[:2]),
                                  raw='(盤頭 M)LUG)',qty='1',load_detail=False,feed=''))
         elif _kind=='haiden' and not _use_set:
             # 配電盤(受変電低圧40系・個別化): TR二次主幹端子M)LUG(TR二次容量→切上・40系)。
