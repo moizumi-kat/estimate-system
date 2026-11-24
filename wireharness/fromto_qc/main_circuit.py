@@ -151,6 +151,41 @@ def _incoming_lug(draw_paths):
     ]
 
 
+def _display_tu(draw_paths):
+    """分電盤の状態表示用T/U(リモコン表示ユニット)を信号バス(N1信号/N2信号)へ結線して生成する。
+
+    状態表示用T/U は図面に在る(DEVICE='状態表示用T/U')が NOT_PRINT で単線トレース対象外＝本番未生成。
+    リモコン制御のユニット(伝送ﾕﾆｯﾄ=CPU・EE連動=EEU・表示用T/U)は N1信号/N2信号 の信号バスを共有する。
+    ∴バスの一員として結線(手本一致):
+      状態表示用T/U:N1信号 → CPU:N1信号 ／ EEU:N2信号 → 状態表示用T/U:N2信号 (1.25sq)
+    状態表示用T/U・CPU・EEU が揃わない盤では空＝回帰ゼロ。呼出側で分電盤(phase_map空)のみ発火。"""
+    has_tu = False
+    has_cpu = False
+    has_eeu = False
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            dev = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}.get('DEVICE', '')
+            if '表示用T/U' in dev:
+                has_tu = True
+            elif dev == 'CPU':
+                has_cpu = True
+            elif dev == 'EEU':
+                has_eeu = True
+    if not (has_tu and has_cpu and has_eeu):
+        return []
+    tu = '状態表示用T/U'
+    return [
+        {'from': f'{tu}:N1信号', 'to': 'CPU:N1信号', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+        {'from': 'EEU:N2信号', 'to': f'{tu}:N2信号', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+    ]
+
+
 def _earth_tails(draw_paths):
     """分電盤のアース尾線(SPDユニット・伝送ユニットの接地)を生成する。
 
@@ -396,4 +431,5 @@ def generate(draw_paths, load_factor=None, seiban=None):
         wires.extend(_spd_wiring(draw_paths))
         wires.extend(_submain_ab(draw_paths))
         wires.extend(_earth_tails(draw_paths))
+        wires.extend(_display_tu(draw_paths))
     return wires
