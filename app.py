@@ -833,7 +833,15 @@ _PARTS = [
 def _detect_main(main_str):
     import re as _re
     n=norm(main_str)
-    # 最優先: B)/M) 接頭辞付きの遮断器(MCB/ELB/MCCB/ELCB/LUG)は、負荷名称より先に判定。
+    # 最優先: M)/B) 接頭辞は norm() で ")" が除去され "mmcb"/"bmcb" になるため、
+    #   元文字列(括弧保持)から直接判定する。M)=主幹(盤頭)/B)=分岐。
+    #   これが無いと "M)MCB 3P225AF" が分岐(B)扱い→x33 で誤コード(手本はx03 M)主幹)。
+    _mb=_re.match(r'\s*(?:主幹用?|主開閉器?|主)?\s*([MB])\s*\)\s*(MCCB|MCB|ELCB|ELB|LUG)', str(main_str), _re.I)
+    if _mb:
+        _kind={'mccb':'mcb','mcb':'mcb','elcb':'elb','elb':'elb','lug':'lug'}[_mb.group(2).lower()]
+        _label={'mcb':'MCB','elb':'ELB','lug':'LUG'}[_kind]
+        return _kind, _mb.group(1).upper()+')'+_label, True
+    # 次点: B)/M) 接頭辞付きの遮断器(MCB/ELB/MCCB/ELCB/LUG)は、負荷名称より先に判定。
     # 「主幹/主/主開閉器」等の和名接頭辞が付いても遮断器語を拾えるようにする(主幹 MCCB 等)。
     m=_re.match(r'(?:主幹用?|主開閉器?|主)?\s*(b\)|m\))?(mccb|mcb|elcb|elb|lug)', n)
     if m:
@@ -2702,7 +2710,10 @@ def sc_classify(panel_name):
         ph='3φ3W' if re.search(r'動力',n) else ('1φ3W' if re.search(r'電灯',n) else '')
         return {'settype':'低圧','phase':ph}
     # コンデンサ盤は段積VCS(16系)にもなり得る(城山=16026 二段積/電磁引出PF)。既定=個別、ゲートで段積VCSセット選択。
-    if re.search(r'コンデンサ|ｺﾝﾃﾞﾝｻ',n): return {'settype':'コンデンサ'}
+    # 「高圧ＳＣ盤」「SC盤」も高圧コンデンサ盤として扱う(funabashi=高圧ＳＣ盤→16026/16066)。
+    # ※低圧コンデンサ盤は53系の個別選定(段積VCSでない)のため除外(ginza2=低圧コンデンサ盤→SC/SR 53系)。
+    if re.search(r'コンデンサ|ｺﾝﾃﾞﾝｻ|ＳＣ|(?<![A-Za-z])SC\s*盤', n) and '低圧' not in n:
+        return {'settype':'コンデンサ'}
     return {'settype':None}
 
 def sc_needs_confirm(attrs):
@@ -2896,7 +2907,7 @@ def terminal_select(name):
 # 描かれない艤装品なので、抽出値でなく確認ゲートで人が盤面ごとに員数・種別を確定する(自動計上しない)。
 # 種別: 換気扇=屋内/屋外/制御盤用/COS、照明=FL(ドアSW付有無)、任意でサーモスタット/スペースヒーター。
 _ACC_FAN=[('74100','換気扇(TH付)COS'),('74103','換気扇(制御盤用 小型)'),('74101','換気扇(TH付 屋内型)'),('74102','換気扇(TH付 屋外型)')]
-_ACC_LIGHT=[('71093','FL-10W'),('71091','FL-10W(ドアSW付)')]
+_ACC_LIGHT=[('71091','FL-10W(ドアSW付)'),('71093','FL-10W')]   # 既定=ドアSW付71091(§7-1・特記「照明はドアSWで点滅」・手本も全案件71091)
 def _panel_is_real_face(rows):
     """実盤面か(主幹M)/セット11-17/高圧43系機器を持つ)。予備品/接続費等の非盤行を除外。"""
     for r in rows:
