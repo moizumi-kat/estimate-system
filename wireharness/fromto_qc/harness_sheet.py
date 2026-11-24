@@ -193,6 +193,15 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
                             'terminal': (dsp_term if dsp_term and dsp_term != '?' else ''),
                             'x': x, 'y': y, 'unfilled_tb': unfilled_tb}
                 terms.append((key, x, y))
+        # 機器内ピンの誤グルーピング除外: 1つの実機器の端子だけで≥4端子が同一号線に束ねられるのは
+        # 計器等(例 WHM 電力量計の 1L/1S/3L/3S/P1-3/B/NET±=別信号)を記号内でまとめた誤りで、
+        # 手本に無い機器内スター配線を生む。主回路節点(M@…=相の母線で同一機能端子)とTBを含む号線は
+        # 対象外(それらは正当)。同一機器の≤3端子の渡り(手本に実在)も残す。[0an]
+        _reals = {(mm['device'], mm['no']) for mm in (idx[k] for k in idx)
+                  if not str(mm['device']).upper().startswith(('TB', 'BOX'))}
+        _hasTB = any(str(idx[k]['device']).upper().startswith('TB') for k in idx)
+        if (not str(g).startswith('M@')) and (not _hasTB) and len(_reals) == 1 and len(idx) >= 4:
+            continue
         circ = _circuit_of(g)
         # 図面に個別指定があればそれ、無ければ制御標準(HIV/1.25)を補完(要確認)。
         # アース号線(末尾E/緑)は緑・IV相当だが色は _color_of が付ける。
