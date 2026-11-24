@@ -318,6 +318,13 @@ class DrawingModel:
         して号線を潰す（実データ 5-21071 で確認）。よって“制御が主体のシート”では L_MAIN を除外。
         スケルトン(主回路)は主回路導体が L_MAIN に乗る（L_MAINが主体）ので含める。
         判定は本数の多寡で行う（L_CONTROL が数本あるだけのスケルトンを誤除外しないため）。"""
+        # 分電盤(H系列=配線図)は遮断器の主回路給電が L_MAIN に乗る(制御線と混在)。制御優勢でも
+        # L_MAIN を外すと遮断器が結線から脱落する(4-29033 H001で実測=遮断器11-21がトレース漏れ)。
+        # ∴ 分電盤H系列は L_MAIN を保持。制御盤(F系列)の L_MAIN=端子ストリップ除外は従来どおり。[0aq]
+        import os as _os
+        import re as _re
+        if _re.search(r'[-_]H\d', _os.path.basename(str(getattr(self, 'path', '')))):
+            return set(WIRE_LAYERS)
         n_ctrl = sum(1 for e in self.msp if e.dxftype() in ('LINE', 'LWPOLYLINE')
                      and e.dxf.layer in ('L_CONTROL', 'L_CONTROL_H'))
         n_main = sum(1 for e in self.msp if e.dxftype() in ('LINE', 'LWPOLYLINE')
