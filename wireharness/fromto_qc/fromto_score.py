@@ -697,16 +697,12 @@ def score_production_net(seiban_dir, dev_level=False):
         # 場外ケーブル(他盤へ渡る外部ケーブル)＝ハーネス範囲外。カバレッジと同じ判定(F<<・電線色-番号端子も)。
         return _fc._is_external_key((str(sym), str(term)))
 
-    def is_main(sym, term):
-        # 主回路(太物＝1人目工程)。電力機器の主端子(1-6)/LUG/主回路TB(回路+相 101U等)。ハーネス(制御)の範囲外。
-        s = str(sym).upper()
-        if 'LUG' in s:
-            return True
-        if re.match(r'(MCCB|ELCB|NFB|ELB|LBS|52|51|ACR|DCR|INV)', s) and str(term) in ('1', '2', '3', '4', '5', '6'):
-            return True
-        if s.startswith('TB') and re.fullmatch(r'\d{3}[UVWE]?', str(term)):
-            return True                        # 主回路TB(回路+相/接地 101U/101E 等)
-        return False
+    def is_oversize(w):
+        # 境界＝手本に合わせる(茂泉様確定2026-11)。主回路(1人目)とハーネス(3人目)の境は
+        # 太物(≥8sq=別工程・別ファイル⑤⑥)で、手本(④)には≤5.5sqのみが入る＝手本が境界の正。
+        # ∴機器種別(旧is_main)で切らず、電線サイズ≥8sqだけを範囲外にする(手本にある配線は全てハーネス対象)。
+        m = re.match(r'([\d.]+)', str(w.get('size') or ''))
+        return bool(m) and float(m.group(1)) >= 8.0
 
     def node_primary(ns, term, other_ns):
         # 母体(tot)判定用の正準ノード＝従来の回路畳み込み(母体を変えない＝退行ゼロ)。
@@ -812,8 +808,8 @@ def score_production_net(seiban_dir, dev_level=False):
             ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
             if is_ext(ra, a['term']) or is_ext(rb, b['term']):
                 continue
-            if is_main(ra, a['term']) and is_main(rb, b['term']):
-                continue                       # 主回路(太物)の電力経路はハーネス(制御)範囲外
+            if is_oversize(w):
+                continue                       # 太物(≥8sq)=主回路=別工程(1人目)。境界は手本に合わせる
             na = _nsym(resolve(ra, rb), lmap)
             nb = _nsym(resolve(rb, ra), lmap)
             xp = node_primary(na, a['term'], nb)
