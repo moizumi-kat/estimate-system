@@ -2741,13 +2741,17 @@ def sc_classify(panel_name):
     if re.search(r'分電|制御|操作',n): return {'settype':None}
     # 17系低圧セット=受変電のTR二次側(変圧器あり)。TR盤/変圧器盤/低圧電灯・動力盤。
     # MCCB盤(変圧器なし・分電のみ)は17系対象外→個別(18系ACB主幹+個別MCB)。TR盤判定を優先。
-    _is_mccb=re.search(r'MCCB盤|ＭＣＣＢ盤|MCCB番|ＭＣＣＢ番',n)
-    _is_tr=re.search(r'TR盤|ＴＲ盤|変圧器盤|ﾄﾗﾝｽ盤',n)
-    if _is_mccb and not _is_tr: return {'settype':None}   # MCCB盤=個別
+    # MCCB盤/ブレーカ盤(変圧器なし)=個別。全角「ブレーカ盤」も含む(ginza2=一般動力ブレーカ盤等)。
+    _is_mccb=re.search(r'MCCB盤|ＭＣＣＢ盤|MCCB番|ＭＣＣＢ番|ﾌﾞﾚｰｶ盤|ブレーカ盤|ﾌﾞﾚｰｶｰ盤|ブレーカー盤',n)
+    # TR盤/変圧器盤/トランス盤(全角ｶﾀｶﾅも)=TR二次=17系。
+    _is_tr=re.search(r'TR盤|ＴＲ盤|変圧器盤|ﾄﾗﾝｽ盤|トランス盤',n)
+    if _is_mccb and not _is_tr: return {'settype':None}   # MCCB盤/ブレーカ盤=個別
     if re.search(r'スコット|ｽｺｯﾄ',n): return {'settype':'低圧','phase':'スコット'}
-    # 低圧TR盤(17系セット選択可)=受変電のTR二次側。TR盤/変圧器盤のほか、電灯盤/動力盤(一般・非常等)も対象。
-    # ※分電盤/制御盤は上で既にNone。相はTR itemから自動把握するので名称phaseは予備。既定=個別(ゲートで17系選択)。
-    if _is_tr or re.search(r'電灯盤|動力盤',n) or (re.search(r'低圧',n) and re.search(r'電灯|動力',n)):
+    # 低圧TR盤(17系セット選択可)=受変電のTR二次側。TR盤/変圧器盤/トランス盤のほか、電灯盤/動力盤(一般・非常等)、
+    # 「電灯/動力＋配電盤」形(ginza2=保安電灯動力配電盤/一般動力トランス盤・nerima=保安電灯動力配電盤)も対象。
+    # ※分電盤/制御盤は上で既にNone。ブレーカ盤は_is_mccbでNone。相はTR itemから自動把握(名称phaseは予備)。既定=個別(ゲートで17系選択)。
+    if _is_tr or re.search(r'電灯盤|動力盤',n) or \
+       (re.search(r'電灯|動力',n) and re.search(r'低圧|配電盤|トランス|ﾄﾗﾝｽ',n)):
         ph='3φ3W' if re.search(r'動力',n) else ('1φ3W' if re.search(r'電灯',n) else '')
         return {'settype':'低圧','phase':ph}
     # コンデンサ盤は段積VCS(16系)にもなり得る(城山=16026 二段積/電磁引出PF)。既定=個別、ゲートで段積VCSセット選択。
