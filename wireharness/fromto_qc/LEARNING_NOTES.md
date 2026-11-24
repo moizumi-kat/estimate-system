@@ -790,3 +790,13 @@
 - 実装: `harness_sheet._DROP_MAIN_ONEDEV=True`(既定)。M@でも「1機器のみ+≥4端子+TB無し」なら号線を出力しない。
   ※同一機器≤3端子の正当な渡り(F-WL1:1↔2, 6-103:1↔3↔5 等)・2機器以上のM@フィーダ節点は残す。
 - 回帰ゼロ(test_fromto_score/harness_draft/run_local OK)。フラグFalseで従来に戻せる。
+
+## 🔴0ap 引込ノードを実引込TBに(b-1)＋主制御電源CPの引込タップ(b-2)(2026-11)
+(b)引込ラグ。production は引込を一律 `LUG` としていたが、手本は面ごとの実引込(面1=`TB-1:1R/1S/1T`)。
+- **裏取り**: 引込TBは図面に実在(E001 `DEVICE=TB DEVICE1=1 TYPE=CKT-400A TERMINAL='R,S,T'`＋相ラベル SOU 1R/1S/1T)。
+  TERMINAL に R,S,T を持つTBが引込TB。台番号=回路群(TB-1→群1…)、群5は引込TB無し=LUG(手本一致)。
+- **b-1(`main_circuit._incoming_tb`＋`incoming_node`)**: 群Gに引込TBがあれば入線を `TB-<台>:<G>{R/S/T}→遮断器:1/3/5`
+  (相 U←R/V←S/W←T)。無ければ従来 `LUG`。手本一致(TB-1:1R→ELCB-104:1)。
+- **b-2(`_main_control_powers`)**: 主制御電源 CP-<群>(1-2桁番号=引込給電)に引込タップ `TB-<台>:<G>相→CP-<群>:1/3/5`。
+  per回路CP(CP-102等=3桁=遮断器出力給電)は既にトレーサ捕捉のため対象外(b-2冗長を回避)。手本一致(TB-1:1R→CP-1:1)。
+- **効果(5-12043)**: strict② 42.1→42.8(b-1)→**44.1%**(+b-2)。4-21088 88.5%不変(引込TB無パターン=無害)。回帰ゼロ(全テストOK)。
