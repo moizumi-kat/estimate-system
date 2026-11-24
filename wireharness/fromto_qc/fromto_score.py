@@ -457,6 +457,31 @@ def _letter_assign_map(seiban_dir):
     return out
 
 
+def _letter_base_map(seiban_dir):
+    """letter → {基番号(int): 実機器sym}。手本が基を明記した locator(例 '1I'=基1の文字I, '1-A')を
+    曖昧さ無く解決するための地図。DCT(機器相番号)があればそれを基キーで採る(最も正確)。無ければ
+    位置ベース採番(_letter_assign_map)。基が手本に明記されている時だけ使う＝推測ゼロ・◎誤答ゼロ。"""
+    out = collections.defaultdict(dict)
+    dcts = glob.glob(os.path.join(seiban_dir, '機器相番号_*.dxf'))
+    if dcts:
+        for p in dcts:
+            try:
+                pairs = LM.extract_pairs(p)
+            except Exception:
+                continue
+            for loc, act in pairs:
+                b, lt = LM._split_locator(loc)
+                if b and lt and re.fullmatch(r'[A-Z]', lt.upper()):
+                    try:
+                        key = int(re.sub(r'\D', '', b) or '0')
+                    except Exception:
+                        continue
+                    out[lt.upper()][key] = norm(act).upper()
+        if out:
+            return out
+    return _letter_assign_map(seiban_dir)
+
+
 # TB台番号を設計レイアウト(回路群内の最寄りストリップ)で付番して照合する(0af: 台番号は回路番号から導出)。
 # False に戻せば従来の('TB',回路)畳み込みに戻る(退行時の安全弁)。
 _TB_STRIP = True
@@ -648,10 +673,15 @@ def _produce_nets(seiban_dir):
     return nets, node2net, prod_syms, dev2nets
 
 
-def score_production_net(seiban_dir):
+def score_production_net(seiban_dir, dev_level=False):
     """【本番採点＝②実生成一致】本番 produce() 出力をネット単位で採点。場外ケーブル(R-F/L-F)は対象外。
     素ロケーター文字は相手端点の盤(無ければファイルの盤)で一意の実機器へ解決。
-    戻り: {seiban,truth,present,hit,recall,present_rate}。present=両端が本番出力に在る辺数(カバレッジ寄り指標)。"""
+    戻り: {seiban,truth,present,hit,recall,present_rate}。present=両端が本番出力に在る辺数(カバレッジ寄り指標)。
+
+    dev_level=False(既定・公式②＝退行ゼロ): ノード＝(実機器, 端子機能)。端子番号も一致を要する。
+    dev_level=True(診断・『端子番号は入力済み』前提の上限): 非TB端点を機器単位で照合する
+      (端子番号は現場で人が入力する前提＝採点では所与とみなす)。TB台番号/接点機能は従来どおり。
+      公式②との差＝端子番号当ての損失(人手入力で解消)。残差＝カバレッジ＋ネット構成の実課題。"""
     lmap = locator_resolution(seiban_dir)
     nets, node2net, prod_syms, dev2nets = _produce_nets(seiban_dir)
     dev_panel = _dev_panel_map(seiban_dir)
@@ -659,6 +689,7 @@ def score_production_net(seiban_dir):
     if not letmap:
         # DCT(機器相番号)が無い製番は内部配置図D001の位置ベース採番で素letterを解決する。
         letmap = _letter_assign_map(seiban_dir)
+    basemap = _letter_base_map(seiban_dir)   # 基明記locator('1I'等)の曖昧なし解決用(推測ゼロ)
 
     from . import fromto_coverage as _fc
 
@@ -707,7 +738,8 @@ def score_production_net(seiban_dir):
             nn = [node2net[c] for c in cs if c in node2net]
             return set().union(*nn) if nn else set()
         ft_ = _fold_term(ns, term)
-        if ft_ == '' and (_LAMP.match(ns.upper()) or _BTN.match(ns.upper())):
+        if dev_level or (ft_ == '' and (_LAMP.match(ns.upper()) or _BTN.match(ns.upper()))):
+            # 『端子番号は入力済み』前提: 端子番号は所与とみなし機器単位で照合(診断用の上限)。
             return set(dev2nets.get(_nsym(ns, {}), set()))
         return set(node2net.get((ns, ft_), set()))
     tot = hit = present = 0
@@ -719,6 +751,18 @@ def score_production_net(seiban_dir):
 
         def resolve_one(sym, comp):
             s = sym.upper()
+            # 手本が基を明記した locator(例 '1I'=基1の文字I / '1-A')は曖昧なし＝基キー地図で直接解決。
+            # 基が書かれている時だけ使う(推測ゼロ)。素の単一文字(A)は従来どおり下の経路で解く。
+            mb = re.fullmatch(r'(\d+)-?([A-Z])', s)
+            if mb:
+                lt = mb.group(2)
+                try:
+                    bk = int(mb.group(1))
+                except Exception:
+                    bk = None
+                if bk is not None and lt in basemap and bk in basemap[lt]:
+                    return basemap[lt][bk]
+                return sym
             if not (re.fullmatch(r'[A-Z]', s) and s in letmap):
                 return sym
             # 候補＝そのロケーター文字の実機器(本番出力に在るものを優先)
