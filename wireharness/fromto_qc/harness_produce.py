@@ -99,6 +99,37 @@ def terminal_number_defects(seq_paths, skel_paths=None, seiban=''):
                     '割り当てて出力しています（要確認）。'}
 
 
+def _main_circuit_rows(seq_paths, skel_paths, seiban):
+    """主回路ハーネス線(LUG→遮断器:1/3/5 / 遮断器:2/4/6→TB:回路相 / 接地数珠→BOX)を
+    build_sheet 行スキーマで返す。単線図は3相を1本で描くためトレーサ(trace_nodes)は相別配線を
+    出せない＝人は極数から相を起こす。境界を手本に合わせた今(≤5.5sq=ハーネス対象)、本番でも
+    main_circuit.generate で起こして成果物に載せる(0ai/0aj/0ak)。サイズ/色は図面に無く要確認(空欄)。"""
+    from . import main_circuit as _mc
+    draws = list(skel_paths or []) + list(seq_paths or [])
+    try:
+        wires = _mc.generate(draws, seiban=seiban)
+    except Exception:
+        return []
+
+    def _mem(ep):
+        sym, term = (str(ep).split(':', 1) + [''])[:2]
+        d, n = (sym.rsplit('-', 1) if '-' in sym else (sym, ''))
+        return {'place': '', 'device': d, 'no': n, 'terminal': term,
+                'x': 0.0, 'y': 0.0, 'unfilled_tb': False}
+    rows = []
+    for w in wires:
+        ma, mb = _mem(w.get('from', '')), _mem(w.get('to', ''))
+        rows.append({'gousen': (f"{w.get('circuit','')}{w.get('phase','')}" or 'MC'),
+                     'kind': '', 'size': '',
+                     'members': [ma, mb],
+                     'wires': [{'color': '',
+                                'from': {k: ma[k] for k in ('place', 'device', 'no', 'terminal')},
+                                'to': {k: mb[k] for k in ('place', 'device', 'no', 'terminal')},
+                                'from_pos': (0.0, 0.0), 'to_pos': (0.0, 0.0)}],
+                     'is_main_circuit': True, 'confidence': w.get('confidence', '要確認')})
+    return rows
+
+
 def produce(seq_paths, skel_paths=None, seiban='', layout_path=None, strict=True):
     """本番フロー本体。図面のみでハーネスシートを生成する。
     strict=True: 不備が1件でもあれば最終シートは保留し、不備＋修正案を提示(参考シートは付す)。
@@ -111,6 +142,9 @@ def produce(seq_paths, skel_paths=None, seiban='', layout_path=None, strict=True
     }"""
     da = analyze_defects(seq_paths, skel_paths=skel_paths, seiban=seiban, layout_path=layout_path)
     sheet = harness_sheet.build_sheet(seq_paths, skel_paths=skel_paths, seiban=seiban)
+    # 主回路ハーネス線(LUG→遮断器→TB・接地)を追加(トレーサは単線図の相別配線を出せない＝
+    # 境界を手本に合わせた分。追加のみ＝既存の制御線行は不変。0ak)。
+    sheet = list(sheet) + _main_circuit_rows(seq_paths, skel_paths, seiban)
     n_wires = sum(len(r['wires']) for r in sheet)
     # A(要確認の出力): 端子番号が機器TYPE→ピン配で裏取りできない端子に『要確認』を付す
     # (推測番号を黙って出さない＝現場混乱ゼロ・茂泉様方針)。値は候補として残す。

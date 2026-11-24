@@ -714,7 +714,7 @@ def _produce_nets(seiban_dir, add_main_circuit=False):
     return nets, node2net, prod_syms, dev2nets
 
 
-def score_production_net(seiban_dir, dev_level=False, add_main_circuit=False):
+def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
     """【本番採点＝②実生成一致】本番 produce() 出力をネット単位で採点。場外ケーブル(R-F/L-F)は対象外。
     素ロケーター文字は相手端点の盤(無ければファイルの盤)で一意の実機器へ解決。
     戻り: {seiban,truth,present,hit,recall,present_rate}。present=両端が本番出力に在る辺数(カバレッジ寄り指標)。

@@ -735,3 +735,16 @@
   **5-12043 strict② 35.5→39.9%(+4.4pt)・hit 327→367(+40)・present も同じ+40**＝新規一致は全て主回路線で**偽ヒット無し**(recall増=present増の綺麗な signature)。
   LUG は多数ネットに跨るが、相手端点(遮断器:1等)のノードが固有なため無関係辺を誤結しない(設計確認済)。
 - 次: これを**本番(harness_produce.produce / build_sheet)に結線**して成果物(Excel)にも主回路ハーネス線を出す。接地数珠の TB 畳み込み(('TB',回路))は相の有無で同一ノードになり得るため、接地の過剰マージには注意(まず相配線で効果確認済)。
+
+## 🔴0ak 主回路ハーネス線を本番(produce)に結線＋採点既定ON(2026-11・4製番で検証)
+0aj の実証を受け、`harness_produce.produce` に `_main_circuit_rows`(LUG→遮断器:1/3/5 / 遮断器:2/4/6→TB:回路相 / 接地→BOX)を
+**追加行として結線**(build_sheet の行スキーマ・既存の制御線行は不変＝追加のみ)。成果物(Excel)にも主回路ハーネス線が出る。
+`score_production_net` は既定 `add_main_circuit=True`(本番=produce の出力を測るため・採点とproduceは共に main_circuit.generate 由来で一致)。
+- **4製番で検証(偽ヒット無し＝hit増≤present増＋present既出の正しい結線)**:
+  - 4-21088(アース母線中心) strict 9.0→**88.5%** / dev 12.8→92.3%(hit+62=present+62)
+  - 5-12043 strict 35.5→**39.9%** / dev 63.0→**68.7%**
+  - 4-29033(分電盤・主幹遮断器なし) 不変(main_circuitが何も足さない＝no-op・無害)
+  - 5-12073 不変(同上)
+- **効く条件**: MCCB/ELCB の主幹があり tb_phase が相を起こせる盤(受変電/動力)。分電盤(H系・主幹遮断器なし)は no-op。
+- **残課題(deliverable品質・連結は正)**: 主回路行の TB 台番号(build_sheetにD図面未供給→'TB'空)・電線サイズ/色は空欄(要確認)。台番号は0af系の付番で後日補完。
+- 回帰: test_fromto_score/coverage/run_local/workflow/harness_draft 全OK。既存制御線行は不変。
