@@ -388,7 +388,14 @@ VMCやSRが抜け落ちやすいので、PFとSCだけでなくVMC・SRも必ず
   受電・饋電は "高圧"、コンデンサは ""(個別)。段積みか自信が無ければ "高圧"/"" のままにし unclear_specs に "settype"。
 - role(段積みの段数/役割): "受電盤"(受電) / "一段積"/"二段積"/"三段積"(饋電やコンデンサの段数) / "母線連絡"(母連盤)。
   段数(何段積か)は外形図/盤姿図の段数で判断。読み切れなければ ""(空)にして unclear_specs に "role"(→人が確認ゲートで確定)。
-- meter(計器種別): 推測しない。器具表等で明確な時のみ "広角"/"普通角"/"マルチ"、単線図だけで確信が無ければ ""(空)。
+- meter(計器種別): 盤ごとの主計器(受電=引込計器/低圧TR盤=TR二次計器)の種別。推測しないが、次の信号を使って判定する:
+  ① 器具表/凡例にその盤の計器として「デジタルマルチメーター(DM)」「マルチ指示計(MDA等)」があれば "マルチ"。
+     ※図面右下の凡例で「DM=デジタルマルチメーター」等と定義され、その盤にDMがあれば "マルチ"。
+  ② 「広角型の指示計器(広角VM/AM等)」なら "広角"、「普通角」なら "普通角"。
+  ③ 図面右下の〈特記事項/共通仕様(●印を適用)〉に「指示計器は広角型」等の計器種別指定があり、
+     その盤がDM(マルチ)でない場合は、その指定(広角等)を適用する。
+  ④ 以上で確信が持てなければ ""(空)にして unclear_specs に "meter"(→確認ゲートで人が確定)。
+  ※1盤内でDM(マルチ)と広角指示計が混在することがある。主計器(セットの代表計器)の種別を優先。案件・盤で分かれるため推測しない。
 - phase: 1φ→"1φ3W" / 3φ→"3φ3W" / スコットTR→"スコット"
 - cap: 変圧器のKVA(数値+KVA)。読めなければ ""。
 - 【TR/SC/SRが「スペース」「予備」表記でも必ず拾う】受変電盤でTR・SC・SRが実装置でなく「スペース(SP)」
@@ -397,8 +404,21 @@ VMCやSRが抜け落ちやすいので、PFとSCだけでなくVMC・SRも必ず
   容量・相が必要なため(表参道手本=TR/SC/SRはスペースだが17205/16026等のセットで積算)。
 - vcb: "8KA"/"12.5KA"(高圧のみ)。 op: "手動"/"電動"/"電動引出"(VCB上下に黒四角＋回転矢印記号なら電動引出)。段積VCSは "電磁"/"電磁引出PF"。
 - unclear_specs: 読み切れなかった仕様名の配列(例 ["meter","role","settype"])
+
+【図面の〈特記事項/共通仕様(●印を適用)〉を読んで common_spec に出す(重要・コード選定に反映)】
+図面右下等にある「特記事項」「共通仕様」ブロックは、配電盤・制御盤・分電盤・その他に共通の盤仕様。
+●印(=適用する)が付いた項目のうち、盤の機器構成・計器・附属品に関わるものを、出力トップレベルの
+common_spec(案件共通の仕様)として拾う。○印(=適用しない)は拾わない。読めない/無ければ common_spec は省略。
+- meter_note: 計器種別に関する記述があれば原文(例 "指示計器は広角型1.5級")。各盤のmeter判定に使う。
+- 下記は該当する●項目があれば true(無ければ false か省略):
+  protect_cover(配線用遮断器/高圧器類/モールド変圧器に透明保護カバー),
+  tr_temp_alarm(変圧器 温度警報接点・ダイヤル温度計付), sc_pressure_alarm(コンデンサ 圧力警報接点),
+  bz_electronic(電子ブザー), ctrl_dc100v(警報/操作/表示電源はDC100V・別途直流電源装置から供給),
+  maint_outlet(保守用コンセント付), lighting_led(盤内照明LED・ドアSW点滅),
+  ceiling_fan(天井扇で換気), mccb_2ndary_terminal(低圧MCCBの2次側は端子台接続),
+  cold_region(寒冷地仕様), outdoor(屋外防水型キュービクル)
 出力は次のJSONのみ（説明文・マークダウン禁止）:
-{"panels":[{"panel":"盤名","set_attrs":{"settype":"","role":"","meter":"","phase":"","cap":"","vcb":"","op":"","unclear_specs":[]},"legend":{},"items":[{"name":"品名仕様","qty":"数量","volt":"HV|400V|200V|100V|","symbol":"A〜L|","kw":"容量数値|","breaker":"●|○|","group":"親リレー名|","load_detail":false,"parent":"","unclear":false}]}]}"""
+{"panels":[{"panel":"盤名","set_attrs":{"settype":"","role":"","meter":"","phase":"","cap":"","vcb":"","op":"","unclear_specs":[]},"legend":{},"items":[{"name":"品名仕様","qty":"数量","volt":"HV|400V|200V|100V|","symbol":"A〜L|","kw":"容量数値|","breaker":"●|○|","group":"親リレー名|","load_detail":false,"parent":"","unclear":false}]}],"common_spec":{"meter_note":"","protect_cover":false,"tr_temp_alarm":false,"sc_pressure_alarm":false,"bz_electronic":false,"ctrl_dc100v":false,"maint_outlet":false,"lighting_led":false,"ceiling_fan":false,"mccb_2ndary_terminal":false,"cold_region":false,"outdoor":false}}"""
 
 # ===== DXF: 文字を座標つきで抽出し、Claudeで盤・機器に構造化 =====
 def extract_dxf(cli, data_bytes):

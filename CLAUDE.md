@@ -307,3 +307,11 @@ Claude(1回目) ∩ Gemini 2.5 Pro(2回目)
 - **同時抽出の安全弁(本セッション実装)**: 重い抽出(高解像度×二重Vision)が同時に走るとOOMの恐れ→`_EXTRACT_SEM=Semaphore(EXTRACT_CONCURRENCY,既定2)`で同時実行を制限。超過分は`_work`内でacquire待ち=statusに`queued:true`→フロントpollJobが「順番待ち」表示。空き次第自動開始。抽出コア(`_do_extract`)は不変=回帰ゼロ。t3.medium+swap2GBで既定2、`EXTRACT_CONCURRENCY`環境変数で調整可。
 - **gunicornワーカー**: 現行 `-w 2`(INSTALL.md)。5人の軽い操作(選定/pageimg/locate=数秒ブロック)を滑らかにするなら `/etc/systemd/system/estimate.service` の ExecStart を `--workers 4 --timeout 600`(必要なら`--threads 2`)へ。要 `sudo systemctl daemon-reload && sudo systemctl restart estimate`(SSH・手動)。4GBなら4ワーカー可。
 - 未了: 個人別ログイン(users.json等)・セキュリティ宿題(APIキー失効/PW変更/SSH制限)。
+
+## 12. 共通仕様(図面の特記事項)をコード選定に反映(2026-11／茂泉様要望・新5案件)
+新5案件の図面右下に〈特記事項/共通仕様(●印を適用)〉ブロックがあり、配電盤/制御盤/分電盤/その他に共通の盤仕様(計器種別・附属品・変種)が明記されている。これをコード選定へ反映する(§1-1に従い実手本で裏取り)。
+- **計器種別は盤・案件で分かれる(§6-3再確認)**: 新5案件の手本セット計器種別=funabashi/nerima/kandanomori/ginza2は全マルチ、musabiは受電16014=広角＋低圧17205=マルチの**混在**。∴単一の全盤共通値にはできない。ただし**凡例「DM=デジタルマルチメーター」→その盤はマルチ**、「指示計器は広角型」→広角、が判定信号になる。
+- **【Phase1実装(プロンプトのみ・選定ロジック不変=回帰ゼロ)】** `EXTRACT_PROMPT` の meter 指示を強化: ①凡例/器具のDM(デジタルマルチ)→"マルチ" ②広角指示計→"広角" ③特記事項の計器種別指定を(DMでない盤に)適用 ④確信なければ空→確認ゲート。**1盤内でDM/広角混在時は主計器を優先**。さらにトップレベルに `common_spec`(特記事項の●項目: protect_cover/tr_temp_alarm/sc_pressure_alarm/bz_electronic/ctrl_dc100v/maint_outlet/lighting_led/ceiling_fan/mccb_2ndary_terminal/cold_region/outdoor + meter_note)を捕捉。抽出結果パース(line586)は追加キーを保持し`select_from_extracted(data)`へ渡る。
+  - 選定側は既存のmeter→セット計器選定経路をそのまま使う(meter=広角→11342/16014広角, マルチ→17205等)。実機A/B: common_spec付きデータで選定不変・meter=広角/マルチで正しいセット計器コード。**計器種別はALWAYS_CONFIRMのまま○止め=◎誤答ゼロ**(共通仕様で既定が普通角→広角/マルチに改善、人が確認ゲート/一括確定で◎)。
+- **【Phase2未了(附属品の自動計上)】** common_spec の附属品フラグを選定で自動計上(○・案件共通): 透明保護カバー(79010)・変圧器温度計(74083/74264)・コンデンサ圧力計(74279)・電子ブザーDC100V(74002)・保守用コンセント・MCCB2次側端子台 等。多くは**機器ごと員数**or既存セット内包/既存自動計上(照明71091・換気扇)と重複し得るため、二重計上防止と員数ルールの設計が要。金額インパクトは小さく、本番で実案件を流して要否・頻度を見てから実装する(茂泉様優先度確認)。
+- 裏取り: 計器種別の判定強化は実図面の再抽出が要るため本番で確認。common_specが実際に特記事項から正しく拾えるか・musabiの広角/マルチ混在が盤別に正しく出るかを実案件で検証。
