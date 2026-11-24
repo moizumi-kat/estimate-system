@@ -26,6 +26,12 @@ from .geometry import norm
 from . import spec_rules as _sr2
 DEFAULT_WIRE = (_sr2.wire_type('control'), _sr2.CONTROL_MIN_SIZE)   # = ('IV', '1.25')
 
+# 主回路節点(M@…)の「単一機器の全端子束ね」も誤グルーピング除外に含める(0an拡張)。
+# 実測A/Bでスコア不変(②は不変=手本に無い)かつ成果物の物理不能な配線(遮断器2-4-6=相短絡
+# 等、出力2/4/6+コイルA1A2・補助13/14を1ネットに束ねた誤り)を除去できるため既定True。
+# 真の主回路配線は main_circuit が相別に別途生成する。[0ao]
+_DROP_MAIN_ONEDEV = True
+
 
 def _wire_specs(paths):
     """図面から 回路番号→(種別,サイズ) を集める。
@@ -200,7 +206,8 @@ def build_sheet(seq_paths, skel_paths=None, seiban='', place_of=None, priority='
         _reals = {(mm['device'], mm['no']) for mm in (idx[k] for k in idx)
                   if not str(mm['device']).upper().startswith(('TB', 'BOX'))}
         _hasTB = any(str(idx[k]['device']).upper().startswith('TB') for k in idx)
-        if (not str(g).startswith('M@')) and (not _hasTB) and len(_reals) == 1 and len(idx) >= 4:
+        if (not _hasTB) and len(_reals) == 1 and len(idx) >= 4 and \
+                ((not str(g).startswith('M@')) or _DROP_MAIN_ONEDEV):
             continue
         circ = _circuit_of(g)
         # 図面に個別指定があればそれ、無ければ制御標準(HIV/1.25)を補完(要確認)。
