@@ -2183,6 +2183,31 @@ def _bunden_load_branch(name, panel):
     code='60014' if _WET_ELB.search(name) else '60012'
     return code if code in byCode else None
 
+def _apply_breaker_variant(code, name):
+    """遮断器コードの変種調整(茂泉様確定・新5案件手本で裏取り)。
+    名称に「高性能/電子式/漏電アラーム」の修飾があれば、同ブロック(系+極+AF+MCB/ELB)の
+    該当変種コードへ差し替える。例『B)MCB 3P225AF(AX付,高性能)』→41233(AX付)でなく41232(高性能)。
+    修飾が無ければ基準コードのまま(=回帰ゼロ)。◎誤答ゼロ: 図面に明記された変種のみ反映。"""
+    if not code or code not in byCode or len(code)!=5: return code
+    nm_in=str(name)
+    quals=[]
+    if re.search(r'電子式', nm_in): quals.append('電子式')
+    if re.search(r'高性能', nm_in): quals.append('高性能')
+    if re.search(r'漏電ｱﾗｰﾑ|漏電アラーム', nm_in): quals.append('漏電アラーム')
+    if not quals: return code
+    base=byCode[code].get('name','')
+    if any(q in base for q in quals): return code   # 既に合致
+    is_elb='ELB' in base; is_mdu='MDU' in base
+    blk=code[:4]
+    for q in quals:
+        for c,v in byCode.items():
+            if c[:4]!=blk or c==code: continue
+            n2=v.get('name','')
+            if ('ELB' in n2)!=is_elb or ('MDU' in n2)!=is_mdu: continue
+            if 'スペース' in n2 or '(SP)' in n2: continue
+            if q in n2: return c
+    return code
+
 def _mcb_code(name, panel, meta):
     n=norm(name); pn=norm(panel)
     is_main = n.startswith('m)') or ('主幹' in name) or ('主開閉器' in name) or (meta.get('main','').startswith('M)'))
@@ -2242,11 +2267,11 @@ def _mcb_code(name, panel, meta):
         return code
     if is_main and not is_elb and pole=='3':
         code=afmap_main.get(kind,{}).get(af,'')
-        if code in byCode: return _ax(code)
+        if code in byCode: return _apply_breaker_variant(_ax(code), name)
     # 分岐MCB/ELB(B)系): 極数×AF×盤種別で実在コードを探す
     if not is_main:
         for cand in _branch_candidates(pole, af, is_elb, kind):
-            if cand in byCode: return _ax(cand)
+            if cand in byCode: return _apply_breaker_variant(_ax(cand), name)
     return ''
 
 # --- M)LUG(主幹端子)コード: DB実在コードから (系統,極数)→[(容量,コード)] を構築 ---
