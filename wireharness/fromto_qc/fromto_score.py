@@ -802,6 +802,7 @@ def _produce_nets(seiban_dir, add_main_circuit=False):
                     out.add(('TBS:' + dai, ''))
                 return out, None
             return {(s, _fold_term(s, term))}, s
+        _brk_in = re.compile(r'^(MCCB|ELCB|NFB|ELB|CP)', re.I)
         for w in mcw:
             na_, da = _mc_nodes(w.get('from', ''))
             nb_, db = _mc_nodes(w.get('to', ''))
@@ -816,6 +817,13 @@ def _produce_nets(seiban_dir, add_main_circuit=False):
                 if dd:
                     prod_syms.add(dd)
                     dev2nets[dd].add(idx)
+            # 引込被覆: 引込TB(台番号付)→遮断器入力(1/3/5)の給電線は、電気的に引込ラグ母線そのもの。
+            # 手本が引込を素の 'LUG'(群なし・端子空欄)で表す盤では本番がTB-<台>で起こすため素LUGが
+            # dev2netsに現れない→出現率で落ちる。給電線のネットを 'LUG' にも登録し素LUGを解決する
+            # (加点のみ・本番ハーネス出力は不変＝採点側の被覆補助)。LUG実ノードを起こす盤では既に登録済。
+            _fsym = str(w.get('from', '')).split(':', 1)[0]
+            if re.match(r'^TB', _nsym(_fsym, {}), re.I) and db and _brk_in.match(db):
+                dev2nets['LUG'].add(idx)
     return nets, node2net, prod_syms, dev2nets
 
 
