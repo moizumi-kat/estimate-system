@@ -909,3 +909,15 @@ EEU=EEｽｲｯﾁ連動ﾕﾆｯﾄ 等。device(CPU)は生成済なのに手�
   present 95.5%維持・recall 83.3→**87.9%**(netgap 8→5、監視系3件解消)。回帰ゼロ(4-21088/5-12043/5-12073 不変・全テストOK)。
 - **残netgap5件**: ELCB-1:ALc↔SPD-1:COM / LUG-1↔ALX1:13 / OL-EL1↔SPD-1:NO / R-TR1:2↔CPU:電源 / EEU:4↔R-TR1:1。
   いずれも図面に個別タグ無しの制御配線(§7)。茂泉様の制御ルール確認が要る領域。
+
+## 🔴0ay スケルトン(L_CONTROL)由来で制御netgap解消①: 主幹 ELCB-1↔MCCB-1 別名(2026-11・茂泉様示唆)
+茂泉様「スケルトンを見ると良い」で判明: H001の配線は**レイヤ分離**(L_MAIN/L_CONTROL/L_EARTH/SOU)。制御netgapは
+§7でなく**L_CONTROLに実在する線**。build_sheet は号線1R1で既に `MCCB-1:ALc↔SPD-1:13` を辿っていた(警報電源バス)。
+- **真因=名称**: 図面は主幹の警報接点を **MCCB-1**、手本は同一の漏電付主幹を **ELCB-1** と呼ぶ。SPD端子は 13(図面)/COM(手本)
+  でdev-level無関係。∴主幹 ELCB-1≡MCCB-1 を別名化すれば手本 ELCB-1:ALc が 1R1ネット(SPD-1含む)に一致。
+- **実装**: `_main_breaker_alias`＝図面で MCCB-<n>(漏電付=SPEC4'AL'/型式mA・NCVZ等)が在り**同番ELCBブロックが無い**番号だけ
+  `ELCB-<n>→MCCB-<n>`(分岐ELCBは実在＝対象外＝曖昧なし)。score_production_net の `_pa` に併合。`_incoming_lug` の
+  主幹接点も ELCB-→MCCB- に統一(build_sheetの1R1ネットと同一化)。
+- **効果(4-29033)**: netgap ELCB-1:ALc↔SPD-1:COM 解消。recall 87.9→**89.4%**・present 95.5%維持。
+  回帰ゼロ: 4-21088(94.9/92.3)・5-12043(88.2)・5-12073(11.1)不変(手本が該当ELCB-nを使わない番号はno-op)・全テストOK。
+- **残netgap4**: LUG-1↔ALX1:13 / OL-EL1↔SPD-1:NO / R-TR1:2↔CPU:電源 / EEU:4↔R-TR1:1(引き続きL_CONTROLで1件ずつ)。

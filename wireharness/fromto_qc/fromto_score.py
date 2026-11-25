@@ -200,6 +200,40 @@ def _parts_full(seiban_dir):
     return pairs
 
 
+def _main_breaker_alias(seiban_dir):
+    """主幹(漏電付MCCB)の ELCB-<n> ↔ MCCB-<n> 別名。{canon('ELCB-n'): canon('MCCB-n')}。
+    主幹は漏電付MCCB(例 NF125-NCVZ・SPEC4='AL')で、図面は全接点を MCCB-<n> と記すが、手本は
+    漏電/警報接点を同一物の ELCB-<n> と呼ぶ。図面に MCCB-<n> が在り同番の ELCB-<n> ブロックが無い
+    ものだけ別名化(分岐ELCBは実在するので対象外＝曖昧なし)。build_sheet の主幹接点ネット(MCCB)と
+    手本の ELCB を一致させる。"""
+    import glob as _glob
+    mccb = set(); elcb = set(); earthleak = set()
+    for p in sorted(set(_glob.glob(os.path.join(seiban_dir, '図面データ_*.dxf'))) |
+                    set(_glob.glob(os.path.join(seiban_dir, '図面データ_*.DXF')))):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            dev = d.get('DEVICE', ''); dv1 = d.get('DEVICE1', '')
+            if not re.fullmatch(r'\d+', str(dv1)):
+                continue
+            if dev == 'MCCB':
+                mccb.add(dv1)
+                # 漏電付(SPEC4='AL' か 型式に mA/NCVZ/NV/BV 等)＝ELCB としても呼ばれ得る
+                if 'AL' in d.get('SPEC4', '').upper() or re.search(r'MA|NCVZ|^NV|^BV', d.get('TYPE', '').upper()):
+                    earthleak.add(dv1)
+            elif dev == 'ELCB':
+                elcb.add(dv1)
+    out = {}
+    for n in (mccb & earthleak) - elcb:        # MCCB(漏電付)で同番ELCBブロックが無い番号のみ
+        out[dn.canon(('ELCB-' + n).upper())] = dn.canon(('MCCB-' + n).upper())
+    return out
+
+
 def _nterm(t):
     s = re.sub(r'\s+', '', str(t or '')).upper()
     # 端子番号の位置記述(上/下/左/右＝同一端子の上下段・製造位置)は畳む。手本'2_下'↔本番'2'。
@@ -787,6 +821,7 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
       公式②との差＝端子番号当ての損失(人手入力で解消)。残差＝カバレッジ＋ネット構成の実課題。"""
     lmap = locator_resolution(seiban_dir)
     _pa = _parts_alias(seiban_dir)         # PARTS(人の呼称)→機器名 1:1別名(手本 '伝送ﾕﾆｯﾄ'↔本番 'CPU' 等)
+    _pa.update(_main_breaker_alias(seiban_dir))   # 主幹 ELCB-1↔MCCB-1(同一の漏電付主幹)
     nets, node2net, prod_syms, dev2nets = _produce_nets(seiban_dir, add_main_circuit=add_main_circuit)
     _pfull = [(cp, dv) for (cp, dv) in _parts_full(seiban_dir) if dv in dev2nets]  # 部分一致別名(略称)用・生成済のみ
 

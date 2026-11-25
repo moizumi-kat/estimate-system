@@ -144,10 +144,12 @@ def _incoming_lug(draw_paths):
     if not (incoming_tb and main_no and fuse_no):
         return []
     fsym = f'F-AL{fuse_no}'
+    # 主幹の漏電/警報接点は図面上 MCCB-<n>(手本では同一物を ELCB-<n> とも呼ぶ)。図面名 MCCB に揃える
+    # (採点側で ELCB-1↔MCCB-1 を別名化し手本と一致させる)。build_sheet の 1R1 ネット(MCCB-1)と同一化する。
     return [
         {'from': f'MCCB-{main_no}:N', 'to': 'LUG-2:', 'circuit': '', 'phase': '', 'confidence': '要確認'},
         {'from': 'LUG-1:', 'to': f'{fsym}:1', 'circuit': '', 'phase': '', 'confidence': '要確認'},
-        {'from': f'{fsym}:2', 'to': f'ELCB-{main_no}:ECAc', 'circuit': '', 'phase': '', 'confidence': '要確認'},
+        {'from': f'{fsym}:2', 'to': f'MCCB-{main_no}:ECAc', 'circuit': '', 'phase': '', 'confidence': '要確認'},
     ]
 
 
