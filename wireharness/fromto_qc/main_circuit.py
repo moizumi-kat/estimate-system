@@ -534,8 +534,11 @@ def _energy_metering(draw_paths):
                 if m in wls:   # 表示灯 WL-m へ(CP-WL の出力側 2/4 → 白ランプ)。手本: CP-WL<m>:2→WL-<m> / :4→WL-<m>:-
                     wires.append({'from': f'CP-WL{m}:2', 'to': f'WL-{m}:', 'circuit': m, 'phase': '', 'confidence': '要確認'})
                     wires.append({'from': f'CP-WL{m}:4', 'to': f'WL-{m}:-', 'circuit': m, 'phase': '', 'confidence': '要確認'})
-        # アース(親ユニット)。手本は計測機器の接地を共通アースバー BOX へ結ぶ(5-12073=無印 'BOX')。
-        # アースは等電位1ネット・鎖順は製造任意ゆえ共通バー直結が電気的に正。終端名は手本に合わせ 'BOX'。
+        # アース(親ユニット)。手本=計測機器の接地を共通アースバーBOXへ(等電位1ネット・鎖順は製造任意)。
+        # ただし主群(最若番=計測分岐201-204を担う親)の筐体アースは、その分岐接地バス TB-202:204E へ鎖で
+        # 結ぶ(手本・シートまたぎ=スケルトンL_EARTHは各シートに在るが単一線にならない)。他群はBOX直結。
+        if m == _main_m and relay12[0]:   # 主群は分岐接地TB-202:204E経由でBOXへ(鎖の中継点)
+            wires.append({'from': 'TB-202:204E', 'to': f'{u(m)}:E', 'circuit': m, 'phase': 'E', 'confidence': '要確認'})
         wires.append({'from': f'{u(m)}:E', 'to': 'BOX:', 'circuit': m, 'phase': 'E', 'confidence': '要確認'})
         # ② CT→ch。群=番号先頭桁が親番号。chは [親A, 各増設(A,B)] の順。
         grp_exts = sorted([e for e in exts if e[:-1] == m], key=lambda s: int(s))
@@ -620,7 +623,7 @@ def _energy_metering(draw_paths):
             for lug in ('1', '3'):
                 _v(f'MCCB-2:{t}', f'LUG-{lug}:')
         # LUG→中欠用(中性線欠相センス)→主母線TB-C
-        for lug in ('1', '3', '5'):
+        for lug in ('1', '3', '5', '7'):
             _v(f'LUG-{lug}:', '中欠用:')
         for lug in ('2', '4'):
             _v('中欠用:', f'LUG-{lug}:')
@@ -665,6 +668,8 @@ def _energy_metering(draw_paths):
         _v('TB-C:1N 下', 'MCCB-○A:3')
     if 'B' in eco:
         _v('MCCB-○B:3', 'TB-C:1T 下')
+    if 'A' in eco and 'B' in eco:
+        _v('MCCB-○A:3', 'MCCB-○B:3')         # 両エコモニタ遮断器はN相(端子3)を共有
     # 制御系(増幅器WR3913/リモコントランスR-TR/監視リレーR-RY/MCCB-□9)。増幅器のある計測盤のみ。
     # 裏取り(手本): 増幅器-<n>:E→BOX(接地) / MCCB-□9→R-TR→増幅器:電源(数珠) / ELCB-◎5(=ELCB-5)→R-RY(監視電源)。
     # 増幅器は生成側 'AMP<n>' に合わせ(番号別名で手本 增幅器-<n> も解決)。R-TR/R-RYはH系列で検出。
