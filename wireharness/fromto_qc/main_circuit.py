@@ -615,6 +615,45 @@ def _energy_metering(draw_paths):
             _v('中欠用:', f'LUG-{lug}:')
         _v('LUG-2:', 'TB-C:1R 下')
         _v('LUG-7:', 'TB-C:')
+    # エコモニタ電源遮断器 MCCB-○A/○B(裏取り: 茂泉様指摘で内部配置図/扉から発見)。
+    # H系列の2P遮断器(BH-C1)で、番号(○A/○B)は DEVICE1 空欄＝隣接テキスト'A'/'B'(＋相'R N'/'T N')で付与。
+    # 手本: 主母線 TB-C:1R下→MCCB-○A:1 / TB-C:1N下→MCCB-○A:3 / MCCB-○B:3→TB-C:1T下。計測盤のみ(masters有)。
+    eco = set()
+    for p in (draw_paths or []):
+        if 'G0' in _os.path.basename(p):
+            continue                                   # H系列のみ(配置の主幹部)
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        msp = doc.modelspace()
+        labels = []
+        for e in msp:
+            if e.dxftype() in ('TEXT', 'MTEXT'):
+                try:
+                    tx, ty = float(e.dxf.insert[0]), float(e.dxf.insert[1])
+                except Exception:
+                    continue
+                s = ((e.dxf.text if e.dxftype() == 'TEXT' else e.text) or '').strip()
+                if s in ('A', 'B'):
+                    labels.append((s, tx, ty))
+        for ins in msp.query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {t.dxf.tag: (t.dxf.text or '').strip() for t in ins.attribs}
+            if a.get('DEVICE', '').upper() == 'MCCB' and not a.get('DEVICE1', '') and '2P' in a.get('SPEC1', ''):
+                try:
+                    bx, by = float(ins.dxf.insert[0]), float(ins.dxf.insert[1])
+                except Exception:
+                    continue
+                cand = [(tx - bx, s) for s, tx, ty in labels if 0 < (tx - bx) < 220 and abs(ty - by) < 90]
+                if cand:
+                    eco.add(min(cand, key=lambda t: t[0])[1])   # 直右のラベル(A/B)で番号付与
+    if 'A' in eco:
+        _v('TB-C:1R 下', 'MCCB-○A:1')
+        _v('TB-C:1N 下', 'MCCB-○A:3')
+    if 'B' in eco:
+        _v('MCCB-○B:3', 'TB-C:1T 下')
     return wires
 
 
