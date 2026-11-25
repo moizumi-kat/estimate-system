@@ -460,6 +460,8 @@ def _energy_metering(draw_paths):
     exts = {}      # 増設番号 -> [x,...]
     cts = {}       # CT番号 -> [x,...]
     cps = set()    # CP番号集合('1','WL1','2','WL2')
+    monitors = {}  # 電力監視機器(小形表示ユニット EMU4-D65)番号 -> [x,...]
+    comm_tb = set()  # 通信TB('11'/'21')の有無
     for p in gpaths:
         try:
             doc = ezdxf.readfile(p)
@@ -482,6 +484,10 @@ def _energy_metering(draw_paths):
                 cts.setdefault(no, []).append(x)
             elif dev.upper() == 'CP' and re.fullmatch(r'(WL)?\d+', no):
                 cps.add(no)
+            elif dev == '小形表示ユニット' and re.fullmatch(r'\d+', no):
+                monitors.setdefault(no, []).append(x)      # 電力監視機器(EMU4-D65)=手本 'ｴﾈﾙｷﾞｰ-ﾓﾆﾀ'
+            elif (dev.upper() in ('TB11', 'TB21')) or (dev.upper() == 'TB' and no in ('11', '21')):
+                comm_tb.add(dev.upper()[2:] if dev.upper().startswith('TB') and len(dev) > 2 else no)
     if not masters:
         return []
 
@@ -537,6 +543,16 @@ def _energy_metering(draw_paths):
                     wires.append({'from': 'TB-CT:', 'to': uend, 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
                 else:
                     wires.append({'from': ctend, 'to': uend, 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
+    # 電力監視機器(小形表示ユニット EMU4-D65=手本 'ｴﾈﾙｷﾞｰ-ﾓﾆﾀ')のRS485通信 → 通信TB。
+    # 裏取り: PARTS='電力監視機器'・TYPE=EMU4-D65(三菱の電力監視表示器)＝手本 ｴﾈﾙｷﾞｰ-ﾓﾆﾀ。
+    # 手本: ｴﾈﾙｷﾞｰ-ﾓﾆﾀ<m>:485+/485-/SLD → TB-<m>1(左右の渡り)。監視機器<m>→TB-'<m>1'(m1→11, m2→21)。
+    for mo in sorted(monitors, key=lambda s: int(s)):
+        tbno = f'{mo}1'
+        if tbno not in comm_tb:
+            continue   # 通信TBが無ければ出さない(安全側)
+        for sig in ('485+', '485-', 'SLD'):
+            wires.append({'from': f'ｴﾈﾙｷﾞｰ-ﾓﾆﾀ{mo}:{sig}', 'to': f'TB-{tbno}:',
+                          'circuit': '', 'phase': '', 'confidence': '要確認'})
     return wires
 
 
