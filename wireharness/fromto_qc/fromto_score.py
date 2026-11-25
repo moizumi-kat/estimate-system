@@ -139,6 +139,10 @@ def _nsym(sym, lmap):
     if re.fullmatch(r'[A-Z]', base) and base in lmap:
         s = lmap[base]
     c = dn.canon(s)                        # ハイフン等の表記ゆれを吸収(FX-1≡FX1)
+    # LUG端子台(LugTB=CKT型圧着端子ブロック)は引込TBと同一機器(図面でLugTB-6とTB-6の二重ラベル・
+    # 同一CKT型を確認)。手本は'LUG-TB<n>'、本番(引込)は'TB-<n>'と別名で呼ぶため、TB畳み込みに乗せて
+    # 一致させる。素の'LUG'(分電盤引込)や'LUG-<n>'(5-12073電圧センス)は'TB'を含まず不変=回帰ゼロ。
+    c = re.sub(r'^LUGTB(?=\d)', 'TB', c)
     # フルネーム別名(PARTS由来・1:1検証済)。lmapに canon(フル名)→機器名 が在れば適用。
     # 単文字キー(ロケーター)とは衝突しない(キーが別空間)＝後方互換(退行ゼロ)。
     if lmap:
