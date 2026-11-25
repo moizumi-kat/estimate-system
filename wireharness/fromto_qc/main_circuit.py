@@ -462,6 +462,7 @@ def _energy_metering(draw_paths):
     cps = set()    # CP番号集合('1','WL1','2','WL2')
     monitors = {}  # 電力監視機器(小形表示ユニット EMU4-D65)番号 -> [x,...]
     comm_tb = set()  # 通信TB('11'/'21')の有無
+    wls = set()    # 表示灯 WL の番号集合('1'/'2')
     for p in gpaths:
         try:
             doc = ezdxf.readfile(p)
@@ -488,6 +489,8 @@ def _energy_metering(draw_paths):
                 monitors.setdefault(no, []).append(x)      # 電力監視機器(EMU4-D65)=手本 'ｴﾈﾙｷﾞｰ-ﾓﾆﾀ'
             elif (dev.upper() in ('TB11', 'TB21')) or (dev.upper() == 'TB' and no in ('11', '21')):
                 comm_tb.add(dev.upper()[2:] if dev.upper().startswith('TB') and len(dev) > 2 else no)
+            elif dev.upper() == 'WL' and re.fullmatch(r'\d+', no):
+                wls.add(no)                                # 表示灯(白ランプ)
     if not masters:
         return []
 
@@ -506,6 +509,9 @@ def _energy_metering(draw_paths):
             if f'WL{m}' in cps:   # 主CP↔WL-CP の相渡り(R/N)
                 wires.append({'from': f'CP-{m}:1', 'to': f'CP-WL{m}:1', 'circuit': m, 'phase': '', 'confidence': '要確認'})
                 wires.append({'from': f'CP-{m}:3', 'to': f'CP-WL{m}:3', 'circuit': m, 'phase': '', 'confidence': '要確認'})
+                if m in wls:   # 表示灯 WL-m へ(CP-WL の出力側 2/4 → 白ランプ)。手本: CP-WL<m>:2→WL-<m> / :4→WL-<m>:-
+                    wires.append({'from': f'CP-WL{m}:2', 'to': f'WL-{m}:', 'circuit': m, 'phase': '', 'confidence': '要確認'})
+                    wires.append({'from': f'CP-WL{m}:4', 'to': f'WL-{m}:-', 'circuit': m, 'phase': '', 'confidence': '要確認'})
         # アース(親ユニット)。手本は計測機器の接地を共通アースバー BOX へ結ぶ(5-12073=無印 'BOX')。
         # アースは等電位1ネット・鎖順は製造任意ゆえ共通バー直結が電気的に正。終端名は手本に合わせ 'BOX'。
         wires.append({'from': f'{u(m)}:E', 'to': 'BOX:', 'circuit': m, 'phase': 'E', 'confidence': '要確認'})
