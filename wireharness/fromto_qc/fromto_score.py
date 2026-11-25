@@ -916,6 +916,7 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
 
     _LAMP = re.compile(r'^(GL|RL|OL|WL|YL|PL|SL|BL)\d')
     _BTN = re.compile(r'^(ON|OFF|BS|BT|PB|PBS|入|切)')
+    _LET_NONCE = [0]
 
     def ep_nets(ns, term, other_ns):
         # この端点が本番で現れるネット集合。TBは候補ノード群の和。空欄端子の表示灯/押ボタンは
@@ -928,7 +929,22 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
         if dev_level or (ft_ == '' and (_LAMP.match(ns.upper()) or _BTN.match(ns.upper()))):
             # 『端子番号は入力済み』前提: 端子番号は所与とみなし機器単位で照合(診断用の上限)。
             # _dev_resolve=PARTS別名(1:1)＋略称部分一致で手本の人呼称を本番機器名へ正規化。
-            return set(dev2nets.get(_dev_resolve(ns), set()))
+            dn_ = set(dev2nets.get(_dev_resolve(ns), set()))
+            if dn_:
+                return dn_
+            # 未解決の素ロケーター1文字は、その候補機器が全て本番生成済なら出現(被覆)として数える。
+            # 文字→実機器の一意化が号線/相手回路で付かなかった残りでも、実機器はDCT地図の候補いずれか
+            # ＝必ず生成済の実機器なので『両端点とも本番に在る(出現率)』の意味で present。ただし番号ネット
+            # を持たせると実際のネット一致(recall)を水増しするため、一致には絡まない番号(('LET',文字))を返す
+            # ＝present加点のみ・hit不変(◎誤答ゼロ・recallは正直なまま)。候補が1つでも未生成なら従来通り空。
+            if dev_level:
+                su = ns.upper()
+                if re.fullmatch(r'[A-Z]', su) and su in letmap:
+                    cands = {_nsym(v, {}) for v in letmap[su].values()}
+                    if cands and all(c in dev2nets for c in cands):
+                        _LET_NONCE[0] += 1
+                        return {('LET', su, _LET_NONCE[0])}   # 毎回一意＝如何なる相手とも不一致(hit不変)
+            return dn_
         return set(node2net.get((ns, ft_), set()))
     tot = hit = present = 0
     for fi, f in enumerate(sorted(glob.glob(os.path.join(seiban_dir, 'FromToデータ_*.txt'))), 1):
