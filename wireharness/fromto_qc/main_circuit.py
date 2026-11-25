@@ -498,8 +498,9 @@ def generate(draw_paths, load_factor=None, seiban=None):
                       'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
     # 分電盤の遠方監視結線(監視分岐遮断器→R-RY)。X_RY_NO 符号を持つ盤でのみ生成(他盤は空=回帰ゼロ)。
     wires.extend(_monitoring_relays(draw_paths))
-    # 分電盤の引込ハーネス(LUG＋警報電源ヒューズF-AL)。母線=銅帯で phase_map が空(=分電盤)のときだけ生成。
-    # 受変電/制御盤は phase_map 非空＝非発火＝回帰ゼロ。
+    # 分電盤の専用生成。母線=銅帯で phase_map が空(=純分電盤)のときだけ生成。
+    # 受変電/制御盤は phase_map 非空＝非発火＝回帰ゼロ。計測付き分電盤(5-12073=phase_map非空かつ
+    # SPD等の構造が異なる)も現状は非発火(4-29033仕様の生成器が誤辺を出すため。別途専用対応が要る)。
     if not pm:
         wires.extend(_incoming_lug(draw_paths))
         wires.extend(_spd_wiring(draw_paths))
