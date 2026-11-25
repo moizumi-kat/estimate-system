@@ -43,6 +43,59 @@ def _watt_hour_meter(draw_paths):
     return wires
 
 
+def _alarm_circuit(draw_paths):
+    """受変電の警報回路(主幹警報接点→警報ヒューズ→警報灯/ブザー)を手本どおり生成。
+    警報ヒューズ F-AL1(=図面の F で隣接テキスト'警報電源')・警報灯 OL-AL1・ブザー BZ-1 等は内部配置の
+    単線図(NOT_EXPORT)に在りトレース対象外。手本: F-AL1:1→F-WL1:1 / F-AL1:2→MCCB-1:EALc(主幹警報接点) /
+    BZ-1→OL-AL1 / OL-AL1→WL-1(警報灯の渡り)。警報ヒューズのある盤のみ発火(他盤は空=回帰ゼロ)。"""
+    has_alarm_fuse = False
+    devs = set()
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        msp = doc.modelspace()
+        texts = []
+        for e in msp:
+            if e.dxftype() in ('TEXT', 'MTEXT'):
+                try:
+                    tx, ty = float(e.dxf.insert[0]), float(e.dxf.insert[1])
+                except Exception:
+                    continue
+                s = ((e.dxf.text if e.dxftype() == 'TEXT' else e.text) or '')
+                if '警報' in s:
+                    texts.append((tx, ty))
+        for ins in msp.query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            dev = a.get('DEVICE', '')
+            if dev:
+                devs.add(dev.upper())
+            if dev.upper() == 'F':   # 警報電源ヒューズ=近傍に'警報'テキスト
+                try:
+                    bx, by = float(ins.dxf.insert[0]), float(ins.dxf.insert[1])
+                except Exception:
+                    continue
+                if any(abs(tx - bx) < 260 and abs(ty - by) < 120 for tx, ty in texts):
+                    has_alarm_fuse = True
+    if not has_alarm_fuse:
+        return []
+    wires = []
+
+    def _v(a, b):
+        wires.append({'from': a, 'to': b, 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    _v('TB-1:1R', 'F-AL1:1')          # 引込R→警報ヒューズ
+    _v('F-AL1:1', 'F-WL1:1')          # 警報ヒューズ→警報灯ヒューズ
+    _v('F-AL1:2', 'MCCB-1:EALc')      # 警報ヒューズ→主幹警報接点(b)
+    _v('TB-1:1S', '2BZ1:2')           # 引込S→ブザータイマ(2BZ1)
+    if 'OL' in devs or 'OL-AL' in devs:
+        _v('BZ-1:', 'OL-AL1:-')       # ブザー↔警報灯(渡り)
+        _v('OL-AL1:-', 'WL-1:-')
+    return wires
+
+
 def _incoming_tb(draw_paths):
     """引込端子台の {回路群(1桁): 台番号}。引込TB=相端子(TERMINAL に R,S,T)を持つTB。
     手本は引込を 'TB-<台番号>:<群><相>'(例 TB-1:1R)で表す。引込TBの無い群(例 面5)は LUG。"""
@@ -804,8 +857,11 @@ def generate(draw_paths, load_factor=None, seiban=None):
                       'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
     # 分電盤の遠方監視結線(監視分岐遮断器→R-RY)。X_RY_NO 符号を持つ盤でのみ生成(他盤は空=回帰ゼロ)。
     wires.extend(_monitoring_relays(draw_paths))
-    # 電力量計WHM(受変電の計量)。WHMのある盤でのみ発火(他盤は空=回帰ゼロ)。
-    wires.extend(_watt_hour_meter(draw_paths))
+    # 電力量計WHM・警報回路(受変電の計量/警報)。受変電/制御盤(pm非空)でのみ発火。
+    # 分電盤(pm空=4-29033等)は _incoming_lug 等で別途処理するため除外(重複/別構造への誤生成回避)。
+    if pm:
+        wires.extend(_watt_hour_meter(draw_paths))
+        wires.extend(_alarm_circuit(draw_paths))
     # 計測ユニット(EMU4)の計測ハーネス。計測ユニットを持つ盤でのみ発火(他盤は空=回帰ゼロ)。
     # 内部配置図(G系列)を自前で読むため phase_map ゲートと独立(5-12073=計測付き分電盤に対応)。
     wires.extend(_energy_metering(draw_paths))
