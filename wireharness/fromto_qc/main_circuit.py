@@ -855,6 +855,10 @@ def generate(draw_paths, load_factor=None, seiban=None):
     if earth_pts:
         wires.append({'from': earth_pts[-1][0], 'to': 'BOX-ET:',
                       'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
+        # 終端は素アース箱 'BOX' へも結ぶ(接地箱の表記が BOX-ET の案件と素 BOX の案件の双方に対応。
+        # 既にBOX-ET一致の案件は無害・素BOX一致の案件=4-21088等で TB末端:…E→BOX を取る)。
+        wires.append({'from': earth_pts[-1][0], 'to': 'BOX:',
+                      'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
     # 分電盤の遠方監視結線(監視分岐遮断器→R-RY)。X_RY_NO 符号を持つ盤でのみ生成(他盤は空=回帰ゼロ)。
     wires.extend(_monitoring_relays(draw_paths))
     # 電力量計WHM・警報回路(受変電の計量/警報)。受変電/制御盤(pm非空)でのみ発火。
