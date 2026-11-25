@@ -909,7 +909,7 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
         except Exception:
             continue
 
-        def resolve_one(sym, comp):
+        def resolve_one(sym, comp, hint_circ=None):
             s = sym.upper()
             # 手本が基を明記した locator(例 '1I'=基1の文字I / '1-A')は曖昧なし＝基キー地図で直接解決。
             # 基が書かれている時だけ使う(推測ゼロ)。素の単一文字(A)は従来どおり下の経路で解く。
@@ -930,6 +930,13 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
             cands = [v for v in vs if _nsym(v, {}) in prod_syms] or vs
             if len(set(cands)) == 1:
                 return cands[0]
+            # (0) 号線(線番)が回路3桁を示すなら、その回路の候補を優先。集合警報盤(file例 18-6)は
+            #     文字(A..Z,1A..)が各回路の警報リレー(30X等)を指し、号線=回路(101..509)。グローバル
+            #     letmapの多数決では別回路(例 52X104)に誤解決するため、号線で一意化する(裏取り済)。
+            if hint_circ:
+                m = [c for c in cands if _circ_num(c) == hint_circ]
+                if len(set(m)) == 1:
+                    return m[0]
             # (1) 相手端点の回路と一致する候補(最も確実: M↔回路201の機器 → 86X201)
             cc = _circ_num(comp)
             if cc:
@@ -946,27 +953,47 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
             return sym
         # 反復解決(多段伝播)：実機器を相手に持つ辺で各文字→実機器を投票で確定し、確定した文字を
         # 次段で"相手"として使って letter↔letter 辺も解く(ファイル内で同じ文字＝同じ実機器)。固定点まで。
-        letter_map = {}
+        # 号線(線番)が回路3桁(101..509)なら、その回路の候補を優先ヒントにする(集合警報盤の文字一意化)。
+        def _g_circ(g):
+            return g if re.fullmatch(r'\d{3}', (g or '').strip()) else None
+        # 号線(線番)が回路3桁を示す文字は、その回路の候補で一意に確定できるなら多数決より先にピン留め。
+        # 集合警報盤(file例 18-6)は文字(A..Z)が各回路の警報リレー(30X)を指し、号線=回路。グローバル
+        # letmapの多数決では別回路に誤解決する(E→52X104)ため、号線で確定＝正しい30Xへ解く(裏取り済)。
+        gousen_pin = {}
+        for w in wires:
+            a, b = w['ends']
+            ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
+            for sym, hc in ((ra, _g_circ(a.get('gousen'))), (rb, _g_circ(b.get('gousen')))):
+                s = sym.upper()
+                if not (hc and re.fullmatch(r'[A-Z]', s) and s in letmap and s not in gousen_pin):
+                    continue
+                vs = [v for v in letmap[s].values() if _nsym(v, {}) in prod_syms] or list(letmap[s].values())
+                m = [c for c in vs if _circ_num(c) == hc]
+                if len(set(m)) == 1:
+                    gousen_pin[s] = m[0]
+        letter_map = dict(gousen_pin)
         for _ in range(6):
             vote = collections.defaultdict(collections.Counter)
             for w in wires:
                 a, b = w['ends']
                 ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
-                for sym, comp in ((ra, rb), (rb, ra)):
+                for sym, comp, hc in ((ra, rb, _g_circ(a.get('gousen'))),
+                                      (rb, ra, _g_circ(b.get('gousen')))):
                     comp_eff = letter_map.get(comp.upper(), comp)   # 解決済み文字は実機器として相手に使う
-                    dev = resolve_one(sym, comp_eff)
+                    dev = resolve_one(sym, comp_eff, hc)
                     if dev != sym:
                         vote[sym.upper()][dev] += 1
             new_map = {s: c.most_common(1)[0][0] for s, c in vote.items() if c}
+            new_map.update(gousen_pin)              # 号線ピンは多数決に優先(確定を上書きさせない)
             if new_map == letter_map:
                 break
             letter_map = new_map
 
-        def resolve(sym, comp):
+        def resolve(sym, comp, hint_circ=None):
             s = sym.upper()
             if re.fullmatch(r'[A-Z]', s) and s in letter_map:
                 return letter_map[s]
-            return resolve_one(sym, comp)
+            return resolve_one(sym, comp, hint_circ)
         for w in wires:
             a, b = w['ends']
             ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
@@ -974,8 +1001,8 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
                 continue
             if is_oversize(w):
                 continue                       # 太物(≥8sq)=主回路=別工程(1人目)。境界は手本に合わせる
-            na = _nsym(resolve(ra, rb), lmap)
-            nb = _nsym(resolve(rb, ra), lmap)
+            na = _nsym(resolve(ra, rb, _g_circ(a.get('gousen'))), lmap)
+            nb = _nsym(resolve(rb, ra, _g_circ(b.get('gousen'))), lmap)
             xp = node_primary(na, a['term'], nb)
             yp = node_primary(nb, b['term'], na)
             if xp == yp:
