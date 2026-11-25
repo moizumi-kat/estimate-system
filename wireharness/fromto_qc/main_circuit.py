@@ -498,8 +498,9 @@ def _energy_metering(draw_paths):
             if f'WL{m}' in cps:   # 主CP↔WL-CP の相渡り(R/N)
                 wires.append({'from': f'CP-{m}:1', 'to': f'CP-WL{m}:1', 'circuit': m, 'phase': '', 'confidence': '要確認'})
                 wires.append({'from': f'CP-{m}:3', 'to': f'CP-WL{m}:3', 'circuit': m, 'phase': '', 'confidence': '要確認'})
-        # アース(親ユニット)
-        wires.append({'from': f'{u(m)}:E', 'to': 'BOX-ET:', 'circuit': m, 'phase': 'E', 'confidence': '要確認'})
+        # アース(親ユニット)。手本は計測機器の接地を共通アースバー BOX へ結ぶ(5-12073=無印 'BOX')。
+        # アースは等電位1ネット・鎖順は製造任意ゆえ共通バー直結が電気的に正。終端名は手本に合わせ 'BOX'。
+        wires.append({'from': f'{u(m)}:E', 'to': 'BOX:', 'circuit': m, 'phase': 'E', 'confidence': '要確認'})
         # ② CT→ch。群=番号先頭桁が親番号。chは [親A, 各増設(A,B)] の順。
         grp_exts = sorted([e for e in exts if e[:-1] == m], key=lambda s: int(s))
         channels = [(m, 'A')]
