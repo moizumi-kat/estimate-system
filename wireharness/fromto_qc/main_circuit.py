@@ -428,6 +428,96 @@ def _monitoring_relays(draw_paths):
     return wires
 
 
+def _energy_metering(draw_paths):
+    """計測ユニット(三菱EMU4)の計測ハーネスを生成する(内部配置図G系列由来・手本/図面で裏取り済)。
+
+    構成(裏取り: 5-12073 G002＋手本 FromTo):
+      - エネルギー計測ユニット(親 EMU4-BM1-MB)＋増設ユニット(EMU4-A2)。親=1計測(ch A)、増設=2計測(ch A/B)。
+      - CP(CP30-BA 3P=主/2P=WL)が各ユニット群へ制御電源を給電。CT(EMU-CT)が各chの電流を計測。
+    規則(◎誤答ゼロ・推測せず図面構造から):
+      ① CP電源: CP-<m>:2/4/6 → ﾕﾆｯﾄ<m>:P1/P2/P3、かつ P1→MA・P2→MB(親ユニットの計測電源)。
+                 主CP↔WL-CP の相渡り CP-<m>:1→CP-WL<m>:1 / :3→:3。アース ﾕﾆｯﾄ<m>:E→BOX-ET。
+      ② CT→ch: 群(CT番号先頭桁＝親番号)内で、CTを番号順に [親A, 増設1.A, 増設1.B, 増設2.A, 増設2.B,…]
+                 へ割付(EMU4標準・手本一致)。CT-<nn>R→ch-1(K/L)、CT-<nn>T→ch-3(K/L)。
+                 ∵ CTは図面中央の1列に並び x近接では群が割れない→番号先頭桁で群を定める(確実)。
+    記号は手本に合わせ ﾕﾆｯﾄは 'ｴﾈﾙｷﾞｰ-ﾕﾆｯﾄ<N>'(親/増設とも)。計測ユニットの無い盤(他全案件)では
+    空＝回帰ゼロ。G系列(内部配置図)は seq/skel に含まれないため seiban_dir から直接読む。
+    数が合わない群(CT数≠ch数)は安全側で丸ごと生成しない(誤割付回避)。"""
+    import os as _os
+    import glob as _glob
+    gpaths = []
+    for p in (draw_paths or []):
+        d = _os.path.dirname(p)
+        if d:
+            for pat in ('図面データ_*G0*.dxf', '図面データ_*G0*.DXF'):
+                gpaths += _glob.glob(_os.path.join(d, pat))
+    gpaths = sorted(set(gpaths))
+    if not gpaths:
+        return []
+    masters = {}   # 親番号 -> [x,...]
+    exts = {}      # 増設番号 -> [x,...]
+    cts = {}       # CT番号 -> [x,...]
+    cps = set()    # CP番号集合('1','WL1','2','WL2')
+    for p in gpaths:
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            dev = a.get('DEVICE', ''); no = str(a.get('DEVICE1', '')).strip()
+            try:
+                x = float(ins.dxf.insert[0])
+            except Exception:
+                x = 0.0
+            if dev == 'ｴﾈﾙｷﾞｰ計測ﾕﾆｯﾄ' and re.fullmatch(r'\d+', no):
+                masters.setdefault(no, []).append(x)
+            elif dev == '増設ﾕﾆｯﾄ' and re.fullmatch(r'\d+', no):
+                exts.setdefault(no, []).append(x)
+            elif dev.upper() == 'CT' and re.fullmatch(r'\d+', no):
+                cts.setdefault(no, []).append(x)
+            elif dev.upper() == 'CP' and re.fullmatch(r'(WL)?\d+', no):
+                cps.add(no)
+    if not masters:
+        return []
+
+    def u(no):
+        return f'ｴﾈﾙｷﾞｰ-ﾕﾆｯﾄ{no}'
+
+    wires = []
+    for m in sorted(masters, key=lambda s: int(s)):
+        # ① CP電源(親ユニットへ)。主CP 'm' が在るときのみ。
+        if m in cps:
+            wires.append({'from': f'CP-{m}:2', 'to': f'{u(m)}:P1', 'circuit': m, 'phase': '', 'confidence': '要確認'})
+            wires.append({'from': f'{u(m)}:P1', 'to': f'{u(m)}:MA', 'circuit': m, 'phase': '', 'confidence': '要確認'})
+            wires.append({'from': f'CP-{m}:4', 'to': f'{u(m)}:P2', 'circuit': m, 'phase': '', 'confidence': '要確認'})
+            wires.append({'from': f'{u(m)}:P2', 'to': f'{u(m)}:MB', 'circuit': m, 'phase': '', 'confidence': '要確認'})
+            wires.append({'from': f'CP-{m}:6', 'to': f'{u(m)}:P3', 'circuit': m, 'phase': '', 'confidence': '要確認'})
+            if f'WL{m}' in cps:   # 主CP↔WL-CP の相渡り(R/N)
+                wires.append({'from': f'CP-{m}:1', 'to': f'CP-WL{m}:1', 'circuit': m, 'phase': '', 'confidence': '要確認'})
+                wires.append({'from': f'CP-{m}:3', 'to': f'CP-WL{m}:3', 'circuit': m, 'phase': '', 'confidence': '要確認'})
+        # アース(親ユニット)
+        wires.append({'from': f'{u(m)}:E', 'to': 'BOX-ET:', 'circuit': m, 'phase': 'E', 'confidence': '要確認'})
+        # ② CT→ch。群=番号先頭桁が親番号。chは [親A, 各増設(A,B)] の順。
+        grp_exts = sorted([e for e in exts if e[:-1] == m], key=lambda s: int(s))
+        channels = [(m, 'A')]
+        for e in grp_exts:
+            channels.append((e, 'A'))
+            channels.append((e, 'B'))
+        grp_cts = sorted([c for c in cts if c[:1] == m], key=lambda s: int(s))
+        if len(grp_cts) != len(channels):
+            continue   # 数不一致=安全側で群ごと生成しない(誤割付回避・◎誤答ゼロ)
+        for ctno, (uno, ch) in zip(grp_cts, channels):
+            # R相→ch-1、T相→ch-3。端子 K/L。
+            wires.append({'from': f'CT-{ctno}R:K', 'to': f'{u(uno)}:{ch}-1K', 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
+            wires.append({'from': f'CT-{ctno}R:L', 'to': f'{u(uno)}:{ch}-1L', 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
+            wires.append({'from': f'CT-{ctno}T:K', 'to': f'{u(uno)}:{ch}-3K', 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
+            wires.append({'from': f'CT-{ctno}T:L', 'to': f'{u(uno)}:{ch}-3L', 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
+    return wires
+
+
 def generate(draw_paths, load_factor=None, seiban=None):
     """主回路の From-To 辺を生成。戻り: [{from,to,circuit,phase,confidence}]。
     confidence は tb_phase の判定(確定/要確認)を引き継ぐ。
@@ -498,6 +588,9 @@ def generate(draw_paths, load_factor=None, seiban=None):
                       'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
     # 分電盤の遠方監視結線(監視分岐遮断器→R-RY)。X_RY_NO 符号を持つ盤でのみ生成(他盤は空=回帰ゼロ)。
     wires.extend(_monitoring_relays(draw_paths))
+    # 計測ユニット(EMU4)の計測ハーネス。計測ユニットを持つ盤でのみ発火(他盤は空=回帰ゼロ)。
+    # 内部配置図(G系列)を自前で読むため phase_map ゲートと独立(5-12073=計測付き分電盤に対応)。
+    wires.extend(_energy_metering(draw_paths))
     # 分電盤の専用生成。母線=銅帯で phase_map が空(=純分電盤)のときだけ生成。
     # 受変電/制御盤は phase_map 非空＝非発火＝回帰ゼロ。計測付き分電盤(5-12073=phase_map非空かつ
     # SPD等の構造が異なる)も現状は非発火(4-29033仕様の生成器が誤辺を出すため。別途専用対応が要る)。
