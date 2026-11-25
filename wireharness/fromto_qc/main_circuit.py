@@ -161,6 +161,45 @@ def _incoming_lug(draw_paths):
     return wires
 
 
+def _remocon_control(draw_paths):
+    """分電盤のリモコン制御(WR系)の定型内部結線を生成する。
+
+    リモコントランス R-TR(2次)が伝送ﾕﾆｯﾄ(CPU)・EE連動(EEU)へ制御電源を供給し、SPD状態接点が表示灯へ。
+    これらは図面 L_CONTROL に実在する(号線22T/ELX1 等)が、幾何トレーサが端子粒度で辿り切れず別ネットに
+    落ちる。WR系の定型結線として起こす(手本一致):
+      OL-EL1 → SPD-<n>:NO ／ R-TR-1:2 → CPU:電源 ／ EEU:4 → R-TR-1:1 (1.25sq)
+    R-TR/CPU/EEU/SPD/OL-EL1 が揃わない盤では空＝回帰ゼロ。呼出側で分電盤(phase_map空)のみ発火。"""
+    rtr = set(); has_cpu = False; has_eeu = False; spd_no = None; has_olel = False
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            dev = d.get('DEVICE', ''); dv1 = d.get('DEVICE1', '')
+            if dev == 'R-TR' and dv1:
+                rtr.add(dv1)
+            elif dev == 'CPU':
+                has_cpu = True
+            elif dev == 'EEU':
+                has_eeu = True
+            elif dev == 'SPD' and dv1:
+                spd_no = dv1
+            elif dev == 'OL' and dv1 == 'EL1':
+                has_olel = True
+    wires = []
+    if has_olel and spd_no:
+        wires.append({'from': 'OL-EL1:', 'to': f'SPD-{spd_no}:NO', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    if '1' in rtr and has_cpu:
+        wires.append({'from': 'R-TR-1:2', 'to': 'CPU:電源', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    if '1' in rtr and has_eeu:
+        wires.append({'from': 'EEU:4', 'to': 'R-TR-1:1', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    return wires
+
+
 def _display_tu(draw_paths):
     """分電盤の状態表示用T/U(リモコン表示ユニット)を信号バス(N1信号/N2信号)へ結線して生成する。
 
@@ -463,4 +502,5 @@ def generate(draw_paths, load_factor=None, seiban=None):
         wires.extend(_submain_ab(draw_paths))
         wires.extend(_earth_tails(draw_paths))
         wires.extend(_display_tu(draw_paths))
+        wires.extend(_remocon_control(draw_paths))
     return wires
