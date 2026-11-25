@@ -836,6 +836,14 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
             hits = {dv for cp, dv in _pfull if tk in cp}
             if len(hits) == 1:
                 return next(iter(hits))
+        # 番号保存の部分一致: 手本 'PARTS基+<n>'(例 增幅器-1→'増幅器1') を 図面 DEVICE '<X><n>'(同番号)へ。
+        # PARTSが複数機器に跨り1:1別名が作れない時(增幅器→AMP1/AMP2)、基の部分一致＋末尾番号一致で一意に解く。
+        mnum = re.match(r'^(.*?)(\d+)$', tk)
+        if mnum and len(mnum.group(1)) >= 3:
+            base, num = mnum.group(1), mnum.group(2)
+            hits = {dv for cp, dv in _pfull if base in cp and dv.endswith(num)}
+            if len(hits) == 1:
+                return next(iter(hits))
         return k
     dev_panel = _dev_panel_map(seiban_dir)
     letmap = _letter_panel_map(seiban_dir, dev_panel)
