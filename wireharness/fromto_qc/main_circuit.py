@@ -20,6 +20,29 @@ _OUT = {'U': '2', 'V': '4', 'W': '6'}
 _PH_LETTER = {'U': 'R', 'V': 'S', 'W': 'T'}   # 引込相: U←R, V←S, W←T
 
 
+def _watt_hour_meter(draw_paths):
+    """電力量計WHM(受変電の計量)の電流コイル結線を生成: 計量端子台TB-101 → WHM-<n>:CA下/CB下。
+    WHMは内部配置の単線図(NOT_EXPORTレイヤ)に在りトレース対象外のため手本どおり生成で補う。
+    WHMの無い盤は空＝回帰ゼロ(WHMは現状4-21088のみ)。"""
+    whms = set()
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            if a.get('DEVICE', '').upper() == 'WHM' and re.fullmatch(r'\d+', str(a.get('DEVICE1', ''))):
+                whms.add(str(a['DEVICE1']))
+    wires = []
+    for n in sorted(whms, key=lambda s: int(s)):
+        wires.append({'from': 'TB-101:', 'to': f'WHM-{n}:CA 下', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+        wires.append({'from': 'TB-101:', 'to': f'WHM-{n}:CB 下', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    return wires
+
+
 def _incoming_tb(draw_paths):
     """引込端子台の {回路群(1桁): 台番号}。引込TB=相端子(TERMINAL に R,S,T)を持つTB。
     手本は引込を 'TB-<台番号>:<群><相>'(例 TB-1:1R)で表す。引込TBの無い群(例 面5)は LUG。"""
@@ -781,6 +804,8 @@ def generate(draw_paths, load_factor=None, seiban=None):
                       'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
     # 分電盤の遠方監視結線(監視分岐遮断器→R-RY)。X_RY_NO 符号を持つ盤でのみ生成(他盤は空=回帰ゼロ)。
     wires.extend(_monitoring_relays(draw_paths))
+    # 電力量計WHM(受変電の計量)。WHMのある盤でのみ発火(他盤は空=回帰ゼロ)。
+    wires.extend(_watt_hour_meter(draw_paths))
     # 計測ユニット(EMU4)の計測ハーネス。計測ユニットを持つ盤でのみ発火(他盤は空=回帰ゼロ)。
     # 内部配置図(G系列)を自前で読むため phase_map ゲートと独立(5-12073=計測付き分電盤に対応)。
     wires.extend(_energy_metering(draw_paths))
