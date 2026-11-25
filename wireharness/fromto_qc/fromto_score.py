@@ -332,9 +332,11 @@ def score_functional(seiban_dir):
 
 
 def _circ_num(sym):
-    """機器記号 → 回路番号(3桁)。例 '52-102'→'102', 'TB-13'→''(TBは台番号で回路でない)。"""
-    m = re.search(r'(\d{3})', dn.strip_marks(str(sym or '')))
-    return m.group(1) if m else ''
+    """機器記号 → 回路番号(3桁)。例 '52-102'→'102', 'TB-13'→''(TBは台番号で回路でない)。
+    全数字名(51104=熱動51の回路104)は機器種別prefixを含み先頭3桁'511'が回路でないため、
+    先頭の3桁以上の数字runの【末尾3桁】を回路とする(51104→104 / 52104→104 / 2301→301)。"""
+    m = re.search(r'(\d{3,})', dn.strip_marks(str(sym or '')))
+    return m.group(1)[-3:] if m else ''
 
 
 def _conn_edge(edge):

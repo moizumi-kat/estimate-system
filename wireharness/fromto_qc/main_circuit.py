@@ -152,6 +152,24 @@ def _contactors(draw_paths):
     return out
 
 
+def _thermals(draw_paths):
+    """熱動過負荷継電器(51)がある回路番号の集合。電動機回路の出力は 遮断器→52→51→TB で、
+    51の出力(2/4/6)が負荷TBへ出る(手本)。main_circuitは52入力までで止まるため51→TBを補う。"""
+    out = set()
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            d = {a.dxf.tag: (a.dxf.text or '').strip() for a in ins.attribs}
+            if d.get('DEVICE', '').upper() == '51' and re.fullmatch(r'\d+', str(d.get('DEVICE1', ''))):
+                out.add(str(d['DEVICE1']))
+    return out
+
+
 def _main_control_powers(draw_paths):
     """主制御電源 CP の記号集合 {'CP-<群>'}。DEVICE=CP かつ番号が1-2桁(=群・引込給電)のもの。
     3桁番号(CP-102等=per回路・遮断器出力給電)は対象外(既にトレーサ捕捉)。"""
@@ -803,6 +821,7 @@ def generate(draw_paths, load_factor=None, seiban=None):
     brk = _breakers(draw_paths)
     strip = tb_strip.assign(draw_paths, load_factor=load_factor)   # 回路→台番号
     contactors = _contactors(draw_paths)                           # 接触器のある回路(電動機)=出力側を出さない
+    thermals = _thermals(draw_paths)                               # 熱動51のある回路(電動機の出力 51→TB を補う)
     incoming = _incoming_tb(draw_paths)                            # 回路群→引込TB台番号(無ければLUG)
     _main_cps = _main_control_powers(draw_paths)                   # 主制御電源(引込給電)の記号集合
 
@@ -840,6 +859,16 @@ def generate(draw_paths, load_factor=None, seiban=None):
                 # V(4→3)は変流器(CT)経由で直結でないため出さない(手本一致・◎誤答ゼロ)。接触器=52-回路。
                 wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'52-{circ}:{_IN[ph]}',
                               'circuit': circ, 'phase': ph, 'confidence': conf})
+    # 電動機回路の出力: 熱動51(2/4/6) → 負荷TB(<circ>U/V/W)。遮断器→52→51→TB の末端(手本)。
+    # 52までで止めていた分を補う。51のある電動機回路のみ(他は非発火=回帰ゼロ)。dev採点ではTBが
+    # 回路番号で畳まれるため台番号/相順(スターデルタ等)に依らず一致。
+    for circ in sorted(contactors & thermals, key=lambda c: (len(c), c)):
+        info = pm.get(circ, {})
+        tb = tbsym(circ)
+        for ph in ('U', 'V', 'W'):
+            if ph in info.get('phases', set()):
+                wires.append({'from': f'51-{circ}:{_OUT[ph]}', 'to': f'{tb}:{circ}{ph}',
+                              'circuit': circ, 'phase': ph, 'confidence': '要確認'})
     # 主制御電源(CP-<群>=1桁番号)の引込タップ: 引込相→CP-<群>:1/3/5(手本 TB-1:1R→CP-1:1 等)。[b-2]
     # per回路のCP(CP-102等=3桁)は遮断器出力から給電され既にトレーサが捕捉済みのため対象外。
     for g, dai in sorted(incoming.items()):
