@@ -107,6 +107,7 @@ def _incoming_lug(draw_paths):
     引込TB(R,N,T)・警報F・主幹1 が揃わない盤では空 ＝ 回帰ゼロ。呼出側で分電盤(phase_map空)のみ発火。"""
     incoming_tb = False
     main_no = None
+    alx_no = None         # 警報補助リレー ALX(引込中性=1Nバスへ繋ぐ)
     fuses = []            # (pos, DEVICE1)
     alarms = []           # '警報' テキスト位置
     for p in (draw_paths or []):
@@ -133,6 +134,8 @@ def _incoming_lug(draw_paths):
                 main_no = '1'
             if dev == 'F':
                 fuses.append((pos, dv1 or '1'))
+            if dev == 'ALX':
+                alx_no = dv1 or '1'
     # 警報電源ヒューズ: DEVICE=F で '警報' テキスト近傍(<=400)
     fuse_no = None
     if alarms:
@@ -146,11 +149,16 @@ def _incoming_lug(draw_paths):
     fsym = f'F-AL{fuse_no}'
     # 主幹の漏電/警報接点は図面上 MCCB-<n>(手本では同一物を ELCB-<n> とも呼ぶ)。図面名 MCCB に揃える
     # (採点側で ELCB-1↔MCCB-1 を別名化し手本と一致させる)。build_sheet の 1R1 ネット(MCCB-1)と同一化する。
-    return [
+    wires = [
         {'from': f'MCCB-{main_no}:N', 'to': 'LUG-2:', 'circuit': '', 'phase': '', 'confidence': '要確認'},
         {'from': 'LUG-1:', 'to': f'{fsym}:1', 'circuit': '', 'phase': '', 'confidence': '要確認'},
         {'from': f'{fsym}:2', 'to': f'MCCB-{main_no}:ECAc', 'circuit': '', 'phase': '', 'confidence': '要確認'},
     ]
+    # 引込中性(LUG-1)→警報の中性バス(ALX-<n>:13)。手本 LUG-1→A:13(A=ALX1 に解決)。
+    # build_sheet が辿る 1N バス(ALX/ELX/SPDX:13)に引込LUGを繋ぐ。ALX が在る分電盤のみ。
+    if alx_no:
+        wires.append({'from': 'LUG-1:', 'to': f'ALX-{alx_no}:13', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    return wires
 
 
 def _display_tu(draw_paths):
