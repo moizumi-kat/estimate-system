@@ -507,9 +507,16 @@ def _energy_metering(draw_paths):
         return f'ｴﾈﾙｷﾞｰ-ﾕﾆｯﾄ{no}'
 
     wires = []
+    _main_m = min(masters, key=lambda s: int(s))   # 主群(最若番)＝主母線TB-Cから給電
     for m in sorted(masters, key=lambda s: int(s)):
         # ① CP電源(親ユニットへ)。主CP 'm' が在るときのみ。
         if m in cps:
+            # CP入力(引込タップ): 主群は主母線TB-C、他群は自群の引込TB-<m>から R/N/T を取る
+            # (手本: TB-C:1R下→CP-1:1 / TB-2:2R→CP-2:1 等)。CPの入力端子=1/3/5。
+            _tap = 'C' if m == _main_m else m
+            for _ci, _ph in (('1', 'R'), ('3', 'N'), ('5', 'T')):
+                wires.append({'from': f'CP-{m}:{_ci}', 'to': f'TB-{_tap}:{m}{_ph}',
+                              'circuit': m, 'phase': '', 'confidence': '要確認'})
             wires.append({'from': f'CP-{m}:2', 'to': f'{u(m)}:P1', 'circuit': m, 'phase': '', 'confidence': '要確認'})
             wires.append({'from': f'{u(m)}:P1', 'to': f'{u(m)}:MA', 'circuit': m, 'phase': '', 'confidence': '要確認'})
             wires.append({'from': f'CP-{m}:4', 'to': f'{u(m)}:P2', 'circuit': m, 'phase': '', 'confidence': '要確認'})
