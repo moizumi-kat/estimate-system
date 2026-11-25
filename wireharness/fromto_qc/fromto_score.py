@@ -850,6 +850,19 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
             hits = {dv for cp, dv in _pfull if base in cp and dv.endswith(num)}
             if len(hits) == 1:
                 return next(iter(hits))
+        # 結合遮断器名(手本 'MCCB-101-103'=複数遮断器の警報まとめ)→個別の先頭が本番に在れば採用。
+        # DCT製番の警報回路で、範囲表記の遮断器を個別機器へ寄せる(出現率/被覆向上・◎誤答ゼロ=本番在のみ)。
+        mcomb = re.match(r'^(MCCB|ELCB|NFB|ELB)(\d{3})(\d{3})$', tk)
+        if mcomb:
+            cand = _nsym(f'{mcomb.group(1)}-{mcomb.group(2)}', _pa)
+            if cand in dev2nets:
+                return cand
+        # SPD分離器の別名(手本 'SPD-分離器1' ↔ 本番 'SPD-1')。
+        msp = re.search(r'SPD.*?分離器\s*(\d+)', str(ns))
+        if msp:
+            cand = _nsym(f'SPD-{msp.group(1)}', _pa)
+            if cand in dev2nets:
+                return cand
         return k
     dev_panel = _dev_panel_map(seiban_dir)
     letmap = _letter_panel_map(seiban_dir, dev_panel)
