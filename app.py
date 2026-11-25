@@ -2390,8 +2390,13 @@ def _main_elb_code(name, panel, meta):
     if '制御' in pn or '自立' in pn: bases=['50','60']
     elif any(k in pn for k in ['配電','受電','高圧','ｷｭ-ﾋﾞｸﾙ','キュービクル','饋電']): bases=['40','60','50']
     else: bases=['60','50']
+    # AX付(補助接点)=系統を+1(60→61等)。※「欠相保護」は60系の基本変種名で、AXとは別(明示AX/補助接点のみ)。
+    is_ax = bool(re.search(r'AX付?|(?<![A-Za-z])AX(?![A-Za-z])|補助接点', str(name)))
     for base in bases:
         c=base+afdig+tail
+        if is_ax:
+            axc=str(int(base)+1)+afdig+tail   # 主幹ELB AX付(60→61/50→51/40→41)
+            if axc in byCode: return axc
         if c in byCode: return c
     return None
 
