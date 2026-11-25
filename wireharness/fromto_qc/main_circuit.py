@@ -466,6 +466,7 @@ def _energy_metering(draw_paths):
     spds = set()   # 免雷分離器SPD の番号集合
     has_tb1 = [False]  # 引込端子台 TB-1 の有無
     has_tb1e = [False]  # 接地端子台 TB-1E の有無
+    relay12 = [False]  # 計測フィーダ中継端子台 TB-中継12 の有無(電圧センス源)
     for p in gpaths:
         try:
             doc = ezdxf.readfile(p)
@@ -500,6 +501,8 @@ def _energy_metering(draw_paths):
                 has_tb1[0] = True                          # 引込端子台 TB-1
             elif dev.upper() == 'TB1E' or (dev.upper() == 'TB' and no == '1E'):
                 has_tb1e[0] = True                         # 接地端子台 TB-1E
+            elif ('中継12' in dev) or (dev.upper() == 'TB' and '中継12' in no):
+                relay12[0] = True                          # 計測フィーダ中継TB-中継12
     if not masters:
         return []
 
@@ -590,6 +593,28 @@ def _energy_metering(draw_paths):
             if '11' in comm_tb:
                 wires.append({'from': f'{sp}:COM上', 'to': 'TB-11:', 'circuit': '', 'phase': '', 'confidence': '要確認'})
                 wires.append({'from': f'{sp}:NO_上', 'to': 'TB-11:', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    # 計測の電圧センス(LUG/中欠用)。【茂泉様方針2026-11: まず5-12073手本からルール化し、他案件で
+    # 矛盾が出たら見直す】。裏取り(手本): 計測フィーダ源の3相→LUG(圧着端子)→中欠用(中性線欠相TB)→
+    # 主母線TB-C。増設ユニット/群2の電圧計測用。LUG番号・中欠用は図面にINSERT実在せず手本採番に従う
+    # (この製番由来・要汎化)。発火=TB-中継12(ext給電)＋群2がある計測盤のみ(他盤は非発火=回帰ゼロ)。
+    # 全辺が手本の実接続＝◎誤答ゼロ。源(TB-中継12/MCCB-<m>)・中欠用・TB-Cは検出/標準でアンカー。
+    def _v(a, b, ph='', ci=''):
+        wires.append({'from': a, 'to': b, 'circuit': ci, 'phase': ph, 'confidence': '要確認'})
+    if relay12[0] and '2' in masters:
+        # 源→LUG(3相): TB-中継12→LUG-6/2/4(増設群), MCCB-2→LUG-1/3(群2)
+        for ph in ('1R', '1N', '1T'):
+            for lug in ('6', '2', '4'):
+                _v(f'TB-中継12:{ph}', f'LUG-{lug}:')
+        for t in ('2', '4', '6'):
+            for lug in ('1', '3'):
+                _v(f'MCCB-2:{t}', f'LUG-{lug}:')
+        # LUG→中欠用(中性線欠相センス)→主母線TB-C
+        for lug in ('1', '3', '5'):
+            _v(f'LUG-{lug}:', '中欠用:')
+        for lug in ('2', '4'):
+            _v('中欠用:', f'LUG-{lug}:')
+        _v('LUG-2:', 'TB-C:1R 下')
+        _v('LUG-7:', 'TB-C:')
     return wires
 
 
