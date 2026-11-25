@@ -463,6 +463,9 @@ def _energy_metering(draw_paths):
     monitors = {}  # 電力監視機器(小形表示ユニット EMU4-D65)番号 -> [x,...]
     comm_tb = set()  # 通信TB('11'/'21')の有無
     wls = set()    # 表示灯 WL の番号集合('1'/'2')
+    spds = set()   # 免雷分離器SPD の番号集合
+    has_tb1 = [False]  # 引込端子台 TB-1 の有無
+    has_tb1e = [False]  # 接地端子台 TB-1E の有無
     for p in gpaths:
         try:
             doc = ezdxf.readfile(p)
@@ -491,6 +494,12 @@ def _energy_metering(draw_paths):
                 comm_tb.add(dev.upper()[2:] if dev.upper().startswith('TB') and len(dev) > 2 else no)
             elif dev.upper() == 'WL' and re.fullmatch(r'\d+', no):
                 wls.add(no)                                # 表示灯(白ランプ)
+            elif 'SPD' in dev.upper() and ('分離' in dev or '分離' in no):
+                spds.add(no if re.fullmatch(r'\d+', no) else '1')   # 免雷分離器SPD(SPD・分離器)
+            elif dev.upper() == 'TB' and no == '1':
+                has_tb1[0] = True                          # 引込端子台 TB-1
+            elif dev.upper() == 'TB1E' or (dev.upper() == 'TB' and no == '1E'):
+                has_tb1e[0] = True                         # 接地端子台 TB-1E
     if not masters:
         return []
 
@@ -559,6 +568,21 @@ def _energy_metering(draw_paths):
         for sig in ('485+', '485-', 'SLD'):
             wires.append({'from': f'ｴﾈﾙｷﾞｰ-ﾓﾆﾀ{mo}:{sig}', 'to': f'TB-{tbno}:',
                           'circuit': '', 'phase': '', 'confidence': '要確認'})
+    # 免雷分離器SPD(サージ防護)の通し配線。標準構造(裏取り: 手本＋PARTS='免雷分離器SPD'/TYPE=LT-TS2312):
+    #   引込 TB-1:1R/1N/1T → SPD:1/2/3_上 → 主母線 TB-C:1R/1N/1T上(SPDを挟む通し)。
+    #   SPD:E_下 → 接地端子台 TB-1E。 SPD:COM上/NO_上 → 通信/警報TB-11(無電圧接点)。
+    # 引込TB-1が在るときのみ(=引込にSPDを挟む標準盤)。SPD/TB-1/TB-1E/TB-11 を検出して発火。
+    if has_tb1[0]:
+        for sn in sorted(spds):
+            sp = f'SPD-分離器{sn}'
+            for i, (ph1, phc) in enumerate([('1R', '1R 上'), ('1N', '1N 上'), ('1T', '1T 上')], start=1):
+                wires.append({'from': f'{sp}:{i}_上', 'to': f'TB-1:{ph1}', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+                wires.append({'from': f'{sp}:{i}_上', 'to': f'TB-C:{phc}', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+            if has_tb1e[0]:
+                wires.append({'from': f'{sp}:E_下', 'to': 'TB-1E:ET1上', 'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+            if '11' in comm_tb:
+                wires.append({'from': f'{sp}:COM上', 'to': 'TB-11:', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+                wires.append({'from': f'{sp}:NO_上', 'to': 'TB-11:', 'circuit': '', 'phase': '', 'confidence': '要確認'})
     return wires
 
 
