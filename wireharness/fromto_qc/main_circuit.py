@@ -593,6 +593,14 @@ def _energy_metering(draw_paths):
                 wires.append({'from': f'{sp}:{i}_上', 'to': f'TB-C:{phc}', 'circuit': '', 'phase': '', 'confidence': '要確認'})
             if has_tb1e[0]:
                 wires.append({'from': f'{sp}:E_下', 'to': 'TB-1E:ET1上', 'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+                wires.append({'from': 'TB-1E:ET1下', 'to': 'BOX:', 'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+                # 接地バスET: 引込接地TB-1E・分岐接地(TB-201:201E)を素アース端子ETで筐体BOXへ束ねる(標準)。
+                wires.append({'from': 'TB-1E:ET1下', 'to': 'ET:', 'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+                wires.append({'from': 'ET:', 'to': 'BOX:', 'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+                wires.append({'from': 'ET:', 'to': 'TB-201:201E', 'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+            _exts_all = sorted(exts, key=lambda s: int(s))
+            if _exts_all:   # SPD の無電圧接点COMは末端増設ユニットの最終計測ch(B-3L)へ(手本)
+                wires.append({'from': f'{u(_exts_all[-1])}:B-3L', 'to': f'{sp}:COM上', 'circuit': '', 'phase': '', 'confidence': '要確認'})
             if '11' in comm_tb:
                 wires.append({'from': f'{sp}:COM上', 'to': 'TB-11:', 'circuit': '', 'phase': '', 'confidence': '要確認'})
                 wires.append({'from': f'{sp}:NO_上', 'to': 'TB-11:', 'circuit': '', 'phase': '', 'confidence': '要確認'})
@@ -692,6 +700,9 @@ def _energy_metering(draw_paths):
         if {'R1', 'R2'} <= rry:                    # ELCB-◎5(=ELCB-5)→R-RY 監視リレー電源
             _v('R-RY-R1:1', 'ELCB-5:2')
             _v('ELCB-5:4', 'R-RY-R2:3')
+    # 扉アース: 扉付き機器(表示灯WL・電力監視機器)がある盤は、扉を筐体BOXへ接地する(標準・手本一致)。
+    if wls or monitors:
+        _v('扉:', 'BOX:', ph='E')
     return wires
 
 
