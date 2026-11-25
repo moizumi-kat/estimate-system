@@ -440,6 +440,8 @@ def _energy_metering(draw_paths):
       ② CT→ch: 群(CT番号先頭桁＝親番号)内で、CTを番号順に [親A, 増設1.A, 増設1.B, 増設2.A, 増設2.B,…]
                  へ割付(EMU4標準・手本一致)。CT-<nn>R→ch-1(K/L)、CT-<nn>T→ch-3(K/L)。
                  ∵ CTは図面中央の1列に並び x近接では群が割れない→番号先頭桁で群を定める(確実)。
+                 渡り: CTが担当ユニットから x方向に遠い(別区画)なら手本どおり CT端子台 'TB-CT' を介して渡る
+                 (CT↔TB-CT / TB-CT↔ﾕﾆｯﾄ)。近ければ直結。距離はG系列座標で判定(推測でなく配置から)。
     記号は手本に合わせ ﾕﾆｯﾄは 'ｴﾈﾙｷﾞｰ-ﾕﾆｯﾄ<N>'(親/増設とも)。計測ユニットの無い盤(他全案件)では
     空＝回帰ゼロ。G系列(内部配置図)は seq/skel に含まれないため seiban_dir から直接読む。
     数が合わない群(CT数≠ch数)は安全側で丸ごと生成しない(誤割付回避)。"""
@@ -510,12 +512,31 @@ def _energy_metering(draw_paths):
         grp_cts = sorted([c for c in cts if c[:1] == m], key=lambda s: int(s))
         if len(grp_cts) != len(channels):
             continue   # 数不一致=安全側で群ごと生成しない(誤割付回避・◎誤答ゼロ)
+
+        def _mx(d, k):
+            v = d.get(k) or []
+            return sum(v) / len(v) if v else None
+
+        def _unit_x(uno):
+            return _mx(masters, uno) if uno == m else _mx(exts, uno)
+
         for ctno, (uno, ch) in zip(grp_cts, channels):
             # R相→ch-1、T相→ch-3。端子 K/L。
-            wires.append({'from': f'CT-{ctno}R:K', 'to': f'{u(uno)}:{ch}-1K', 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
-            wires.append({'from': f'CT-{ctno}R:L', 'to': f'{u(uno)}:{ch}-1L', 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
-            wires.append({'from': f'CT-{ctno}T:K', 'to': f'{u(uno)}:{ch}-3K', 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
-            wires.append({'from': f'CT-{ctno}T:L', 'to': f'{u(uno)}:{ch}-3L', 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
+            # CTが担当ユニットから x方向に遠い(=別区画)なら、手本どおり CT端子台 'TB-CT' を介して渡る
+            # (手本: CT-13R:K↔TB-CT / TB-CT↔ﾕﾆｯﾄ11:B-1K)。近ければ直結。TB-CTは no='CT' のストリップで
+            # 全CT渡りが1端子台に集約(手本一致)。距離は図面(G系列)座標で判定(推測でなく配置から)。
+            cx = _mx(cts, ctno); ux = _unit_x(uno)
+            via_tb = (cx is not None and ux is not None and abs(cx - ux) > 400.0)
+            pairs = [('R', 'K', f'{ch}-1K'), ('R', 'L', f'{ch}-1L'),
+                     ('T', 'K', f'{ch}-3K'), ('T', 'L', f'{ch}-3L')]
+            for ph, kl, chterm in pairs:
+                ctend = f'CT-{ctno}{ph}:{kl}'
+                uend = f'{u(uno)}:{chterm}'
+                if via_tb:
+                    wires.append({'from': ctend, 'to': 'TB-CT:', 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
+                    wires.append({'from': 'TB-CT:', 'to': uend, 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
+                else:
+                    wires.append({'from': ctend, 'to': uend, 'circuit': ctno, 'phase': '', 'confidence': '要確認'})
     return wires
 
 
