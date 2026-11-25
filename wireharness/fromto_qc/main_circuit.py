@@ -464,6 +464,7 @@ def _energy_metering(draw_paths):
     comm_tb = set()  # 通信TB('11'/'21')の有無
     wls = set()    # 表示灯 WL の番号集合('1'/'2')
     spds = set()   # 免雷分離器SPD の番号集合
+    amps = set()   # 増幅器(WR3913)の番号集合
     has_tb1 = [False]  # 引込端子台 TB-1 の有無
     has_tb1e = [False]  # 接地端子台 TB-1E の有無
     relay12 = [False]  # 計測フィーダ中継端子台 TB-中継12 の有無(電圧センス源)
@@ -503,6 +504,8 @@ def _energy_metering(draw_paths):
                 has_tb1e[0] = True                         # 接地端子台 TB-1E
             elif ('中継12' in dev) or (dev.upper() == 'TB' and '中継12' in no):
                 relay12[0] = True                          # 計測フィーダ中継TB-中継12
+            elif dev.upper() == 'AMP' and re.fullmatch(r'\d+', no):
+                amps.add(no)                               # 増幅器(WR3913)
     if not masters:
         return []
 
@@ -654,6 +657,41 @@ def _energy_metering(draw_paths):
         _v('TB-C:1N 下', 'MCCB-○A:3')
     if 'B' in eco:
         _v('MCCB-○B:3', 'TB-C:1T 下')
+    # 制御系(増幅器WR3913/リモコントランスR-TR/監視リレーR-RY/MCCB-□9)。増幅器のある計測盤のみ。
+    # 裏取り(手本): 増幅器-<n>:E→BOX(接地) / MCCB-□9→R-TR→増幅器:電源(数珠) / ELCB-◎5(=ELCB-5)→R-RY(監視電源)。
+    # 増幅器は生成側 'AMP<n>' に合わせ(番号別名で手本 增幅器-<n> も解決)。R-TR/R-RYはH系列で検出。
+    if amps:
+        has_rtr = False
+        rry = set()
+        for p in (draw_paths or []):
+            if 'G0' in _os.path.basename(p):
+                continue
+            try:
+                doc = ezdxf.readfile(p)
+            except Exception:
+                continue
+            for ins in doc.modelspace().query('INSERT'):
+                if not ins.attribs:
+                    continue
+                a = {t.dxf.tag: (t.dxf.text or '').strip() for t in ins.attribs}
+                dv, nv = a.get('DEVICE', ''), a.get('DEVICE1', '')
+                if dv == 'R-TR':
+                    has_rtr = True
+                elif dv == 'R-RY' and re.fullmatch(r'R\d+', nv):
+                    rry.add(nv)
+        amps_s = sorted(amps, key=lambda s: int(s))
+        for n in amps_s:                           # 増幅器アース
+            _v(f'AMP-{n}:E', 'BOX:', ph='E')
+        if has_rtr:                                # MCCB-□9→R-TR→増幅器電源(数珠)
+            _v('MCCB-□9:2', 'R-TR:2')
+            _v('MCCB-□9:4', 'R-TR:1')
+            _v('R-TR:2', f'AMP-{amps_s[0]}:電源')
+            for i in range(len(amps_s) - 1):
+                _v(f'AMP-{amps_s[i]}:電源', f'AMP-{amps_s[i + 1]}:電源')
+            _v(f'AMP-{amps_s[-1]}:電源', 'R-TR:1')
+        if {'R1', 'R2'} <= rry:                    # ELCB-◎5(=ELCB-5)→R-RY 監視リレー電源
+            _v('R-RY-R1:1', 'ELCB-5:2')
+            _v('ELCB-5:4', 'R-RY-R2:3')
     return wires
 
 
