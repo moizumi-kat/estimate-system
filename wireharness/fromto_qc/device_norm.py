@@ -12,7 +12,9 @@ normalize_sym: 機器記号(DEVICE-DEVICE1)の正規化。突合の共通キー�
 import re
 
 # 囲み記号(白丸/二重丸/黒丸/大丸 等)。④の遮断器ラベルの接頭に付く。
-_MARKS = re.compile(r'[○◎●◯⦿◉○◎●◯◉⦿]')
+# 私用領域(U+E000–U+F8FF)の外字も、図面の計測分岐マーカー等の囲み記号(○の外字変種)として
+# 接頭に付く(例 ELCB-<gaiji>201=手本・図面は ELCB-201)。cp932 未マップ外字が PUA になるため同様に除去。
+_MARKS = re.compile(r'[○◎●◯⦿◉○◎●◯◉⦿-]')
 
 
 def strip_marks(s):
