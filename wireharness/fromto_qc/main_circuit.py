@@ -295,19 +295,22 @@ def _spd_wiring(draw_paths):
 def _monitoring_relays(draw_paths):
     """分電盤の遠方監視結線: 監視回路の分岐遮断器 → R-RY リレーを『生成』する。
 
-    由来(推測でなく図面符号化): 制御図(H003等)に、各監視回路の番号を持つ `X_RY_NO` ブロック
-    (属性 NO=回路番号)が、その回路を監視する R-RY リレー(属性 DEVICE1='Rxx')の近傍に置かれる。
-    ∴ 回路↔リレーの対応は図面に符号化されている。各 NO ラベルを最寄りリレーへ割付け、
-    リレーが複数回路から取られた場合は距離最小の回路が占有(=リレー共有ゼロ＝過併合しない)。
+    由来(推測でなく図面符号化): 制御図(H003等)で、各監視回路の番号を持つ `X_RY_NO` ブロック
+    (属性 NO=回路番号)が、その回路を監視する機器(R-RY リレー/R-TR 等)の **行(同じ高さ)の端** に並ぶ。
+    実測: ラベルは対応機器の直下(y が機器の少し下)に置かれ、各リレー行にその回路番号が付く。
+    ∴ 各ラベルを「同じ側(左/右)で直上にある機器」へ割り付け、その機器が R-RY リレーのときだけ
+    回路↔リレーとして採る。R-TR や制御ユニットの行に付くラベル(例 回路22→R-TR)は R-RY を取らない
+    ＝誤割付せず・過併合もしない(茂泉様と図面で確認済)。
 
     単線図では分岐の入力が母線(銅帯＝1人目/主回路・対象外)・出力が別シート号線参照のため、
     トレーサ(build_sheet)は監視ブレーカを単機器ネットとして落とす。ここで遮断器→リレーを起こすと
     監視ブレーカがネットに入り、手本の『分岐遮断器:2/4 → R-RY』(≤5.5sq=ハーネス対象)を生成できる。
 
-    返り: [{from:'MCCB-17:2', to:'R-RY-R6', circuit:'17', phase:'', confidence:'要確認'}]
+    返り: [{from:'MCCB-17:2', to:'R-RY-R4', circuit:'17', phase:'', confidence:'要確認'}]
     `X_RY_NO` ブロックの無い盤(制御盤/受変電)では空 ＝ 回帰ゼロ。"""
-    relays = []       # (Rid, (x,y))
-    nolabels = []     # (circuit, (x,y))
+    relays = []       # (Rid, (x,y))  R-RY リレー
+    devices = []      # (kind, id, (x,y))  行一致の候補機器(R-RY/R-TR/制御ユニット)
+    nolabels = []     # (circuit, (x,y))  X_RY_NO
     for p in (draw_paths or []):
         try:
             doc = ezdxf.readfile(p)
@@ -318,27 +321,35 @@ def _monitoring_relays(draw_paths):
                 continue
             a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
             pos = (float(ins.dxf.insert[0]), float(ins.dxf.insert[1]))
-            if re.fullmatch(r'R\d+', a.get('DEVICE1', '')):
-                relays.append((a['DEVICE1'], pos))
+            dev = a.get('DEVICE', ''); dv1 = a.get('DEVICE1', '')
+            if re.fullmatch(r'R\d+', dv1):
+                relays.append((dv1, pos))
+                devices.append(('RRY', dv1, pos))
+            elif dev == 'R-TR':
+                devices.append(('RTR', dv1 or '', pos))  # リモコントランス(回路22等はここへ)
+            elif dev in ('CPU', 'EEU', 'YTM') or '表示用T/U' in dev:
+                devices.append(('UNIT', dv1, pos))        # 制御ユニット(R-RY を取らせない行)
             if ins.dxf.name == 'X_RY_NO' and re.fullmatch(r'\d+', a.get('NO', '')):
                 nolabels.append((a['NO'], pos))
     if not nolabels or not relays:
         return []
-    # 各 NO ラベル→最寄りリレー。リレーは距離最小の回路が占有(共有防止)。
-    relay_claim = {}   # Rid -> (circuit, dist2)
-    for no, npos in nolabels:
-        best = None
-        bd = None
-        for rid, rpos in relays:
-            dd = (rpos[0] - npos[0]) ** 2 + (rpos[1] - npos[1]) ** 2
-            if bd is None or dd < bd:
-                bd = dd
-                best = rid
-        if best is not None and (best not in relay_claim or bd < relay_claim[best][1]):
-            relay_claim[best] = (no, bd)
+    xs = [p[0] for _, p in relays] + [p[0] for _, p in nolabels]
+    mid = (min(xs) + max(xs)) / 2.0           # 左右列の分離(ラベルは機器と同じ側)
+    # 各ラベル → 同じ側で「直上」(y が少し上=最小の正の差)の機器。R-RY/R-TR のときだけ採る。
     circ2relays = {}
-    for rid, (c, _d) in relay_claim.items():
-        circ2relays.setdefault(c, []).append(rid)
+    circ2rtr = {}
+    for no, npos in nolabels:
+        side = npos[0] < mid
+        cand = [(dp[1] - npos[1], kind, did)
+                for kind, did, dp in devices
+                if (dp[0] < mid) == side and dp[1] >= npos[1] - 1.0]
+        if not cand:
+            continue
+        _dy, kind, did = min(cand, key=lambda t: t[0])
+        if kind == 'RRY':
+            circ2relays.setdefault(no, []).append(did)
+        elif kind == 'RTR':
+            circ2rtr.setdefault(no, []).append(did)
     brk = _breakers(draw_paths)
     wires = []
     for circ in sorted(circ2relays, key=lambda c: (len(c), c)):
@@ -350,6 +361,16 @@ def _monitoring_relays(draw_paths):
         for i, rid in enumerate(rels):
             term = '2' if i % 2 == 0 else '4'
             wires.append({'from': f'{bsym}:{term}', 'to': f'R-RY-{rid}',
+                          'circuit': circ, 'phase': '', 'confidence': '要確認'})
+    # R-TR(リモコントランス)へ行く監視回路(例 回路22)。遮断器:2/4 → R-TR-<id>。
+    for circ in sorted(circ2rtr, key=lambda c: (len(c), c)):
+        bsym = brk.get(circ)
+        if not bsym:
+            continue
+        for i, rid in enumerate(sorted(circ2rtr[circ])):
+            term = '2' if i % 2 == 0 else '4'
+            tsym = f'R-TR-{rid}' if rid else 'R-TR'
+            wires.append({'from': f'{bsym}:{term}', 'to': tsym,
                           'circuit': circ, 'phase': '', 'confidence': '要確認'})
     return wires
 
