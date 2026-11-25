@@ -143,6 +143,9 @@ def _nsym(sym, lmap):
     # 同一CKT型を確認)。手本は'LUG-TB<n>'、本番(引込)は'TB-<n>'と別名で呼ぶため、TB畳み込みに乗せて
     # 一致させる。素の'LUG'(分電盤引込)や'LUG-<n>'(5-12073電圧センス)は'TB'を含まず不変=回帰ゼロ。
     c = re.sub(r'^LUGTB(?=\d)', 'TB', c)
+    # 中継/渡り/MC-DT等の端子台(手本 '中継-TB2'/'MCDT1-TB2'等)は本番の中継端子台(TB-仮<n>)と同じ
+    # 渡り用TB。接頭辞を外してTB畳み込みに乗せ、回路でTBノードとして一致させる(出現率/被覆向上)。
+    c = re.sub(r'^(中継|渡り|MCDT\d*)-?TB(?=\d)', 'TB', c)
     # フルネーム別名(PARTS由来・1:1検証済)。lmapに canon(フル名)→機器名 が在れば適用。
     # 単文字キー(ロケーター)とは衝突しない(キーが別空間)＝後方互換(退行ゼロ)。
     if lmap:
@@ -852,7 +855,8 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
                 return next(iter(hits))
         # 結合遮断器名(手本 'MCCB-101-103'=複数遮断器の警報まとめ)→個別の先頭が本番に在れば採用。
         # DCT製番の警報回路で、範囲表記の遮断器を個別機器へ寄せる(出現率/被覆向上・◎誤答ゼロ=本番在のみ)。
-        mcomb = re.match(r'^(MCCB|ELCB|NFB|ELB)(\d{3})(\d{3})$', tk)
+        mcomb = (re.match(r'^(MCCB|ELCB|NFB|ELB)(\d{3})(\d{3})$', tk) or
+                 re.match(r'^(MCCB|ELCB|NFB|ELB)(\d[A-Z]\d)(\d[A-Z]\d)$', tk))
         if mcomb:
             cand = _nsym(f'{mcomb.group(1)}-{mcomb.group(2)}', _pa)
             if cand in dev2nets:
