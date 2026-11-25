@@ -38,25 +38,41 @@ def parse(path):
     """1ファイル → [wire]。wire={'type','size','color','ends':[end,end]}。
     end={'dev','no','term','length','door','gousen','marker','tube'(マーカー有=True)}。
 
-    物理配線は端点2行で1本(渡りは共有点を繰り返した連続ペアとして別々に記録される)。
-    区切り行('* *…')やマーカー仕様行は飛ばし、端点行を2つ貯めるごとに1配線を確定する。
-    仕様ヘッダ(種別/サイズ/色)を跨ぐときは貯めかけの単独端点を破棄して次群へ。"""
+    端点行を貯め、仕様ヘッダ(種別/サイズ/色)境界で確定(flush)する。確定は【号線run単位】で位置ペア
+    (連続2行=1本)。多点ネット(同一号線が3行以上=奇数)の余り端点は、次号線へ繰り越さず同号線の直前
+    端点へチェーン(例 F1RC: CP-1:2/P1/MA → (CP:2,P1)+(P1,MA))。これにより位置ペアが号線境界をまたいで
+    誤接続する不具合(例 unit1:A-3L[113L] と CT-12R:K[121K] の誤ペア)を解消。色/カテゴリ号線(赤/白/E 等)
+    は偶数runなら従来どおり位置ペアで不変。区切り行('* *…')・マーカー仕様行は端点でないので飛ばす。"""
     wires = []
     ctype = csize = ccolor = None
     pend = []
 
-    def emit_pair():
+    def _emit(a, b):
+        wires.append({'type': ctype, 'size': csize, 'color': ccolor, 'ends': [a, b]})
+
+    def flush():
         nonlocal pend
-        while len(pend) >= 2:
-            a, b = pend[0], pend[1]
-            wires.append({'type': ctype, 'size': csize, 'color': ccolor, 'ends': [a, b]})
-            pend = pend[2:]
+        i = 0
+        while i < len(pend):
+            g = pend[i].get('gousen', '')
+            j = i
+            while j < len(pend) and pend[j].get('gousen', '') == g:
+                j += 1
+            run = pend[i:j]
+            i = j
+            k = 0
+            while k + 1 < len(run):               # 号線run内を位置ペア(2ずつ)
+                _emit(run[k], run[k + 1])
+                k += 2
+            if k < len(run) and k >= 1:            # 奇数余り: 同号線の直前へチェーン(次号線へ繰越さない)
+                _emit(run[k - 1], run[k])
+        pend = []
 
     rows = list(csv.reader(_read(path).splitlines(), delimiter='\t'))
     for r in rows[1:]:                      # 1行目は見出し("配線情報リスト…")
         c = [x.strip() for x in (r + [''] * 10)[:10]]
         if _is_spec(c):
-            pend = []                        # 群の切替。半端な端点は捨てる
+            flush()                          # 群の切替で確定(半端な端点は号線runとして処理)
             ctype = c[3]
             csize = c[4] if c[4] not in ('', '*') else None
             ccolor = c[5] if c[5] not in ('', '*') else None
@@ -73,7 +89,7 @@ def parse(path):
                      'door': (c[4] if c[4] not in ('', '*') else ''),
                      'gousen': (c[1] if c[1] not in ('', '*') else ''),
                      'marker': (c[2] if c[2] not in ('', '*') else ''), 'tube': tube})
-        emit_pair()
+    flush()
     return wires
 
 
