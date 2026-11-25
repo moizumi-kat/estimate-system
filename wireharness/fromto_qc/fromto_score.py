@@ -855,8 +855,7 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
                 return next(iter(hits))
         # 結合遮断器名(手本 'MCCB-101-103'=複数遮断器の警報まとめ)→個別の先頭が本番に在れば採用。
         # DCT製番の警報回路で、範囲表記の遮断器を個別機器へ寄せる(出現率/被覆向上・◎誤答ゼロ=本番在のみ)。
-        mcomb = (re.match(r'^(MCCB|ELCB|NFB|ELB)(\d{3})\.?(\d{3})$', tk) or
-                 re.match(r'^(MCCB|ELCB|NFB|ELB)(\d[A-Z]\d)\.?(\d[A-Z]\d)$', tk))
+        mcomb = re.match(r'^(MCCB|ELCB|NFB|ELB)(\d{3}|\d[A-Z]\d)(?:\.?(?:\d{3}|\d[A-Z]\d))+$', tk)
         if mcomb:
             cand = _nsym(f'{mcomb.group(1)}-{mcomb.group(2)}', _pa)
             if cand in dev2nets:
