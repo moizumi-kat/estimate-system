@@ -43,6 +43,48 @@ def _watt_hour_meter(draw_paths):
     return wires
 
 
+def _multi_meter(draw_paths):
+    """マルチメータ(ﾏﾙﾁﾒｰﾀ)の計量ハーネスを生成する(E系列スケルトン由来・5-29026手本で裏取り)。
+    ﾏﾙﾁﾒｰﾀ本体は内部配置/スケルトンに在るがトレーサが端子を拾えず未生成のため補う。
+    規則(手本 FromTo・◎誤答ゼロ): 計量器<n>ごとに
+      電流: CT-<n>R:K→ﾏﾙﾁ-<n>:1S / CT-<n>T:K→ﾏﾙﾁ-<n>:3S / CT-<n>R:L→CT-<n>T:L(CT渡り)
+      電圧: F-MM<n>:2→ﾏﾙﾁ-<n>:V1,V3 / ﾏﾙﾁ-<n>:V2→N(渡り) / ﾏﾙﾁ-<n>:1L→3L(渡り)
+            LUG-TB<n>:1R→F-MM<n>:1 / :1T→F-MM<n>:1(電圧源)
+      電源: ﾏﾙﾁ-<n>:P→LUG-TB<n>:1S / パルス: ﾏﾙﾁ-<n>:PLS+,PLS-→TB-101 / 接地: ﾏﾙﾁ-<n>:E→BOX
+    名称は手本に合わせ 'ﾏﾙﾁ-<n>'(図面は'ﾏﾙﾒｰﾀ')。ﾏﾙﾁﾒｰﾀの無い盤(他全案件)では空＝回帰ゼロ。"""
+    meters = set()
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            if 'ﾏﾙﾁ' in a.get('DEVICE', '') and re.fullmatch(r'\d+', str(a.get('DEVICE1', ''))):
+                meters.add(str(a['DEVICE1']))
+    wires = []
+    def _w(f, t):
+        wires.append({'from': f, 'to': t, 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    for n in sorted(meters, key=lambda s: int(s)):
+        m = f'ﾏﾙﾁ-{n}'
+        _w(f'CT-{n}R:K', f'{m}:1S')
+        _w(f'CT-{n}T:K', f'{m}:3S')
+        _w(f'CT-{n}R:L', f'CT-{n}T:L')
+        _w(f'F-MM{n}:2', f'{m}:V1')
+        _w(f'F-MM{n}:2', f'{m}:V3')
+        _w(f'{m}:V2', f'{m}:N')
+        _w(f'{m}:1L', f'{m}:3L')
+        _w(f'LUG-TB{n}:1R 上', f'F-MM{n}:1')
+        _w(f'LUG-TB{n}:1T 上', f'F-MM{n}:1')
+        _w(f'{m}:P', f'LUG-TB{n}:1S 上')
+        _w(f'{m}:PLS+', 'TB-101:')
+        _w(f'{m}:PLS-', 'TB-101:')
+        _w(f'{m}:E', 'BOX:')
+    return wires
+
+
 def _alarm_circuit(draw_paths):
     """受変電の警報回路(主幹警報接点→警報ヒューズ→警報灯/ブザー)を手本どおり生成。
     警報ヒューズ F-AL1(=図面の F で隣接テキスト'警報電源')・警報灯 OL-AL1・ブザー BZ-1 等は内部配置の
@@ -909,6 +951,8 @@ def generate(draw_paths, load_factor=None, seiban=None):
     # 計測ユニット(EMU4)の計測ハーネス。計測ユニットを持つ盤でのみ発火(他盤は空=回帰ゼロ)。
     # 内部配置図(G系列)を自前で読むため phase_map ゲートと独立(5-12073=計測付き分電盤に対応)。
     wires.extend(_energy_metering(draw_paths))
+    # マルチメータ計量(ﾏﾙﾁﾒｰﾀを持つ盤のみ発火=他盤は空=回帰ゼロ)。E系列由来・自前読み。
+    wires.extend(_multi_meter(draw_paths))
     # 分電盤の専用生成。母線=銅帯で phase_map が空(=純分電盤)のときだけ生成。
     # 受変電/制御盤は phase_map 非空＝非発火＝回帰ゼロ。計測付き分電盤(5-12073=phase_map非空かつ
     # SPD等の構造が異なる)も現状は非発火(4-29033仕様の生成器が誤辺を出すため。別途専用対応が要る)。
