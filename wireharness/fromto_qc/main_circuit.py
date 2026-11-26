@@ -487,6 +487,45 @@ def _spd_wiring(draw_paths):
     return wires
 
 
+def _spd_sep_earth(draw_paths):
+    """SPD免雷分離器の接地尾線 `SPD-分離器<n>:E下 → SPD用…ETバー` を生成(茂泉様確認済2026-11)。
+
+    ルール: SPD本体(分離器一体型)とSPD用ETバーの間にはハーネス線(IV5.5sq)が在る→別ノード。
+    分離器のE下は、その盤の「SPD用…ETバー」へ接続。ノード名はスケルトンのバー表記から正規化:
+      TEXT1='SPD用'       → ノード 'SPD'            (例 3-21083)
+      TEXT1='SPD用(MCCB)' → ノード 'SPD-ET-(MCCB)'  (例 5-26012)
+    SPD本体=DEVICE'SPD'(SPEC5'(分離器一体型)')またはDEVICE'SPD・分離器'、バー表記ともスケルトン(H系)に在る。
+    両方揃う盤のみ発火=他盤は空=回帰ゼロ。"""
+    seps = set()
+    node = None
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            dev = a.get('DEVICE', ''); dv1 = str(a.get('DEVICE1', '')).strip()
+            spec = a.get('SPEC5', '') + a.get('PARTS', '')
+            if re.fullmatch(r'\d+', dv1) and (
+                    '分離器' in dev or (dev.upper() == 'SPD' and '分離器' in spec)):
+                seps.add(dv1)
+            t1 = a.get('TEXT1', ''); t2 = a.get('TEXT2', '')
+            if t2 == 'ETバー' and t1.startswith('SPD用'):
+                m = re.fullmatch(r'SPD用(\(.+\))?', t1)
+                if m:
+                    node = ('SPD-ET-' + m.group(1)) if m.group(1) else 'SPD'
+    if not (seps and node):
+        return []
+    wires = []
+    for n in sorted(seps):
+        wires.append({'from': f'SPD-分離器{n}:E 下', 'to': f'{node}:',
+                      'circuit': '', 'phase': '', 'confidence': '要確認'})
+    return wires
+
+
 def _monitoring_relays(draw_paths):
     """分電盤の遠方監視結線: 監視回路の分岐遮断器 → R-RY リレーを『生成』する。
 
@@ -956,6 +995,8 @@ def generate(draw_paths, load_factor=None, seiban=None):
     # 電力量計WHM(受変電の計量)。WHMを持つ盤のみ発火=他盤は空=回帰ゼロ。計量専用器のため
     # phase_mapゲートと独立にする(3-21083等=WHM有だが単線図の相検出が空でpm空となる計量盤に対応)。
     wires.extend(_watt_hour_meter(draw_paths))
+    # SPD免雷分離器の接地尾線→SPD用…ETバー。該当盤のみ発火=回帰ゼロ。
+    wires.extend(_spd_sep_earth(draw_paths))
     # 計測ユニット(EMU4)の計測ハーネス。計測ユニットを持つ盤でのみ発火(他盤は空=回帰ゼロ)。
     # 内部配置図(G系列)を自前で読むため phase_map ゲートと独立(5-12073=計測付き分電盤に対応)。
     wires.extend(_energy_metering(draw_paths))
