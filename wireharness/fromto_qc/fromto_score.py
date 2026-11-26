@@ -802,7 +802,6 @@ def _produce_nets(seiban_dir, add_main_circuit=False):
                     out.add(('TBS:' + dai, ''))
                 return out, None
             return {(s, _fold_term(s, term))}, s
-        _brk_in = re.compile(r'^(MCCB|ELCB|NFB|ELB|CP)', re.I)
         for w in mcw:
             na_, da = _mc_nodes(w.get('from', ''))
             nb_, db = _mc_nodes(w.get('to', ''))
@@ -817,14 +816,15 @@ def _produce_nets(seiban_dir, add_main_circuit=False):
                 if dd:
                     prod_syms.add(dd)
                     dev2nets[dd].add(idx)
-            # 引込被覆: 引込TB(台番号付)→遮断器入力(1/3/5)の給電線は、電気的に引込ラグ母線そのもの。
-            # 手本が引込を素の 'LUG'(群なし・端子空欄)で表す盤では本番がTB-<台>で起こすため素LUGが
-            # dev2netsに現れない→出現率で落ちる。給電線のネットを 'LUG' にも登録し素LUGを解決する
-            # (加点のみ・本番ハーネス出力は不変＝採点側の被覆補助)。LUG実ノードを起こす盤では既に登録済。
-            _fsym = str(w.get('from', '')).split(':', 1)[0]
-            if re.match(r'^TB', _nsym(_fsym, {}), re.I) and db and _brk_in.match(db):
-                dev2nets['LUG'].add(idx)
     return nets, node2net, prod_syms, dev2nets
+
+
+def _is_lug(sym):
+    """圧着端子(LUG)か。茂泉様確定(2026-11): LUGは余計な情報＝採点対象外。
+    手本の素'LUG'・'LUG-1'..'LUG-6'(表記ゆれ 'LUG3' 'LUG-3')を対象にする。
+    計量端子台 'LUG-TB<n>' 等(TB付き)は対象外にしない。"""
+    s = re.sub(r'\s', '', str(sym).upper())
+    return bool(re.fullmatch(r'LUG-?\d*', s))
 
 
 def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
@@ -1042,6 +1042,11 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
             a, b = w['ends']
             ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
             if is_ext(ra, a['term']) or is_ext(rb, b['term']):
+                continue
+            # 圧着端子(LUG)は余計な情報(茂泉様確定2026-11)＝採点対象外。LUGは物理的な圧着点で
+            # 番号も内部配置図依存・システム採番のため、手本のLUG端点を持つ辺は母体から除外する
+            # (場外ケーブルと同様のスキップ)。'LUG-TB<n>'等の計量端子台は対象外にしない(^LUG[-数字]のみ)。
+            if _is_lug(ra) or _is_lug(rb):
                 continue
             if is_oversize(w):
                 continue                       # 太物(≥8sq)=主回路=別工程(1人目)。境界は手本に合わせる
