@@ -943,10 +943,10 @@ def generate(draw_paths, load_factor=None, seiban=None):
                       'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
     # 分電盤の遠方監視結線(監視分岐遮断器→R-RY)。X_RY_NO 符号を持つ盤でのみ生成(他盤は空=回帰ゼロ)。
     wires.extend(_monitoring_relays(draw_paths))
-    # 警報回路(受変電の警報)。受変電/制御盤(pm非空)でのみ発火。
-    # 分電盤(pm空=4-29033等)は _incoming_lug 等で別途処理するため除外(重複/別構造への誤生成回避)。
-    if pm:
-        wires.extend(_alarm_circuit(draw_paths))
+    # 警報回路(受変電の警報)。警報電源ヒューズ(F近傍に'警報'テキスト)を持つ盤のみ自己ゲートで発火。
+    # 3-21083等=警報有だが単線図の相検出が空でpm空となる計量盤でも発火させるためゲート外へ(WHMと同様)。
+    # 分電盤(4-29033等)は警報ヒューズ無しで非発火＝回帰ゼロ(実測で確認)。
+    wires.extend(_alarm_circuit(draw_paths))
     # 電力量計WHM(受変電の計量)。WHMを持つ盤のみ発火=他盤は空=回帰ゼロ。計量専用器のため
     # phase_mapゲートと独立にする(3-21083等=WHM有だが単線図の相検出が空でpm空となる計量盤に対応)。
     wires.extend(_watt_hour_meter(draw_paths))
