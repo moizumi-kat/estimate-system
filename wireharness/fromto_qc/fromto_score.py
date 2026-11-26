@@ -849,6 +849,12 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
         if k in dev2nets:
             return k
         tk = dn.canon(dn.strip_marks(str(ns)).upper())
+        # SPD接地バーの別名: 手本は素'SPD'と書くが、システムは「ETバーと分かる」'SPD-ET'に統一(茂泉様方針)。
+        # 手本の素'SPD'(ETバー)を 本番'SPD-ET' と同一視する(本番に'SPD-ET'が在るときのみ=安全)。
+        if tk == 'SPD':
+            cand = _nsym('SPD-ET', _pa)
+            if cand in dev2nets:
+                return cand
         if len(tk) >= 4:
             hits = {dv for cp, dv in _pfull if tk in cp}
             if len(hits) == 1:

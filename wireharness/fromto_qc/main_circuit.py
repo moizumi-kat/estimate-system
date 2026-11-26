@@ -491,9 +491,11 @@ def _spd_sep_earth(draw_paths):
     """SPD免雷分離器の接地尾線 `SPD-分離器<n>:E下 → SPD用…ETバー` を生成(茂泉様確認済2026-11)。
 
     ルール: SPD本体(分離器一体型)とSPD用ETバーの間にはハーネス線(IV5.5sq)が在る→別ノード。
-    分離器のE下は、その盤の「SPD用…ETバー」へ接続。ノード名はスケルトンのバー表記から正規化:
-      TEXT1='SPD用'       → ノード 'SPD'            (例 3-21083)
-      TEXT1='SPD用(MCCB)' → ノード 'SPD-ET-(MCCB)'  (例 5-26012)
+    分離器のE下は、その盤の「SPD用…ETバー」へ接続。ノード名はスケルトンのバー表記から正規化。
+    名前は「ETバーと分かる」よう 'SPD-ET…' に統一(茂泉様方針2026-11。手本の素'SPD'は紛らわしいため不採用。
+    手本'SPD'は採点側の別名で 'SPD-ET' と同一視):
+      TEXT1='SPD用'       → ノード 'SPD-ET'          (例 3-21083。手本は'SPD')
+      TEXT1='SPD用(MCCB)' → ノード 'SPD-ET-(MCCB)'  (例 5-26012。手本も同じ)
     SPD本体=DEVICE'SPD'(SPEC5'(分離器一体型)')またはDEVICE'SPD・分離器'、バー表記ともスケルトン(H系)に在る。
     両方揃う盤のみ発火=他盤は空=回帰ゼロ。"""
     seps = set()
@@ -516,7 +518,7 @@ def _spd_sep_earth(draw_paths):
             if t2 == 'ETバー' and t1.startswith('SPD用'):
                 m = re.fullmatch(r'SPD用(\(.+\))?', t1)
                 if m:
-                    node = ('SPD-ET-' + m.group(1)) if m.group(1) else 'SPD'
+                    node = ('SPD-ET-' + m.group(1)) if m.group(1) else 'SPD-ET'
     if not (seps and node):
         return []
     wires = []
