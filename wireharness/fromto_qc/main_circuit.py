@@ -92,6 +92,7 @@ def _alarm_circuit(draw_paths):
     BZ-1→OL-AL1 / OL-AL1→WL-1(警報灯の渡り)。警報ヒューズのある盤のみ発火(他盤は空=回帰ゼロ)。"""
     has_alarm_fuse = False
     devs = set()
+    wl_nos = set()
     for p in (draw_paths or []):
         try:
             doc = ezdxf.readfile(p)
@@ -112,9 +113,11 @@ def _alarm_circuit(draw_paths):
             if not ins.attribs:
                 continue
             a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
-            dev = a.get('DEVICE', '')
+            dev = a.get('DEVICE', ''); dv1 = str(a.get('DEVICE1', '')).strip()
             if dev:
                 devs.add(dev.upper())
+            if dev.upper() == 'WL' and re.fullmatch(r'\d+', dv1):
+                wl_nos.add(dv1)       # 警報灯 WL-<n> = 警報系統の番号(複数系統の盤に対応)
             if dev.upper() == 'F':   # 警報電源ヒューズ=近傍に'警報'テキスト
                 try:
                     bx, by = float(ins.dxf.insert[0]), float(ins.dxf.insert[1])
@@ -124,17 +127,20 @@ def _alarm_circuit(draw_paths):
                     has_alarm_fuse = True
     if not has_alarm_fuse:
         return []
+    # 警報系統の番号集合。警報灯 WL-<n> から採る。WL無記名の盤は従来どおり系統1のみ(後方互換・回帰ゼロ)。
+    nos = sorted(wl_nos, key=lambda s: int(s)) or ['1']
     wires = []
 
     def _v(a, b):
         wires.append({'from': a, 'to': b, 'circuit': '', 'phase': '', 'confidence': '要確認'})
-    _v('TB-1:1R', 'F-AL1:1')          # 引込R→警報ヒューズ
-    _v('F-AL1:1', 'F-WL1:1')          # 警報ヒューズ→警報灯ヒューズ
-    _v('F-AL1:2', 'MCCB-1:EALc')      # 警報ヒューズ→主幹警報接点(b)
-    _v('TB-1:1S', '2BZ1:2')           # 引込S→ブザータイマ(2BZ1)
-    if 'OL' in devs or 'OL-AL' in devs:
-        _v('BZ-1:', 'OL-AL1:-')       # ブザー↔警報灯(渡り)
-        _v('OL-AL1:-', 'WL-1:-')
+    for n in nos:
+        _v('TB-1:1R', f'F-AL{n}:1')          # 引込R→警報ヒューズ
+        _v(f'F-AL{n}:1', f'F-WL{n}:1')       # 警報ヒューズ→警報灯ヒューズ
+        _v(f'F-AL{n}:2', f'MCCB-{n}:EALc')   # 警報ヒューズ→主幹警報接点(b)
+        _v('TB-1:1S', f'2BZ{n}:2')           # 引込S→ブザータイマ(2BZ<n>)
+        if 'OL' in devs or 'OL-AL' in devs:
+            _v(f'BZ-{n}:', f'OL-AL{n}:-')     # ブザー↔警報灯(渡り)
+            _v(f'OL-AL{n}:-', f'WL-{n}:-')
     return wires
 
 
