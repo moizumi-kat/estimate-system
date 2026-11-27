@@ -698,6 +698,72 @@ def _monitoring_relays(draw_paths):
     return wires
 
 
+def _hv_monitoring(draw_paths):
+    """受変電の遠方監視結線(監視対象遮断器→R-RY監視リレー)を生成(5-26012手本で裏取り2026-11-27)。
+    構造(H005等の遠方監視盤): 各 R-RY-R<n> の行に X_RY_NO ラベル(NO=回路ラベル 'LG05'/'CG88'/'LE51' 等=英数字)。
+    手本: 遮断器:2/4 → R-RY-R<n>:3/1(≤3.5sq)。遮断器名=ラベルで、種別(ELCB/MCCB)は主回路図の実機器から読む。
+    分電盤の _monitoring_relays とは NO 形式で排他: あちらは NO=数字のみ(回路番号 '17'等)、こちらは英数字ラベル
+    (接頭 LG/CG/LE/CE+数字)=受変電のみ。両者が同時発火しない(回帰ゼロ)。英数字ラベルの無い盤は空=回帰ゼロ。"""
+    LABEL = re.compile(r'^[A-Z]{1,3}\d+$')      # 受変電の回路ラベル(LG05/CG88/LE51 等)。分電盤の数字NOは除外。
+    relays = []                                 # (Rid, x, y) 監視リレー R-RY-R<n>
+    labels = []                                 # (label, x, y) X_RY_NO 回路ラベル
+    dev_of = {}                                 # label → 遮断器種別(ELCB/MCCB) 主回路図の実機器から
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            dev = a.get('DEVICE', ''); dv1 = str(a.get('DEVICE1', '')).strip()
+            if dev == 'R-RY' and re.fullmatch(r'R\d+', dv1):
+                # 極数(SPEC1)で限定: 1P(片切・送り端子)=監視リレー1:1で手本一致。2P(両切)は上段で
+                # R-TR(伝送リレー)が混在し同行ヒューリスティックでは R-RY/R-TR を判別できない(◎誤答risk)
+                # →2Pは生成しない(安全側△・人/トレーサに委ねる)。
+                if a.get('SPEC1', '').upper().startswith('1P'):
+                    relays.append((dv1, ins.dxf.insert.x, ins.dxf.insert.y))
+            if ins.dxf.name == 'X_RY_NO':
+                no = a.get('NO', '').strip()
+                if LABEL.match(no):
+                    labels.append((no, ins.dxf.insert.x, ins.dxf.insert.y))
+            # 監視対象遮断器(ELCB/MCCB)の実機器。ラベル(○を除去)で種別を引けるようにする。
+            if dev in ('ELCB', 'MCCB'):
+                key = re.sub(r'[○\s]', '', dv1)
+                if LABEL.match(key):
+                    dev_of.setdefault(key, dev)
+    if not relays or not labels:
+        return []
+    wires = []
+    seen = set()
+    for (lab, lx, ly) in labels:
+        dev = dev_of.get(lab)
+        if not dev:
+            continue                            # 主回路に実機器が無いラベルは起こさない(推測ゼロ)
+        # 同行(|dy|<70)で最寄りの R-RY(左右どちらでも可=受変電は中央T/Uの左右に鏡配置)。
+        cand = [(abs(rx - lx), rid) for (rid, rx, ry) in relays if abs(ry - ly) < 70]
+        if not cand:
+            continue
+        rid = min(cand)[1]
+        key = (dev, lab, rid)
+        if key in seen:
+            continue
+        seen.add(key)
+        bsym = f'{dev}-{lab}'
+        # 手本の端子ペア: L接頭(LG/LE等)=2→R-RY:3 / 4→:1(素), C接頭(CG/CE等)=2→:1 / 4→:3(交差)。
+        # 下段1P群で裏取り(LG05-08=素・CG14/15=交差)。端子交差は盤内規約=○(要確認)だが名前・結線は確定。
+        if lab[:1] == 'C':
+            t2, t4 = '1', '3'
+        else:
+            t2, t4 = '3', '1'
+        wires.append({'from': f'{bsym}:2', 'to': f'R-RY-{rid}:{t2}',
+                      'circuit': '', 'phase': '', 'confidence': '要確認'})
+        wires.append({'from': f'{bsym}:4', 'to': f'R-RY-{rid}:{t4}',
+                      'circuit': '', 'phase': '', 'confidence': '要確認'})
+    return wires
+
+
 def _energy_metering(draw_paths):
     """計測ユニット(三菱EMU4)の計測ハーネスを生成する(内部配置図G系列由来・手本/図面で裏取り済)。
 
@@ -1077,6 +1143,8 @@ def generate(draw_paths, load_factor=None, seiban=None):
                       'circuit': '', 'phase': 'E', 'confidence': earth_pts[-1][1]})
     # 分電盤の遠方監視結線(監視分岐遮断器→R-RY)。X_RY_NO 符号を持つ盤でのみ生成(他盤は空=回帰ゼロ)。
     wires.extend(_monitoring_relays(draw_paths))
+    # 受変電の遠方監視結線(監視遮断器→R-RY)。X_RY_NO が英数字ラベル(LG05等)の盤のみ発火=分電盤と排他=回帰ゼロ。
+    wires.extend(_hv_monitoring(draw_paths))
     # 警報回路(受変電の警報)。警報電源ヒューズ(F近傍に'警報'テキスト)を持つ盤のみ自己ゲートで発火。
     # 3-21083等=警報有だが単線図の相検出が空でpm空となる計量盤でも発火させるためゲート外へ(WHMと同様)。
     # 分電盤(4-29033等)は警報ヒューズ無しで非発火＝回帰ゼロ(実測で確認)。
