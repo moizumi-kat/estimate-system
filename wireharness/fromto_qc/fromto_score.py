@@ -819,6 +819,23 @@ def _produce_nets(seiban_dir, add_main_circuit=False):
     return nets, node2net, prod_syms, dev2nets
 
 
+_BT_ORDER = ['MCCB', 'ELCB', 'NFB', 'ELB', 'ACB', 'LBS', 'WHM', 'FMM', 'CT', 'PT', 'ZCT',
+             'SPDET', 'SPD', 'ﾏﾙﾁ', 'FWL', 'FAL', 'OLAL', 'OLEL', 'WL', 'GL', 'RL', 'YL', 'OL',
+             'BZX', 'BZ', '52Y', '52X', '86X', '30Y', '30X', 'AUXRY', 'RRYR', 'RRY', 'RTR',
+             'TLR', 'CX', 'FX', 'SX', 'ALX', 'ELX', 'SPX', 'CP', 'PL', 'TB', 'ETT', 'ET', 'BOX']
+
+
+def _base_type(sym):
+    """名前除き採点の型(対応付け制約)。遮断器はMCCB/ELCB別、計器/ヒューズ/リレー/ランプ等は記号先頭。
+    同型のみ対応付け可(別型を取り違えて偽合格させない)。"""
+    s = re.sub(r'[-\s]', '', str(sym).upper())
+    for t in _BT_ORDER:
+        if s.startswith(re.sub(r'[-\s]', '', t.upper())):
+            return t
+    m = re.match(r'([A-Z]+|[^\x00-\x7f]+)', s)
+    return m.group(1) if m else s
+
+
 def _is_lug(sym):
     """圧着端子(LUG)か。茂泉様確定(2026-11): LUGは余計な情報＝採点対象外。
     手本の素'LUG'・'LUG-1'..'LUG-6'(表記ゆれ 'LUG3' 'LUG-3')を対象にする。
@@ -827,7 +844,7 @@ def _is_lug(sym):
     return bool(re.fullmatch(r'LUG-?\d*', s))
 
 
-def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
+def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True, name_agnostic=False):
     """【本番採点＝②実生成一致】本番 produce() 出力をネット単位で採点。場外ケーブル(R-F/L-F)は対象外。
     素ロケーター文字は相手端点の盤(無ければファイルの盤)で一意の実機器へ解決。
     戻り: {seiban,truth,present,hit,recall,present_rate}。present=両端が本番出力に在る辺数(カバレッジ寄り指標)。
@@ -952,6 +969,35 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
                         return {('LET', su, _LET_NONCE[0])}   # 毎回一意＝如何なる相手とも不一致(hit不変)
             return dn_
         return set(node2net.get((ns, ft_), set()))
+    # 名前除き採点用: 各ネットに居る機器の型集合(同型が同ネットに居れば改名で結線が成立しうる)。
+    _net_types = []
+    if name_agnostic:
+        for ns_ in nets:
+            ts = set()
+            for node in ns_:
+                sym0 = node[0] if isinstance(node, tuple) else node
+                if sym0 == 'TB':
+                    ts.add('TB')
+                elif isinstance(sym0, str):
+                    ts.add(_base_type(sym0))
+            _net_types.append(ts)
+
+    def _na_rescue(na_, xnets_, nb_, ynets_):
+        """名前除き救済: 片側未解決なら、解決側ネットに未解決側と同型の機器が居れば結線成立とみなす。
+        両側未解決なら、同一ネットに両型が居れば成立とみなす(保守: 同型＋同ネット＝改名で一致可)。"""
+        if xnets_ and not ynets_:
+            u, rnets = nb_, xnets_
+        elif ynets_ and not xnets_:
+            u, rnets = na_, ynets_
+        elif not xnets_ and not ynets_:
+            ta2, tb2 = _base_type(na_), _base_type(nb_)
+            return any(ta2 in _net_types[i] and tb2 in _net_types[i]
+                       for i in range(len(_net_types)))
+        else:
+            return False
+        tu = _base_type(u)
+        return any(tu in _net_types[i] for i in rnets)
+
     tot = hit = present = 0
     for fi, f in enumerate(sorted(glob.glob(os.path.join(seiban_dir, 'FromToデータ_*.txt'))), 1):
         try:
@@ -1071,6 +1117,10 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True):
                     hit += 1
                 elif _COLLECT_GAPS:
                     _LAST_GAPS.append(('netgap', na, a['term'], nb, b['term']))
+            elif name_agnostic and _na_rescue(na, xnets, nb, ynets):
+                # 名前除き: 同型機器が相手ネットに居る＝改名で結線が成立しうる(present+hit)。
+                present += 1
+                hit += 1
             elif _COLLECT_GAPS:
                 _LAST_GAPS.append(('present', na, a['term'], nb, b['term'],
                                    bool(xnets), bool(ynets)))
