@@ -1,0 +1,613 @@
+{
+ "title": "配電盤記号 マスター辞書 v1(支給図面18案件の凡例を名寄せ)",
+ "scope": "受変電・分電・制御の盤内機器記号(積算コード対象)。建築電気=照明/配線/接地極/分岐回路番号は対象外。",
+ "sources": "支給図面18案件の凡例を統合(案件名・入手元パスはリポジトリ外で管理)",
+ "dialect_notes": {
+  "変圧器": "TR=T=Tr（スコットはSCTT/図記号）",
+  "進相コンデンサ": "SC=C",
+  "計器用変圧変流器": "VCT=MOF",
+  "計器用変圧器": "VT=PT",
+  "低圧地絡": "LGR=GR",
+  "漏電遮断器": "ELB=ELCB",
+  "電力計": "W=KW",
+  "温度計": "26T=t°=θ",
+  "マルチ": "MDA=ME=MM=DM",
+  "ANSI機器番号": "27=UVR,51=OCR,52=接触器,55=APFC,64=OVGR,67=DGR,84=電圧継電器,26T=温度",
+  "二義注意": "VS(高圧真空開閉器/電圧計切換SW), PF(電力ヒューズ/力率計), T(変圧器/タイマー), EL(漏電継電器)≠ELB(漏電遮断器)",
+  "監視記号": "O操作/●状態/△警報/□計測/■計量/▲故障(機器でなく中央監視の信号区分)"
+ },
+ "counts": {
+  "canonical_devices": 56,
+  "distinct_aliases": 103
+ },
+ "entries": [
+  {
+   "canonical": "高圧区分開閉器/気中負荷開閉器",
+   "aliases": [
+    "PAS",
+    "UGS",
+    "UAS"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "43231(PAS)/高圧機器"
+  },
+  {
+   "canonical": "方向性SOG制御装置",
+   "aliases": [
+    "SOG"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "43231付属/制御"
+  },
+  {
+   "canonical": "ケーブルヘッド",
+   "aliases": [
+    "CH"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "79030(CH取付金具)※端末自体は対象外"
+  },
+  {
+   "canonical": "避雷器",
+   "aliases": [
+    "LA"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "避雷器(高圧機器)"
+  },
+  {
+   "canonical": "サージ防護デバイス",
+   "aliases": [
+    "SPD"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "SPD(§10-1・クラスI/II)"
+  },
+  {
+   "canonical": "接地(種別)",
+   "aliases": [
+    "E",
+    "EA",
+    "EB",
+    "ED",
+    "EC",
+    "ELH"
+   ],
+   "ansi_no": [],
+   "kind": "接地",
+   "db_code_family": "接地工事(建築側)・金物"
+  },
+  {
+   "canonical": "計器用変圧変流器(取引/需給)",
+   "aliases": [
+    "VCT",
+    "MOF"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "44301(VCT)"
+  },
+  {
+   "canonical": "計器用変圧器",
+   "aliases": [
+    "VT",
+    "PT"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "44001/44002"
+  },
+  {
+   "canonical": "変流器",
+   "aliases": [
+    "CT"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "44系/72系(低圧CT)"
+  },
+  {
+   "canonical": "零相変流器",
+   "aliases": [
+    "ZCT"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "44201-44203"
+  },
+  {
+   "canonical": "零相計器用変圧器",
+   "aliases": [
+    "ZVT",
+    "EVT",
+    "GVT"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "44026(GVT=接地形計器用変圧器・ZVT/EVT/GVT同一)"
+  },
+  {
+   "canonical": "パルス変成器/検出器",
+   "aliases": [
+    "PP"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "42212(パルス検出器)/42211(パルス変換器)"
+  },
+  {
+   "canonical": "零相電圧検出/蓄電器/基準入力",
+   "aliases": [
+    "ZPD",
+    "ZVD"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "46系(保護)"
+  },
+  {
+   "canonical": "真空遮断器",
+   "aliases": [
+    "VCB"
+   ],
+   "ansi_no": [
+    "52"
+   ],
+   "kind": "機器",
+   "db_code_family": "43001-43013/受電セット内包"
+  },
+  {
+   "canonical": "高圧真空/電磁接触器",
+   "aliases": [
+    "VMC",
+    "VCS"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "43101-43112(VCS)"
+  },
+  {
+   "canonical": "高圧負荷開閉器",
+   "aliases": [
+    "LBS",
+    "R-LBS"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "43320/43321/43330"
+  },
+  {
+   "canonical": "断路器",
+   "aliases": [
+    "DS"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "43401-43421"
+  },
+  {
+   "canonical": "配線用遮断器",
+   "aliases": [
+    "MCB",
+    "MCCB"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "40/50/60系(端子台で系統別)"
+  },
+  {
+   "canonical": "漏電遮断器",
+   "aliases": [
+    "ELB",
+    "ELCB"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "41/51/61系"
+  },
+  {
+   "canonical": "高圧真空開閉器",
+   "aliases": [
+    "VS※"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "43系 ※VSは電圧計切換SWと二義"
+  },
+  {
+   "canonical": "電源切替電磁接触器(MCTT)",
+   "aliases": [
+    "MC-ST",
+    "MC-DT",
+    "DTMC",
+    "DT-MC"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "47系(MCTT)/18100"
+  },
+  {
+   "canonical": "動力用MCCB",
+   "aliases": [
+    "DTMC"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "50系"
+  },
+  {
+   "canonical": "電磁接触器/マグネット",
+   "aliases": [
+    "MC"
+   ],
+   "ansi_no": [
+    "52"
+   ],
+   "kind": "機器",
+   "db_code_family": "開閉器"
+  },
+  {
+   "canonical": "エネセーバ(励磁突入抑制)",
+   "aliases": [
+    "ENESAVER"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "43347(エネセーバLBS)"
+  },
+  {
+   "canonical": "電力/限流ヒューズ",
+   "aliases": [
+    "PF"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "43622-43631"
+  },
+  {
+   "canonical": "ヒューズ",
+   "aliases": [
+    "F"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "ヒューズ"
+  },
+  {
+   "canonical": "サーキットプロテクタ",
+   "aliases": [
+    "CP"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "CP"
+  },
+  {
+   "canonical": "変圧器(単相/三相/スコット)",
+   "aliases": [
+    "TR",
+    "T",
+    "Tr",
+    "SCTT(スコット)"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "17系(低圧セット)/45000-45039(高圧支給)"
+  },
+  {
+   "canonical": "進相コンデンサ",
+   "aliases": [
+    "SC",
+    "C"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "45100-45113(高圧支給)/53系(低圧)"
+  },
+  {
+   "canonical": "直列リアクトル",
+   "aliases": [
+    "SR"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "45200-45207(高圧支給)/53系(低圧)"
+  },
+  {
+   "canonical": "放電コイル(ディスチャージ)",
+   "aliases": [
+    "DCC"
+   ],
+   "ansi_no": [],
+   "kind": "機器",
+   "db_code_family": "放電コイル"
+  },
+  {
+   "canonical": "自動力率調整装置",
+   "aliases": [
+    "APFC"
+   ],
+   "ansi_no": [
+    "55"
+   ],
+   "kind": "機器",
+   "db_code_family": "力率制御"
+  },
+  {
+   "canonical": "過電流継電器",
+   "aliases": [
+    "OCR"
+   ],
+   "ansi_no": [
+    "51"
+   ],
+   "kind": "継電器",
+   "db_code_family": "46000/46001/46387"
+  },
+  {
+   "canonical": "地絡方向継電器(高圧)",
+   "aliases": [
+    "DGR"
+   ],
+   "ansi_no": [
+    "67"
+   ],
+   "kind": "継電器",
+   "db_code_family": "46040/46041"
+  },
+  {
+   "canonical": "地絡過電圧継電器",
+   "aliases": [
+    "OVGR"
+   ],
+   "ansi_no": [
+    "64"
+   ],
+   "kind": "継電器",
+   "db_code_family": "46360"
+  },
+  {
+   "canonical": "不足電圧継電器",
+   "aliases": [
+    "UVR",
+    "UV"
+   ],
+   "ansi_no": [
+    "27",
+    "27R(遅延)"
+   ],
+   "kind": "継電器",
+   "db_code_family": "継電器"
+  },
+  {
+   "canonical": "逆電力継電器",
+   "aliases": [
+    "RPR"
+   ],
+   "ansi_no": [],
+   "kind": "継電器",
+   "db_code_family": "継電器"
+  },
+  {
+   "canonical": "低圧地絡継電器",
+   "aliases": [
+    "LGR",
+    "GR"
+   ],
+   "ansi_no": [],
+   "kind": "継電器",
+   "db_code_family": "46系"
+  },
+  {
+   "canonical": "電圧継電器",
+   "aliases": [
+    "VR"
+   ],
+   "ansi_no": [
+    "84"
+   ],
+   "kind": "継電器",
+   "db_code_family": "継電器"
+  },
+  {
+   "canonical": "漏電継電器",
+   "aliases": [
+    "EL"
+   ],
+   "ansi_no": [],
+   "kind": "継電器",
+   "db_code_family": "独立新規不要。文脈で選定: 低圧地絡=46401(LG-RY)/漏電警報=46410(ELR)/分岐内蔵=40x31(漏電アラーム)。EL(漏電継電器)≠ELB(漏電遮断器)に注意"
+  },
+  {
+   "canonical": "漏電警報器(ELR)",
+   "aliases": [
+    "ELR"
+   ],
+   "ansi_no": [],
+   "kind": "計器/警報",
+   "db_code_family": "46410/46411(集合形ELR)"
+  },
+  {
+   "canonical": "漏電火災警報器(LD)",
+   "aliases": [
+    "LD"
+   ],
+   "ansi_no": [],
+   "kind": "対象外(防災設備)",
+   "db_code_family": "盤積算の対象外＝漏電火災警報設備(消防法/防災)。db.json該当なし。盤内の漏電警報機能ならELR(46410)で代替。※対象外でよいか茂泉様確認"
+  },
+  {
+   "canonical": "絶縁監視装置",
+   "aliases": [
+    "GU",
+    "GV",
+    "IGR",
+    "CCT(重畳変成器)"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "46311(IGR装置)/46210(電圧発生器GV)/46221-223(IGR用ZCT)。CCT=重畳変成器はこのIGRセットで計上。※CCT単体計上の要否のみ茂泉様確認"
+  },
+  {
+   "canonical": "サーマルリレー",
+   "aliases": [
+    "TH",
+    "THR",
+    "ThOC"
+   ],
+   "ansi_no": [],
+   "kind": "継電器",
+   "db_code_family": "保護"
+  },
+  {
+   "canonical": "電圧計",
+   "aliases": [
+    "V",
+    "VM"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "42001-42003"
+  },
+  {
+   "canonical": "電流計",
+   "aliases": [
+    "A",
+    "AM"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "42010-42014"
+  },
+  {
+   "canonical": "電力計",
+   "aliases": [
+    "W",
+    "KW"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "42系"
+  },
+  {
+   "canonical": "力率計",
+   "aliases": [
+    "COSφ",
+    "COSf",
+    "COSθ",
+    "cosφ",
+    "Pf"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "42系"
+  },
+  {
+   "canonical": "電力量計",
+   "aliases": [
+    "WH",
+    "Wh",
+    "KWH"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "62系(WHM)"
+  },
+  {
+   "canonical": "周波数計",
+   "aliases": [
+    "Hz",
+    "f"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "42系"
+  },
+  {
+   "canonical": "無効電力計",
+   "aliases": [
+    "Var"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "42系"
+  },
+  {
+   "canonical": "時間計",
+   "aliases": [
+    "H"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "42系"
+  },
+  {
+   "canonical": "最大需要/マルチ指示計",
+   "aliases": [
+    "MDA",
+    "ME",
+    "MM",
+    "DM",
+    "デジタルマルチ"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "42075-42088"
+  },
+  {
+   "canonical": "トランスデューサ",
+   "aliases": [
+    "TD"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "計装(4-20mA)"
+  },
+  {
+   "canonical": "温度計(ダイヤル)",
+   "aliases": [
+    "26T",
+    "t°",
+    "θ"
+   ],
+   "ansi_no": [
+    "26"
+   ],
+   "kind": "計器",
+   "db_code_family": "計装/74系"
+  },
+  {
+   "canonical": "圧力センサー",
+   "aliases": [
+    "PRR"
+   ],
+   "ansi_no": [],
+   "kind": "計器",
+   "db_code_family": "計装"
+  },
+  {
+   "canonical": "セレクタ/切換スイッチ",
+   "aliases": [
+    "SES",
+    "SS",
+    "VS(電圧計)",
+    "AS(電流計)"
+   ],
+   "ansi_no": [],
+   "kind": "計器(SW)",
+   "db_code_family": "42003/42014に内包"
+  }
+ ],
+ "verification": {
+  "new_device_check": "db.json(3672件)照合済",
+  "result": "真のDB追加=0件(ZVT=44026/CCT=46系IGR/ELR=46410/EL=既存漏電地絡系/LD=対象外(防災))。方針5充足。",
+  "open_item": "(1)CCT単体計上の要否 (2)LD漏電火災警報器を防災で対象外としてよいか — の2点のみ茂泉様確認",
+  "note": "方針5(新規追加せず)を満たす。両者は別名辞書への登録のみ。",
+  "decision": "茂泉様確定(2026-11): 別名登録のみ。db.jsonへの新規コード追加はしない(既存コードに名寄せ=漏れゼロ・重複ゼロ)。CCT単体計上/LD防災扱いも現状は既存/対象外のまま。"
+ }
+}
