@@ -764,14 +764,15 @@ def _hv_monitoring(draw_paths):
             continue
         if len(good) == 1:
             use = good                          # 単一=そのまま採用
+        elif all(k == 'RRY' for (k, _, _) in good) and \
+                len(set(rid for (_, rid, _) in good)) == len(good):
+            use = good                          # 複数位置が全て相異なるR-RY(例 LE51=複数2P監視)=全採用
+        elif all(k == 'RTR' for (k, _, _) in good):
+            # 複数位置が全てR-TR(例 CE53): 伝送チェーン入口=最小番号R-TRへ1本だけ生成。
+            # 残りの R-TR→R-TR→CPU チェーンは本番が build_sheet でトレース済み(手本一致)。
+            use = [min(good, key=lambda a: int(a[1]))]
         else:
-            # 複数位置: 全てが相異なる R-RY リレー(R-TR無し・重複無し)のときだけ採用(例 LE51=複数2P監視)。
-            # R-TR絡み/リレー重複を含む曖昧(例 CE53=手本と食い違い)は安全側で生成せず(△)。
-            rids = [rid for (kind, rid, pole) in good]
-            if all(k == 'RRY' for (k, _, _) in good) and len(set(rids)) == len(rids):
-                use = good
-            else:
-                continue
+            continue                            # 上記以外の曖昧(混在等)は安全側で生成せず(△)
         bsym = f'{dev}-{lab}'
         for (kind, rid, pole) in use:
             if kind == 'RTR':
