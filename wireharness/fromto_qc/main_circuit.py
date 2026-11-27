@@ -53,17 +53,35 @@ def _multi_meter(draw_paths):
       電源: ﾏﾙﾁ-<n>:P→LUG-TB<n>:1S / パルス: ﾏﾙﾁ-<n>:PLS+,PLS-→TB-101 / 接地: ﾏﾙﾁ-<n>:E→BOX
     名称は手本に合わせ 'ﾏﾙﾁ-<n>'(図面は'ﾏﾙﾒｰﾀ')。ﾏﾙﾁﾒｰﾀの無い盤(他全案件)では空＝回帰ゼロ。"""
     meters = set()
+    volt_key = {}        # 計器番号 → 電圧号線の集合(frozenset)。一致する計器は電圧母線を共有(3-21083)。
     for p in (draw_paths or []):
         try:
             doc = ezdxf.readfile(p)
         except Exception:
             continue
-        for ins in doc.modelspace().query('INSERT'):
+        msp = doc.modelspace()
+        _ms, _vb = [], []
+        for ins in msp.query('INSERT'):
             if not ins.attribs:
                 continue
             a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
             if 'ﾏﾙﾁ' in a.get('DEVICE', '') and re.fullmatch(r'\d+', str(a.get('DEVICE1', ''))):
                 meters.add(str(a['DEVICE1']))
+                _ms.append((str(a['DEVICE1']), ins.dxf.insert.x, ins.dxf.insert.y))
+            # 源号線ブロック(SOU2/3/4)。電流(…C1/C2/C3)を除いた=電圧号線。
+            sous = [a[k] for k in ('SOU2', 'SOU3', 'SOU4') if a.get(k)]
+            if sous:
+                _vb.append((sous, ins.dxf.insert.x, ins.dxf.insert.y))
+        # 各計器の電圧号線集合を近傍SOUブロックから取る(電流C号線は除外)。
+        for (mn, mx, my) in _ms:
+            vk = set()
+            for (sous, sx, sy) in _vb:
+                if abs(sy - my) < 300 and -700 < (sx - mx) < 100:
+                    for s in sous:
+                        if not re.fullmatch(r'\d+C\d+', s):   # 電流号線(11C1等)は除外
+                            vk.add(s)
+            if vk:
+                volt_key[mn] = frozenset(vk)
     wires = []
     def _w(f, t):
         wires.append({'from': f, 'to': t, 'circuit': '', 'phase': '', 'confidence': '要確認'})
@@ -82,6 +100,21 @@ def _multi_meter(draw_paths):
         _w(f'{m}:PLS+', 'TB-101:')
         _w(f'{m}:PLS-', 'TB-101:')
         _w(f'{m}:E', 'BOX:')
+    # 電圧母線を共有する計器群(電圧号線が一致=3-21083の*1跨ぎ)はデイジー接続を追加(手本裏取り)。
+    # 手本: ﾏﾙﾁ-12:P→ﾏﾙﾁ-11:V1 / 12:V2→11:V2 / 12:N→11:VN(上位番号→下位番号へ)。
+    # 計器ごとに電圧号線が固有な盤(5-29026=W11系/W12系)は群サイズ1=非発火＝回帰ゼロ。
+    groups = {}
+    for n, vk in volt_key.items():
+        groups.setdefault(vk, []).append(n)
+    for vk, ns in groups.items():
+        if len(ns) < 2:
+            continue
+        g = sorted(ns, key=lambda s: int(s))
+        for i in range(len(g) - 1):
+            lo, hi = g[i], g[i + 1]
+            _w(f'ﾏﾙﾁ-{hi}:P', f'ﾏﾙﾁ-{lo}:V1')
+            _w(f'ﾏﾙﾁ-{hi}:V2', f'ﾏﾙﾁ-{lo}:V2')
+            _w(f'ﾏﾙﾁ-{hi}:N', f'ﾏﾙﾁ-{lo}:VN')
     return wires
 
 
