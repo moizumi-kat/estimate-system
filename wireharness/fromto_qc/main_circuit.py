@@ -528,6 +528,37 @@ def _spd_sep_earth(draw_paths):
     return wires
 
 
+def _spd_sep_incoming(draw_paths):
+    """受変電計量盤: 引込端子台 → SPD免雷分離器(入力) の相配線を生成(手本裏取り2026-11)。
+    手本: TB-<n>:<n>R → SPD-分離器<n>:1上 / <n>N→:2上 / <n>T→:3上 (5.5sq)。
+    免雷分離器=TYPE先頭'LT-TS'のみ対象(5-29026のTYPE'LD-B'=警報接点型は別物＝非対象＝回帰回避)。
+    相端子(R,N,T)を持つ引込TB-<n>と番号一致で揃う面のみ発火。他盤は空＝回帰ゼロ。"""
+    seps, tbs = set(), set()
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            dev = a.get('DEVICE', ''); dv1 = str(a.get('DEVICE1', '')).strip()
+            typ = a.get('TYPE', '').upper()
+            if re.fullmatch(r'\d+', dv1) and ('分離器' in dev or dev.upper() == 'SPD') \
+                    and typ.startswith('LT-TS'):
+                seps.add(dv1)
+            if re.fullmatch(r'TB\d*', dev.upper()) and re.fullmatch(r'\d+', dv1) \
+                    and re.search(r'R.?N.?T|R.?S.?T', a.get('TERMINAL', '')):
+                tbs.add(dv1)
+    wires = []
+    for n in sorted(seps & tbs):
+        for ph, pos in (('R', '1'), ('N', '2'), ('T', '3')):
+            wires.append({'from': f'TB-{n}:{n}{ph}', 'to': f'SPD-分離器{n}:{pos}上',
+                          'circuit': '', 'phase': '', 'confidence': '要確認'})
+    return wires
+
+
 def _monitoring_relays(draw_paths):
     """分電盤の遠方監視結線: 監視回路の分岐遮断器 → R-RY リレーを『生成』する。
 
@@ -999,6 +1030,8 @@ def generate(draw_paths, load_factor=None, seiban=None):
     wires.extend(_watt_hour_meter(draw_paths))
     # SPD免雷分離器の接地尾線→SPD用…ETバー。該当盤のみ発火=回帰ゼロ。
     wires.extend(_spd_sep_earth(draw_paths))
+    # 引込TB→SPD免雷分離器(入力相)。LT-TS型の分離器＋相端子付き引込TBが揃う盤のみ発火=回帰ゼロ。
+    wires.extend(_spd_sep_incoming(draw_paths))
     # 計測ユニット(EMU4)の計測ハーネス。計測ユニットを持つ盤でのみ発火(他盤は空=回帰ゼロ)。
     # 内部配置図(G系列)を自前で読むため phase_map ゲートと独立(5-12073=計測付き分電盤に対応)。
     wires.extend(_energy_metering(draw_paths))
