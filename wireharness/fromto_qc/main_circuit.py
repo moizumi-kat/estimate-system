@@ -126,6 +126,7 @@ def _alarm_circuit(draw_paths):
     has_alarm_fuse = False
     devs = set()
     wl_nos = set()
+    main_leak = {}       # 主幹遮断器番号 → 漏電付きか(True=漏電/ELCB・False=平MCCB)。警報トポロジ判別に使う。
     for p in (draw_paths or []):
         try:
             doc = ezdxf.readfile(p)
@@ -151,6 +152,12 @@ def _alarm_circuit(draw_paths):
                 devs.add(dev.upper())
             if dev.upper() == 'WL' and re.fullmatch(r'\d+', dv1):
                 wl_nos.add(dv1)       # 警報灯 WL-<n> = 警報系統の番号(複数系統の盤に対応)
+            # 主幹遮断器(MCCB/ELCB・番号)の漏電有無。漏電=ELCB or 感度電流(mA) or 漏電型式(ZCV/ZAS/ZAG等)。
+            if dev.upper() in ('MCCB', 'ELCB') and re.fullmatch(r'\d+', dv1) and a.get('SPEC1'):
+                spec2 = a.get('SPEC2', ''); typ = a.get('TYPE', '').upper()
+                leak = (dev.upper() == 'ELCB' or 'mA' in spec2 or 'MA' in spec2.upper()
+                        or any(k in typ for k in ('ZCV', 'ZAS', 'ZAG', 'ZC', '漏電')))
+                main_leak[dv1] = leak
             if dev.upper() == 'F':   # 警報電源ヒューズ=近傍に'警報'テキスト
                 try:
                     bx, by = float(ins.dxf.insert[0]), float(ins.dxf.insert[1])
@@ -167,9 +174,16 @@ def _alarm_circuit(draw_paths):
     def _v(a, b):
         wires.append({'from': a, 'to': b, 'circuit': '', 'phase': '', 'confidence': '要確認'})
     for n in nos:
-        _v('TB-1:1R', f'F-AL{n}:1')          # 引込R→警報ヒューズ
-        _v(f'F-AL{n}:1', f'F-WL{n}:1')       # 警報ヒューズ→警報灯ヒューズ
-        _v(f'F-AL{n}:2', f'MCCB-{n}:EALc')   # 警報ヒューズ→主幹警報接点(b)
+        # 警報トポロジは主幹種別で分岐(3製番裏取り・2026-11-27茂泉様確認)。既定(漏電 or 不明)=従来テンプレ=回帰ゼロ。
+        # 主幹が平MCCB(漏電なし)のときだけ 3-21083型: MCCB-n:1→F-WLn:1→MCCB-n:ALc→WL-n(警報灯直結・ALc)。
+        if main_leak.get(n) is False:
+            _v(f'MCCB-{n}:1', f'F-WL{n}:1')      # 主幹1次→警報灯ヒューズ
+            _v(f'F-WL{n}:2', f'MCCB-{n}:ALc')    # 警報灯ヒューズ→主幹警報接点(ALc=平MCCB)
+            _v(f'MCCB-{n}:ALc', f'WL-{n}:')      # 主幹警報接点→警報灯(直結)
+        else:
+            _v('TB-1:1R', f'F-AL{n}:1')          # 引込R→警報ヒューズ
+            _v(f'F-AL{n}:1', f'F-WL{n}:1')       # 警報ヒューズ→警報灯ヒューズ
+            _v(f'F-AL{n}:2', f'MCCB-{n}:EALc')   # 警報ヒューズ→主幹警報接点(b・漏電=EALc)
         _v('TB-1:1S', f'2BZ{n}:2')           # 引込S→ブザータイマ(2BZ<n>)
         if 'OL' in devs or 'OL-AL' in devs:
             _v(f'BZ-{n}:', f'OL-AL{n}:-')     # ブザー↔警報灯(渡り)
