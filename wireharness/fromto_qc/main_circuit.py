@@ -740,37 +740,56 @@ def _hv_monitoring(draw_paths):
                     dev_of.setdefault(key, dev)
     if not relays or not labels:
         return []
-    lab_count = collections.Counter(l for l, _, _ in labels)
-    wires = []
-    for (lab, lx, ly) in labels:
-        if lab_count[lab] != 1:
-            continue                            # 同一ラベルが複数位置=複数リレー跨ぎ/曖昧→安全側で生成せず(△)
-        dev = dev_of.get(lab)
-        if not dev:
-            continue                            # 主回路に実機器が無いラベルは起こさない(推測ゼロ)
-        # 入力端子行(本体Y-ROW_OFF)が label_y に合うリレーで最寄りX。型(RRY/RTR)も確定する。
+
+    def _assoc(lx, ly):
+        # 入力端子行(本体Y-ROW_OFF)が label_y に合うリレーで最寄りX。型(RRY/RTR)も確定。
         cand = [(abs(rx - lx), kind, rid, pole)
                 for (kind, rid, pole, rx, ry) in relays if abs(ly - (ry - ROW_OFF)) < 40]
         if not cand:
-            continue
+            return None
         _, kind, rid, pole = min(cand)
-        bsym = f'{dev}-{lab}'
-        if kind == 'RTR':
-            # 手本: 遮断器:2→R-TR:2 / :4→R-TR:1
-            wires.append({'from': f'{bsym}:2', 'to': f'R-TR-{rid}:2',
-                          'circuit': '', 'phase': '', 'confidence': '要確認'})
-            wires.append({'from': f'{bsym}:4', 'to': f'R-TR-{rid}:1',
-                          'circuit': '', 'phase': '', 'confidence': '要確認'})
+        return (kind, rid, pole)
+
+    # ラベルごとに全位置の対応を集める。
+    lab_pos = collections.defaultdict(list)
+    for (lab, lx, ly) in labels:
+        lab_pos[lab].append((_assoc(lx, ly)))
+    wires = []
+    for lab, assocs in lab_pos.items():
+        dev = dev_of.get(lab)
+        if not dev:
+            continue                            # 主回路に実機器が無いラベルは起こさない(推測ゼロ)
+        good = [a for a in assocs if a]
+        if not good:
+            continue
+        if len(good) == 1:
+            use = good                          # 単一=そのまま採用
         else:
-            # R-RY: 2P(両切)=2→:1/4→:3(交差)、1P(片切)は L接頭=2→:3/4→:1(素)・C接頭=2→:1/4→:3(交差)。
-            if pole.startswith('2P') or lab[:1] == 'C':
-                t2, t4 = '1', '3'
+            # 複数位置: 全てが相異なる R-RY リレー(R-TR無し・重複無し)のときだけ採用(例 LE51=複数2P監視)。
+            # R-TR絡み/リレー重複を含む曖昧(例 CE53=手本と食い違い)は安全側で生成せず(△)。
+            rids = [rid for (kind, rid, pole) in good]
+            if all(k == 'RRY' for (k, _, _) in good) and len(set(rids)) == len(rids):
+                use = good
             else:
-                t2, t4 = '3', '1'
-            wires.append({'from': f'{bsym}:2', 'to': f'R-RY-{rid}:{t2}',
-                          'circuit': '', 'phase': '', 'confidence': '要確認'})
-            wires.append({'from': f'{bsym}:4', 'to': f'R-RY-{rid}:{t4}',
-                          'circuit': '', 'phase': '', 'confidence': '要確認'})
+                continue
+        bsym = f'{dev}-{lab}'
+        for (kind, rid, pole) in use:
+            if kind == 'RTR':
+                # 手本: 遮断器:2→R-TR:2 / :4→R-TR:1
+                wires.append({'from': f'{bsym}:2', 'to': f'R-TR-{rid}:2',
+                              'circuit': '', 'phase': '', 'confidence': '要確認'})
+                wires.append({'from': f'{bsym}:4', 'to': f'R-TR-{rid}:1',
+                              'circuit': '', 'phase': '', 'confidence': '要確認'})
+            else:
+                # R-RY: 2P(両切)=2→:1/4→:3(交差)、1P(片切)は L接頭=2→:3/4→:1(素)・C接頭=2→:1/4→:3(交差)。
+                if pole.startswith('2P') or lab[:1] == 'C':
+                    t2, t4 = '1', '3'
+                else:
+                    t2, t4 = '3', '1'
+                wires.append({'from': f'{bsym}:2', 'to': f'R-RY-{rid}:{t2}',
+                              'circuit': '', 'phase': '', 'confidence': '要確認'})
+                wires.append({'from': f'{bsym}:4', 'to': f'R-RY-{rid}:{t4}',
+                              'circuit': '', 'phase': '', 'confidence': '要確認'})
     return wires
 
 
