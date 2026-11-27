@@ -794,6 +794,32 @@ def _hv_monitoring(draw_paths):
     return wires
 
 
+def _spu_wiring(draw_paths):
+    """信号線雷サージ防護ユニット SPU(WR3925)の結線を生成(5-26012手本で裏取り2026-11-27)。
+    SPUは監視伝送の信号線に入るサージ防護器で IN(1,3)←引込TB / OUT(2,4)→T/U-0 / ED→接地箱。
+    手本: T/U-0:A→SPU:2 / T/U-0:B→SPU:4 / SPU:E→BOX。本番はSPU・T/U-0をトレースするが相互接続と接地が
+    欠落するため補う。SPUとT/U-0の両方がある盤のみ発火=他盤は空=回帰ゼロ。(SPU:1/3→引込TBはTB畳みで一致済)。"""
+    has_spu = has_tu0 = False
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            dev = a.get('DEVICE', '')
+            if dev == 'SPU' or a.get('TYPE', '').upper().startswith('WR3925'):
+                has_spu = True
+            if dev == 'T/U' and str(a.get('DEVICE1', '')).strip() == '0':
+                has_tu0 = True
+    if not (has_spu and has_tu0):
+        return []
+    return [{'from': f, 'to': t, 'circuit': '', 'phase': '', 'confidence': '要確認'}
+            for (f, t) in (('T/U-0:A', 'SPU:2'), ('T/U-0:B', 'SPU:4'), ('SPU:E', 'BOX:'))]
+
+
 def _energy_metering(draw_paths):
     """計測ユニット(三菱EMU4)の計測ハーネスを生成する(内部配置図G系列由来・手本/図面で裏取り済)。
 
@@ -1175,6 +1201,8 @@ def generate(draw_paths, load_factor=None, seiban=None):
     wires.extend(_monitoring_relays(draw_paths))
     # 受変電の遠方監視結線(監視遮断器→R-RY)。X_RY_NO が英数字ラベル(LG05等)の盤のみ発火=分電盤と排他=回帰ゼロ。
     wires.extend(_hv_monitoring(draw_paths))
+    # 信号線雷サージ防護ユニット SPU(WR3925)→T/U-0・接地。SPU+T/U-0のある盤のみ発火=回帰ゼロ。
+    wires.extend(_spu_wiring(draw_paths))
     # 警報回路(受変電の警報)。警報電源ヒューズ(F近傍に'警報'テキスト)を持つ盤のみ自己ゲートで発火。
     # 3-21083等=警報有だが単線図の相検出が空でpm空となる計量盤でも発火させるためゲート外へ(WHMと同様)。
     # 分電盤(4-29033等)は警報ヒューズ無しで非発火＝回帰ゼロ(実測で確認)。
