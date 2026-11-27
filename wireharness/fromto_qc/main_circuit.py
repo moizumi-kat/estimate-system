@@ -580,7 +580,7 @@ def _spd_sep_incoming(draw_paths):
     手本: TB-<n>:<n>R → SPD-分離器<n>:1上 / <n>N→:2上 / <n>T→:3上 (5.5sq)。
     免雷分離器=TYPE先頭'LT-TS'のみ対象(5-29026のTYPE'LD-B'=警報接点型は別物＝非対象＝回帰回避)。
     相端子(R,N,T)を持つ引込TB-<n>と番号一致で揃う面のみ発火。他盤は空＝回帰ゼロ。"""
-    seps, tbs = set(), set()
+    seps, tbs, mccbs = set(), set(), set()
     for p in (draw_paths or []):
         try:
             doc = ezdxf.readfile(p)
@@ -598,11 +598,20 @@ def _spd_sep_incoming(draw_paths):
             if re.fullmatch(r'TB\d*', dev.upper()) and re.fullmatch(r'\d+', dv1) \
                     and re.search(r'R.?N.?T|R.?S.?T', a.get('TERMINAL', '')):
                 tbs.add(dv1)
+            # 系統番号の主幹遮断器(MCCB-<n>)。引込TBから主幹へも給電線が行く(5.5sq=手本対象)。
+            if dev.upper() in ('MCCB', 'ELCB') and re.fullmatch(r'\d+', dv1) and a.get('SPEC1'):
+                mccbs.add(dv1)
     wires = []
     for n in sorted(seps & tbs):
         for ph, pos in (('R', '1'), ('N', '2'), ('T', '3')):
             wires.append({'from': f'TB-{n}:{n}{ph}', 'to': f'SPD-分離器{n}:{pos}上',
                           'circuit': '', 'phase': '', 'confidence': '要確認'})
+        # 同系統に主幹遮断器があれば引込TB→主幹(線側1/3/5=R/N/T)も生成(手本裏取り: 3-21083系統2
+        # =TB-2:2R→MCCB-2:1 等。免雷分離器=5.5sq引込の系統のみ=太物主幹の系統1は非該当で自然に除外)。
+        if n in mccbs:
+            for ph, pole in (('R', '1'), ('N', '3'), ('T', '5')):
+                wires.append({'from': f'TB-{n}:{n}{ph}', 'to': f'MCCB-{n}:{pole}',
+                              'circuit': '', 'phase': '', 'confidence': '要確認'})
     return wires
 
 
