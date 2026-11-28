@@ -1398,13 +1398,22 @@ def generate(draw_paths, load_factor=None, seiban=None):
     # pm(受変電/制御盤)で、pm未検出かつ電動機(接触器)でない給電MCCBを補う(手本一致)。g=回路先頭桁。
     if pm:
         for circ, bsym in sorted(brk.items(), key=lambda kv: (len(kv[0]), kv[0])):
-            if circ in pm or circ in contactors or not re.fullmatch(r'\d{3}', circ):
+            if circ in pm or circ in contactors:
                 continue
             if not bsym.upper().startswith('MCCB'):
                 continue
-            g = circ[0]
-            wires.append({'from': f'TB-{g}:{g}R', 'to': f'{bsym}:1', 'circuit': circ, 'phase': '', 'confidence': '要確認'})
-            wires.append({'from': f'TB-{g}:{g}S', 'to': f'{bsym}:3', 'circuit': circ, 'phase': '', 'confidence': '要確認'})
+            if re.fullmatch(r'\d{3}', circ):
+                g = circ[0]
+                wires.append({'from': f'TB-{g}:{g}R', 'to': f'{bsym}:1', 'circuit': circ, 'phase': '', 'confidence': '要確認'})
+                wires.append({'from': f'TB-{g}:{g}S', 'to': f'{bsym}:3', 'circuit': circ, 'phase': '', 'confidence': '要確認'})
+                if _EXP_LUG_INCOMING:
+                    # 制御盤の動力配電: サブ主幹入力はLUG配電バスからも給電(手本 LUG→サブ主幹)。
+                    for t in ('1', '3', '5'):
+                        wires.append({'from': 'LUG:', 'to': f'{bsym}:{t}', 'circuit': circ, 'phase': '', 'confidence': '要確認'})
+            elif _EXP_LUG_INCOMING and re.fullmatch(r'\d{1,2}', circ):
+                # 制御盤の動力配電: 主幹(短番号・pm外)の出力→LUG配電バス(手本 主幹出力→LUG)。
+                for t in ('2', '4', '6'):
+                    wires.append({'from': f'{bsym}:{t}', 'to': 'LUG:', 'circuit': circ, 'phase': '', 'confidence': '要確認'})
     # 主制御電源(CP-<群>=1桁番号)の引込タップ: 引込相→CP-<群>:1/3/5(手本 TB-1:1R→CP-1:1 等)。[b-2]
     # per回路のCP(CP-102等=3桁)は遮断器出力から給電され既にトレーサが捕捉済みのため対象外。
     for g, dai in sorted(incoming.items()):
