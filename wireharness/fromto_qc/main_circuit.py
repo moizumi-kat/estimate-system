@@ -871,6 +871,60 @@ def _spu_wiring(draw_paths):
             for (f, t) in (('T/U-0:A', 'SPU:2'), ('T/U-0:B', 'SPU:4'), ('SPU:E', 'BOX:'))]
 
 
+def _remote_tr_alx(draw_paths):
+    """受変電のリモコンTR(R-TR)・警報リレー(ALX)の電源/監視結線を生成(3-21083手本で裏取り2026-11-28)。
+    手本: TB-1→R-TR:ｼﾛ/ｱｵ(R-TR電源) / MCCB-<253>:2→R-TR:2・:4→R-TR:1(監視対象→R-TR・X_RY_NO数字で対応) /
+          TB-1→ALX-<n>:5・:9(警報リレー電源)。TB台番号は _metering_tb(3-21083=TB-1)。
+    R-RYのある盤は _monitoring_relays がR-TR監視を出すため、R-TR監視はR-RYの無い盤のみ生成(二重生成回避=回帰ゼロ)。
+    R-TR/ALXの無い盤は空=回帰ゼロ。"""
+    has_rtr = has_rry = False
+    alx = set(); labels = []; dev_of = {}
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            dev = a.get('DEVICE', ''); dv1 = str(a.get('DEVICE1', '')).strip()
+            if dev == 'R-TR':
+                has_rtr = True
+            if dev == 'R-RY' and re.fullmatch(r'R\d+', dv1):
+                has_rry = True
+            if dev == 'ALX' and re.fullmatch(r'\d+', dv1):
+                alx.add(dv1)
+            if ins.dxf.name == 'X_RY_NO' and re.fullmatch(r'\d+', a.get('NO', '')):
+                labels.append(a['NO'])
+            if dev in ('MCCB', 'ELCB') and a.get('SPEC1'):
+                key = re.sub(r'[○\s]', '', dv1)
+                if re.fullmatch(r'\d+', key):
+                    dev_of.setdefault(key, dev)
+    if not (has_rtr or alx):
+        return []
+    tb = _metering_tb(draw_paths)
+    wires = []
+
+    def _v(f, t):
+        wires.append({'from': f, 'to': t, 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    if has_rtr:
+        _v(f'{tb}:', 'R-TR:ｼﾛ')
+        _v(f'{tb}:', 'R-TR:ｱｵ')
+        # 監視対象(X_RY_NO数字)→R-TR。R-RYのある盤は _monitoring_relays が担当=ここは非発火(二重回避)。
+        if not has_rry:
+            for no in sorted(set(labels)):
+                dev = dev_of.get(no)
+                if dev:
+                    _v(f'{dev}-{no}:2', 'R-TR:2')
+                    _v(f'{dev}-{no}:4', 'R-TR:1')
+    if alx:
+        n = min(alx, key=int)
+        _v(f'{tb}:', f'ALX-{n}:5')
+        _v(f'{tb}:', f'ALX-{n}:9')
+    return wires
+
+
 def _energy_metering(draw_paths):
     """計測ユニット(三菱EMU4)の計測ハーネスを生成する(内部配置図G系列由来・手本/図面で裏取り済)。
 
@@ -1254,6 +1308,8 @@ def generate(draw_paths, load_factor=None, seiban=None):
     wires.extend(_hv_monitoring(draw_paths))
     # 信号線雷サージ防護ユニット SPU(WR3925)→T/U-0・接地。SPU+T/U-0のある盤のみ発火=回帰ゼロ。
     wires.extend(_spu_wiring(draw_paths))
+    # リモコンTR(R-TR)・警報リレー(ALX)の電源/監視。R-TR/ALXのある盤のみ発火=回帰ゼロ。
+    wires.extend(_remote_tr_alx(draw_paths))
     # 警報回路(受変電の警報)。警報電源ヒューズ(F近傍に'警報'テキスト)を持つ盤のみ自己ゲートで発火。
     # 3-21083等=警報有だが単線図の相検出が空でpm空となる計量盤でも発火させるためゲート外へ(WHMと同様)。
     # 分電盤(4-29033等)は警報ヒューズ無しで非発火＝回帰ゼロ(実測で確認)。
