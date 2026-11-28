@@ -573,6 +573,13 @@ def _spd_sep_earth(draw_paths):
     for n in sorted(seps):
         wires.append({'from': f'SPD-分離器{n}:E 下', 'to': f'{node}:',
                       'circuit': '', 'phase': '', 'confidence': '要確認'})
+    # MCCB側ETバー(SPD-ET-(MCCB))は主幹MCCB・接地箱へも接地される(5-26012手本)。
+    # 手本: SPD-ET-(MCCB)→BOX / MCCB→BOX(SPD-ET-(MCCB)→MCCBは別所で生成済)。node='SPD-ET'(3-21083等)は非該当=回帰ゼロ。
+    if node == 'SPD-ET-(MCCB)':
+        wires.append({'from': f'{node}:', 'to': 'BOX:',
+                      'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+        wires.append({'from': 'MCCB:', 'to': 'BOX:',
+                      'circuit': '', 'phase': 'E', 'confidence': '要確認'})
     return wires
 
 
@@ -623,6 +630,9 @@ def _spd_sep_incoming(draw_paths):
         for pos, bk, pole in (('1', 'A', '1'), ('2', 'A', '3'), ('3', 'B', '3')):
             wires.append({'from': f'SPD-分離器{n}:{pos}上', 'to': f'MCCB-{bk}:{pole}',
                           'circuit': '', 'phase': '', 'confidence': '要確認'})
+        # 中性線の渡り: MCCB-A:3(N) → MCCB-B:1(手本)。A/Bで中性線を共有する1φ3W。
+        wires.append({'from': 'MCCB-A:3', 'to': 'MCCB-B:1',
+                      'circuit': '', 'phase': '', 'confidence': '要確認'})
     return wires
 
 
