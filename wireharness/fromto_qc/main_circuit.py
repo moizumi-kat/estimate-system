@@ -21,10 +21,39 @@ _OUT = {'U': '2', 'V': '4', 'W': '6'}
 _PH_LETTER = {'U': 'R', 'V': 'S', 'W': 'T'}   # 引込相: U←R, V←S, W←T
 
 
+def _metering_tb(draw_paths):
+    """計量端子台の台番号を内部配置図から読む(2026-11-28 茂泉様とTB台番号を裏取り)。
+    端子台は盤で採番規約が違う: 3-21083=台「TB1」の中に端子101/102(TB101という台は無い)→計量台番号=TB-1。
+    5-29026=台「TB101」が実在(TB-101/TB104…と台ごと分かれる)→計量台番号=TB-101。
+    ∴内部配置図に台『101』が実在すれば 'TB-101'、無ければ(台1の端子101なら) 'TB-1' を返す。読めない盤は既定 'TB-101'(従来不変)。"""
+    seen_tb = False
+    for p in (draw_paths or []):
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            dev = a.get('DEVICE', '').upper(); dv1 = str(a.get('DEVICE1', '')).strip()
+            if dev.startswith('TB'):
+                seen_tb = True
+            if (dev == 'TB' and dv1 == '101') or dev == 'TB101':
+                return 'TB-101'          # 台101が実在(5-29026)
+            if dev == 'TB1' or (dev == 'TB' and dv1 == '1'):
+                # 台1が在り、台101が無い(=端子101は台1の中)→計量は台1(3-21083)。
+                # ただし他に台101が在れば上で既にreturn済み。ここでは台1確定のみ記録。
+                seen_tb = True
+    # 台1が在り台101が無い盤=TB-1。TB台が全く読めない盤は従来どおりTB-101(回帰ゼロ)。
+    return 'TB-1' if seen_tb else 'TB-101'
+
+
 def _watt_hour_meter(draw_paths):
-    """電力量計WHM(受変電の計量)の電流コイル結線を生成: 計量端子台TB-101 → WHM-<n>:CA下/CB下。
+    """電力量計WHM(受変電の計量)の電流コイル結線を生成: 計量端子台 → WHM-<n>:CA下/CB下。
+    台番号は内部配置図から読む(_metering_tb: 3-21083=TB-1 / 5-29026=TB-101)。
     WHMは内部配置の単線図(NOT_EXPORTレイヤ)に在りトレース対象外のため手本どおり生成で補う。
-    WHMの無い盤は空＝回帰ゼロ(WHMは現状4-21088のみ)。"""
+    WHMの無い盤は空＝回帰ゼロ。"""
     whms = set()
     for p in (draw_paths or []):
         try:
@@ -38,9 +67,10 @@ def _watt_hour_meter(draw_paths):
             if a.get('DEVICE', '').upper() == 'WHM' and re.fullmatch(r'\d+', str(a.get('DEVICE1', ''))):
                 whms.add(str(a['DEVICE1']))
     wires = []
+    tb = _metering_tb(draw_paths)
     for n in sorted(whms, key=lambda s: int(s)):
-        wires.append({'from': 'TB-101:', 'to': f'WHM-{n}:CA 下', 'circuit': '', 'phase': '', 'confidence': '要確認'})
-        wires.append({'from': 'TB-101:', 'to': f'WHM-{n}:CB 下', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+        wires.append({'from': f'{tb}:', 'to': f'WHM-{n}:CA 下', 'circuit': '', 'phase': '', 'confidence': '要確認'})
+        wires.append({'from': f'{tb}:', 'to': f'WHM-{n}:CB 下', 'circuit': '', 'phase': '', 'confidence': '要確認'})
     return wires
 
 
@@ -86,6 +116,7 @@ def _multi_meter(draw_paths):
     wires = []
     def _w(f, t):
         wires.append({'from': f, 'to': t, 'circuit': '', 'phase': '', 'confidence': '要確認'})
+    tb = _metering_tb(draw_paths)             # 計量端子台の台番号を内部配置図から(3-21083=TB-1/5-29026=TB-101)
     for n in sorted(meters, key=lambda s: int(s)):
         m = f'ﾏﾙﾁ-{n}'
         _w(f'CT-{n}R:K', f'{m}:1S')
@@ -98,8 +129,8 @@ def _multi_meter(draw_paths):
         _w(f'LUG-TB{n}:1R 上', f'F-MM{n}:1')
         _w(f'LUG-TB{n}:1T 上', f'F-MM{n}:1')
         _w(f'{m}:P', f'LUG-TB{n}:1S 上')
-        _w(f'{m}:PLS+', 'TB-101:')
-        _w(f'{m}:PLS-', 'TB-101:')
+        _w(f'{m}:PLS+', f'{tb}:')
+        _w(f'{m}:PLS-', f'{tb}:')
         _w(f'{m}:E', 'BOX:')
     # 電圧母線を共有する計器群(電圧号線が一致=3-21083の*1跨ぎ)はデイジー接続を追加(手本裏取り)。
     # 手本: ﾏﾙﾁ-12:P→ﾏﾙﾁ-11:V1 / 12:V2→11:V2 / 12:N→11:VN(上位番号→下位番号へ)。
