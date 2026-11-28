@@ -996,7 +996,9 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True, nam
         else:
             return False
         tu = _base_type(u)
-        return any(tu in _net_types[i] for i in rnets)
+        # rnets には ep_nets が返す未解決ロケーターの番号無しセンチネル ('LET',文字,nonce) が混じる
+        # 場合がある(タプル)。これは一致しない一意値=救済対象外のため整数ネット番号のみ走査する。
+        return any(tu in _net_types[i] for i in rnets if isinstance(i, int))
 
     tot = hit = present = 0
     for fi, f in enumerate(sorted(glob.glob(os.path.join(seiban_dir, 'FromToデータ_*.txt'))), 1):
