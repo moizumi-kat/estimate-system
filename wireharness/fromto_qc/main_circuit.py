@@ -582,6 +582,7 @@ def _spd_sep_incoming(draw_paths):
     免雷分離器=TYPE先頭'LT-TS'のみ対象(5-29026のTYPE'LD-B'=警報接点型は別物＝非対象＝回帰回避)。
     相端子(R,N,T)を持つ引込TB-<n>と番号一致で揃う面のみ発火。他盤は空＝回帰ゼロ。"""
     seps, tbs, mccbs = set(), set(), set()
+    mccb_ab = set()          # 文字主幹 MCCB-A/MCCB-B(1φ3W分割=SPD分離器出力から給電)
     for p in (draw_paths or []):
         try:
             doc = ezdxf.readfile(p)
@@ -602,6 +603,8 @@ def _spd_sep_incoming(draw_paths):
             # 系統番号の主幹遮断器(MCCB-<n>)。引込TBから主幹へも給電線が行く(5.5sq=手本対象)。
             if dev.upper() in ('MCCB', 'ELCB') and re.fullmatch(r'\d+', dv1) and a.get('SPEC1'):
                 mccbs.add(dv1)
+            if dev.upper() in ('MCCB', 'ELCB') and dv1 in ('A', 'B') and a.get('SPEC1'):
+                mccb_ab.add(dv1)
     wires = []
     for n in sorted(seps & tbs):
         for ph, pos in (('R', '1'), ('N', '2'), ('T', '3')):
@@ -613,6 +616,13 @@ def _spd_sep_incoming(draw_paths):
             for ph, pole in (('R', '1'), ('N', '3'), ('T', '5')):
                 wires.append({'from': f'TB-{n}:{n}{ph}', 'to': f'MCCB-{n}:{pole}',
                               'circuit': '', 'phase': '', 'confidence': '要確認'})
+    # SPD分離器出力→1φ3W主幹 MCCB-A/MCCB-B(5-26012手本裏取り)。A/B両方があれば最小番号の分離器から給電。
+    # 手本: 分離器:1上→A:1 / :2上→A:3 / :3上→B:3(A:3=中性線→B:1共有)。MCCB-A/Bの無い盤は非発火=回帰ゼロ。
+    if 'A' in mccb_ab and 'B' in mccb_ab and (seps & tbs):
+        n = min(seps & tbs, key=int)
+        for pos, bk, pole in (('1', 'A', '1'), ('2', 'A', '3'), ('3', 'B', '3')):
+            wires.append({'from': f'SPD-分離器{n}:{pos}上', 'to': f'MCCB-{bk}:{pole}',
+                          'circuit': '', 'phase': '', 'confidence': '要確認'})
     return wires
 
 
