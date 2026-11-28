@@ -579,12 +579,14 @@ def _spd_sep_earth(draw_paths):
     両方揃う盤のみ発火=他盤は空=回帰ゼロ。"""
     seps = set()
     node = None
+    has_ett = False
     for p in (draw_paths or []):
         try:
             doc = ezdxf.readfile(p)
         except Exception:
             continue
-        for ins in doc.modelspace().query('INSERT'):
+        msp = doc.modelspace()
+        for ins in msp.query('INSERT'):
             if not ins.attribs:
                 continue
             a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
@@ -598,6 +600,11 @@ def _spd_sep_earth(draw_paths):
                 m = re.fullmatch(r'SPD用(\(.+\))?', t1)
                 if m:
                     node = ('SPD-ET-' + m.group(1)) if m.group(1) else 'SPD-ET'
+        for e in msp:                              # ETバーM5x20の上端端子 'ETT' (3-21083のみ)
+            if e.dxftype() in ('TEXT', 'MTEXT'):
+                tx = ((e.dxf.text if e.dxftype() == 'TEXT' else e.text) or '').strip()
+                if re.fullmatch(r'ETT', tx):
+                    has_ett = True
     if not (seps and node):
         return []
     wires = []
@@ -611,6 +618,13 @@ def _spd_sep_earth(draw_paths):
                       'circuit': '', 'phase': 'E', 'confidence': '要確認'})
         wires.append({'from': 'MCCB:', 'to': 'BOX:',
                       'circuit': '', 'phase': 'E', 'confidence': '要確認'})
+    # SPD用ETバー(SPD-ET)とETバーM5x20(ET)の接地母線(3-21083手本・茂泉様が図面で対応確認)。
+    # 対応: SPD=SPD用ETバー(=node'SPD-ET') / ET=ETバーM5x20 / ETT=ETバー上端端子 / 上部・下部=バー上下段。
+    # ETバー(ETT)のある盤のみ発火(=3-21083のみ・実測)=回帰ゼロ。中欠用は図面根拠が無くLUG行きのため非生成(△)。
+    if node == 'SPD-ET' and has_ett:
+        for f, t in (('SPD-ET', 'ET'), ('SPD-ET', '下部'), ('上部', '下部'), ('ETT', 'ET')):
+            wires.append({'from': f'{f}:', 'to': f'{t}:',
+                          'circuit': '', 'phase': 'E', 'confidence': '要確認'})
     return wires
 
 
