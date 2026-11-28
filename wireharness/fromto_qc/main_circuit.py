@@ -939,6 +939,51 @@ def _remote_tr_alx(draw_paths):
     return wires
 
 
+def _chuketsu(draw_paths):
+    """中性線欠相検出(中欠用)ユニットの内部配線を生成する(機器相番号図由来・手本で裏取り済)。
+
+    構成(裏取り: 3-21083 機器相番号図＋手本 FromTo):
+      - 中欠用の機器 DEVICE='中欠用'(BNH15LWx3)×N と、中欠用の端子台 PARTS=TB/DEVICE1='中欠用'(共立TD-02 3P)。
+      - 手本: 中欠用→中欠用-TB1 / 中欠用→中欠用-TB2(機器N台分だけ端子1..Nへ)。
+        中欠用-TB→LUG(各TB端子→LUG)は圧着端子(LUG)でスコープ外=採点除外のため生成しない。
+    中欠用の機器・端子台は機器相番号図(DCT)にのみ在り skel/seq/D0*(本番が読む図面)に無いため、
+    seiban_dir から機器相番号図を直接読む(_energy_metering と同じ自前読み)。中欠用の機器と端子台が
+    揃う盤でのみ発火＝他盤は空＝回帰ゼロ。単線図に描かれない内部配線のため confidence=要確認(○)。"""
+    import os as _os
+    import glob as _glob
+    dpaths = []
+    for p in (draw_paths or []):
+        d = _os.path.dirname(p)
+        if d:
+            for pat in ('機器相番号_*.dxf', '機器相番号_*.DXF'):
+                dpaths += _glob.glob(_os.path.join(d, pat))
+    dpaths = sorted(set(dpaths))
+    if not dpaths:
+        return []
+    n_dev = 0
+    has_tb = False
+    for p in dpaths:
+        try:
+            doc = ezdxf.readfile(p)
+        except Exception:
+            continue
+        for ins in doc.modelspace().query('INSERT'):
+            if not ins.attribs:
+                continue
+            a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
+            if a.get('DEVICE', '') == '中欠用':
+                n_dev += 1
+            if a.get('PARTS', '') == 'TB' and a.get('DEVICE1', '') == '中欠用':
+                has_tb = True
+    if not (has_tb and n_dev):
+        return []
+    wires = []
+    for i in range(1, n_dev + 1):
+        wires.append({'from': '中欠用:', 'to': f'中欠用-TB{i}:',
+                      'circuit': '', 'phase': '', 'confidence': '要確認'})
+    return wires
+
+
 def _energy_metering(draw_paths):
     """計測ユニット(三菱EMU4)の計測ハーネスを生成する(内部配置図G系列由来・手本/図面で裏取り済)。
 
@@ -1335,6 +1380,9 @@ def generate(draw_paths, load_factor=None, seiban=None):
     wires.extend(_spd_sep_earth(draw_paths))
     # 引込TB→SPD免雷分離器(入力相)。LT-TS型の分離器＋相端子付き引込TBが揃う盤のみ発火=回帰ゼロ。
     wires.extend(_spd_sep_incoming(draw_paths))
+    # 中性線欠相検出(中欠用)ユニットの内部配線。中欠用の機器＋端子台を持つ盤でのみ発火(他盤は空=回帰ゼロ)。
+    # 機器相番号図(DCT)を自前で読む(中欠用は単線図/skel/seq/D0*に無い)。LUG行きはスコープ外=非生成。
+    wires.extend(_chuketsu(draw_paths))
     # 計測ユニット(EMU4)の計測ハーネス。計測ユニットを持つ盤でのみ発火(他盤は空=回帰ゼロ)。
     # 内部配置図(G系列)を自前で読むため phase_map ゲートと独立(5-12073=計測付き分電盤に対応)。
     wires.extend(_energy_metering(draw_paths))
