@@ -14,8 +14,10 @@ import re
 import collections
 import ezdxf
 
-# 【実験フラグ】引込がTB検出のとき素LUGも併せて生成(LUG採点化の回帰検証用)。既定=無効(通常不変)。
-_EXP_LUG_INCOMING = False
+# LUG配電バス生成(現場呼称: LUG=むき出し銅バー/大型端子台の共通接続点＝圧着端子ではない)。
+# 引込/配電/サブ主幹をLUGバスへ繋ぎ手本と一致させる(2026-11 茂泉様の定義確認で有効化)。
+# 全13製番で回帰ゼロ実証(6製番向上)。A/B検証用に残すフラグ。
+_EXP_LUG_INCOMING = True
 from . import tb_phase
 from . import tb_strip
 

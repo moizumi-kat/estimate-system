@@ -1097,11 +1097,10 @@ def score_production_net(seiban_dir, dev_level=False, add_main_circuit=True, nam
             ra, rb = ft.endpoint_sym(a), ft.endpoint_sym(b)
             if is_ext(ra, a['term']) or is_ext(rb, b['term']):
                 continue
-            # 圧着端子(LUG)は余計な情報(茂泉様確定2026-11)＝採点対象外。LUGは物理的な圧着点で
-            # 番号も内部配置図依存・システム採番のため、手本のLUG端点を持つ辺は母体から除外する
-            # (場外ケーブルと同様のスキップ)。'LUG-TB<n>'等の計量端子台は対象外にしない(^LUG[-数字]のみ)。
-            if _is_lug(ra) or _is_lug(rb):
-                continue
+            # 【LUGは採点対象(茂泉様の定義確認2026-11で見直し)】LUG=むき出し銅バー/大型端子台の
+            # 共通接続点(DEVICE=Lug/LugTB/ﾜｲﾄﾞﾊﾞｰ)＝配線の接続場所であり、圧着端子(付属品R8-8)ではない。
+            # 本番(main_circuit)がLUG配電バスを生成するので母体に含めて採点する(全13製番で回帰ゼロ実証)。
+            # 注: 盤外形の外側に描かれた圧着端子(付属品)はLugでなく手本にも無いため元から非計上。
             if is_oversize(w):
                 continue                       # 太物(≥8sq)=主回路=別工程(1人目)。境界は手本に合わせる
             na = _nsym(resolve(ra, rb, _g_circ(a.get('gousen'))), lmap)
