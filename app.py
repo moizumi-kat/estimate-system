@@ -4690,12 +4690,16 @@ def api_symcolor():
     except Exception: idx=0
     png=_page_png(fn, data, idx, zoom=2)
     if png is None: return jsonify(ok=False, reason='no_page', msg='ページを描画できません')
+    tset=(request.form.get('set','') or '').strip()
     try:
-        cpng, counts = _sd.colorize(png)
+        if tset:
+            cpng, counts = _sd.colorize(png, tset); used=tset
+        else:
+            cpng, counts, used = _sd.auto_colorize(png)   # 図面に合うセットを自動選択(設計事務所差を吸収)
         if cpng is None:
-            return jsonify(ok=False, reason='detect', msg='記号検出に失敗しました', counts=counts)
+            return jsonify(ok=False, reason='detect', msg='記号を検出できませんでした(この図面向けのテンプレ校正が必要かもしれません)', counts=counts, set=used)
         b64='data:image/png;base64,'+base64.standard_b64encode(cpng).decode()
-        return jsonify(ok=True, img=b64, counts=counts)
+        return jsonify(ok=True, img=b64, counts=counts, set=used, sets=_sd.list_sets())
     except Exception as e:
         return jsonify(ok=False, reason='error', msg=str(e)[:120])
 

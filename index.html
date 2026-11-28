@@ -686,7 +686,8 @@ async function dwgSymColor(){
     const cnt=j.counts||{}; const parts=Object.keys(cnt).map(k=>esc(k)+'×'+cnt[k]);
     const total=Object.values(cnt).reduce((a,b)=>a+b,0);
     if(info){ info.style.display='block';
-      info.innerHTML='🎨 <b>記号検出 '+total+'件</b>（'+ (parts.join('／')||'0') +'）　— 記号だけを機器別色で着色（配線は黒）。位置・台数は概略の当たり付け。'; }
+      const setlbl=j.set&&j.set!=='default'?'（校正セット:'+esc(j.set)+'）':'';
+      info.innerHTML='🎨 <b>記号検出 '+total+'件</b>'+setlbl+'（'+ (parts.join('／')||'0') +'）　— 記号だけを機器別色で着色（配線は黒）。位置・台数は概略の当たり付け。'; }
     if(btn)btn.textContent='🎨 元の図面に戻す';
   }catch(e){ alert('記号着色に失敗しました: '+e); }
   finally{ if(btn){btn.disabled=false; if(!_dwgColored)btn.textContent='🎨 記号で着色(AI)';} }
