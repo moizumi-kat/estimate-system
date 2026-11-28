@@ -965,6 +965,8 @@ def _chuketsu(draw_paths):
         return []
     dev_pos = set()   # 中欠用機器の位置(x,y丸め)=同一機器を複数図面で重複カウントしない
     has_tb = False
+    feeders = set()   # Wh(電力量計)の台番号=幹線番号
+    meters = set()    # ﾏﾙﾁﾒｰﾀの番号(11,12,21,22…)
     for p in dpaths:
         try:
             doc = ezdxf.readfile(p)
@@ -974,13 +976,18 @@ def _chuketsu(draw_paths):
             if not ins.attribs:
                 continue
             a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
-            if a.get('DEVICE', '') == '中欠用':
+            dev = a.get('DEVICE', ''); dv1 = str(a.get('DEVICE1', '')).strip()
+            if dev == '中欠用':
                 try:
                     dev_pos.add((round(ins.dxf.insert.x), round(ins.dxf.insert.y)))
                 except Exception:
                     dev_pos.add((len(dev_pos), 0))
-            if a.get('PARTS', '') == 'TB' and a.get('DEVICE1', '') == '中欠用':
+            if a.get('PARTS', '') == 'TB' and dv1 == '中欠用':
                 has_tb = True
+            if dev in ('Wh', 'WHM') and re.fullmatch(r'\d+', dv1):
+                feeders.add(dv1)
+            if dev == 'ﾏﾙﾁﾒｰﾀ' and re.fullmatch(r'\d+', dv1):
+                meters.add(dv1)
     n_dev = len(dev_pos)
     if not (has_tb and n_dev):
         return []
@@ -988,6 +995,36 @@ def _chuketsu(draw_paths):
     for i in range(1, n_dev + 1):
         wires.append({'from': '中欠用:', 'to': f'中欠用-TB{i}:',
                       'circuit': '', 'phase': '', 'confidence': '要確認'})
+    # 【LUG接続点を含める方針(茂泉様2026-11見直し: LUGは圧着端子でなく配線の接続場所)】
+    # 中欠用・マルチ計器の LUG 合流(共通接続点)を本番に表現する。LUGは名前非依存トポロジーで一致。
+    # 中欠用は3-21083のみ発火＝このLUG生成も3-21083限定＝他盤は不変(回帰ゼロ)。手本で裏取り済:
+    #   中欠用-TB{i} は幹線{i}の主幹(MCCB-{i})/計器(WHM-{i})と同点で合流(LUG-3/LUG-6)＋単独圧着(LUG-2/LUG-5)。
+    #   マルチ計器の電圧源 LUG は各幹線の F-MM{m} と ﾏﾙﾁ-{m}(手本 LUG-1/LUG-4)で合流。
+    _lid = [90]
+    def _lug():
+        _lid[0] += 1
+        return f'LUG-{_lid[0]}:'
+    def _v(f, t):
+        wires.append({'from': f, 'to': t, 'circuit': '', 'phase': '',
+                      'confidence': '要確認'})
+    fl = sorted(feeders, key=int)
+    for idx, i in enumerate(fl, start=1):
+        if idx > n_dev:
+            break
+        n = _lug()                       # 中欠用-TB{idx} と 幹線{i}主幹の合流
+        _v(f'中欠用-TB{idx}:', n)
+        _v(f'MCCB-{i}:', n)
+        _v(f'WHM-{i}:', n)
+        _v(f'中欠用-TB{idx}:', _lug())    # 単独圧着(バーへ)
+    # マルチ計器: 幹線ごとの入口メータ(番号最大=幹線先頭桁+2)の F-MM/ﾏﾙﾁ を素LUGで合流
+    grp = {}
+    for m in meters:
+        grp.setdefault(m[0], []).append(m)
+    for f in sorted(grp):
+        entry = max(grp[f], key=int)
+        n = _lug()
+        _v(f'F-MM{entry}:1', n)
+        _v(f'ﾏﾙﾁ-{entry}:N', n)
     return wires
 
 
