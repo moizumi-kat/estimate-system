@@ -13,6 +13,9 @@
 import re
 import collections
 import ezdxf
+
+# 【実験フラグ】引込がTB検出のとき素LUGも併せて生成(LUG採点化の回帰検証用)。既定=無効(通常不変)。
+_EXP_LUG_INCOMING = False
 from . import tb_phase
 from . import tb_strip
 
@@ -1356,8 +1359,14 @@ def generate(draw_paths, load_factor=None, seiban=None):
             if ph == 'E':
                 earth_pts.append((f'{tb}:{circ}E', conf))
                 continue
-            wires.append({'from': incoming_node(circ, ph), 'to': f'{bsym}:{_IN[ph]}',
+            inode = incoming_node(circ, ph)
+            wires.append({'from': inode, 'to': f'{bsym}:{_IN[ph]}',
                           'circuit': circ, 'phase': ph, 'confidence': conf})
+            if _EXP_LUG_INCOMING and inode.startswith('TB-'):
+                # 【実験】引込がTB検出でも手本はLUG圧着の盤がある(5-21094: TB-1はTB-C1用で分岐入力はLUG)。
+                # TBとLUGの両方を出し、手本が使う方で命中(余分は無害)。回帰は全製番で実測して判断。
+                wires.append({'from': 'LUG:', 'to': f'{bsym}:{_IN[ph]}',
+                              'circuit': circ, 'phase': ph, 'confidence': conf})
             if circ not in contactors:       # 給電回路のみ 遮断器:2/4/6→TB(電動機回路は熱動51経由で出さない)
                 wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'{tb}:{circ}{ph}',
                               'circuit': circ, 'phase': ph, 'confidence': conf})
