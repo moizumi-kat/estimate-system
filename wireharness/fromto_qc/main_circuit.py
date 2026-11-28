@@ -946,21 +946,24 @@ def _chuketsu(draw_paths):
       - 中欠用の機器 DEVICE='中欠用'(BNH15LWx3)×N と、中欠用の端子台 PARTS=TB/DEVICE1='中欠用'(共立TD-02 3P)。
       - 手本: 中欠用→中欠用-TB1 / 中欠用→中欠用-TB2(機器N台分だけ端子1..Nへ)。
         中欠用-TB→LUG(各TB端子→LUG)は圧着端子(LUG)でスコープ外=採点除外のため生成しない。
-    中欠用の機器・端子台は機器相番号図(DCT)にのみ在り skel/seq/D0*(本番が読む図面)に無いため、
-    seiban_dir から機器相番号図を直接読む(_energy_metering と同じ自前読み)。中欠用の機器と端子台が
-    揃う盤でのみ発火＝他盤は空＝回帰ゼロ。単線図に描かれない内部配線のため confidence=要確認(○)。"""
+    中欠用の機器・端子台は単線図/skel/seq/D0*(本番が読む結線図)に描かれず、内部配置図側
+    (3-21083では機器相番号図＝G001内部配置図に機器相番号を付した対の図)にのみ在る。どちらの内部配置図
+    (機器相番号図 / G0* / D0*)に描かれても拾えるよう両系を読み、同一位置は座標で重複排除する。
+    中欠用の機器と端子台が揃う盤でのみ発火＝他盤は空＝回帰ゼロ。単線図に無い内部配線のため confidence=要確認(○)。"""
     import os as _os
     import glob as _glob
     dpaths = []
     for p in (draw_paths or []):
         d = _os.path.dirname(p)
         if d:
-            for pat in ('機器相番号_*.dxf', '機器相番号_*.DXF'):
+            for pat in ('機器相番号_*.dxf', '機器相番号_*.DXF',
+                        '図面データ_*G0*.dxf', '図面データ_*G0*.DXF',
+                        '図面データ_*D0*.dxf', '図面データ_*D0*.DXF'):
                 dpaths += _glob.glob(_os.path.join(d, pat))
     dpaths = sorted(set(dpaths))
     if not dpaths:
         return []
-    n_dev = 0
+    dev_pos = set()   # 中欠用機器の位置(x,y丸め)=同一機器を複数図面で重複カウントしない
     has_tb = False
     for p in dpaths:
         try:
@@ -972,9 +975,13 @@ def _chuketsu(draw_paths):
                 continue
             a = {x.dxf.tag: (x.dxf.text or '').strip() for x in ins.attribs}
             if a.get('DEVICE', '') == '中欠用':
-                n_dev += 1
+                try:
+                    dev_pos.add((round(ins.dxf.insert.x), round(ins.dxf.insert.y)))
+                except Exception:
+                    dev_pos.add((len(dev_pos), 0))
             if a.get('PARTS', '') == 'TB' and a.get('DEVICE1', '') == '中欠用':
                 has_tb = True
+    n_dev = len(dev_pos)
     if not (has_tb and n_dev):
         return []
     wires = []
