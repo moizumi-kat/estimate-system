@@ -18,7 +18,8 @@
  },
  "counts": {
   "canonical_devices": 56,
-  "distinct_aliases": 103
+  "distinct_aliases": 103,
+  "jis_mapped": 45
  },
  "entries": [
   {
@@ -30,7 +31,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "43231(PAS)/高圧機器"
+   "db_code_family": "43231(PAS)/高圧機器",
+   "jis_no": "07-13-08",
+   "symbol_shape": "接点(気中開閉)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "方向性SOG制御装置",
@@ -39,7 +44,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "43231付属/制御"
+   "db_code_family": "43231付属/制御",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "ケーブルヘッド",
@@ -48,7 +57,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "79030(CH取付金具)※端末自体は対象外"
+   "db_code_family": "79030(CH取付金具)※端末自体は対象外",
+   "jis_no": "慣用",
+   "symbol_shape": "ケーブルヘッド",
+   "symbol_styles": 1,
+   "conventional": true
   },
   {
    "canonical": "避雷器",
@@ -57,7 +70,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "避雷器(高圧機器)"
+   "db_code_family": "避雷器(高圧機器)",
+   "jis_no": "07-22-03",
+   "symbol_shape": "箱+下矢印(避雷器)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "サージ防護デバイス",
@@ -80,7 +97,11 @@
    ],
    "ansi_no": [],
    "kind": "接地",
-   "db_code_family": "接地工事(建築側)・金物"
+   "db_code_family": "接地工事(建築側)・金物",
+   "symbol_shape": "接地記号(A/B/C/D種)",
+   "jis_no": "02-15系",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "計器用変圧変流器(取引/需給)",
@@ -90,7 +111,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "44301(VCT)"
+   "db_code_family": "44301(VCT)",
+   "jis_no": "慣用",
+   "symbol_shape": "箱+VCT",
+   "symbol_styles": 1,
+   "conventional": true
   },
   {
    "canonical": "計器用変圧器",
@@ -100,7 +125,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "44001/44002"
+   "db_code_family": "44001/44002",
+   "jis_no": "06-13-01",
+   "symbol_shape": "丸/コイル(計器用変圧器)",
+   "symbol_styles": 2,
+   "conventional": false
   },
   {
    "canonical": "変流器",
@@ -109,7 +138,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "44系/72系(低圧CT)"
+   "db_code_family": "44系/72系(低圧CT)",
+   "jis_no": "06-09-10",
+   "symbol_shape": "丸スラッシュ/格子(変流器)",
+   "symbol_styles": 2,
+   "conventional": false
   },
   {
    "canonical": "零相変流器",
@@ -118,7 +151,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "44201-44203"
+   "db_code_family": "44201-44203",
+   "jis_no": "06-13-10",
+   "symbol_shape": "丸+矢/格子(零相変流器)",
+   "symbol_styles": 2,
+   "conventional": false
   },
   {
    "canonical": "零相計器用変圧器",
@@ -129,7 +166,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "44026(GVT=接地形計器用変圧器・ZVT/EVT/GVT同一)"
+   "db_code_family": "44026(GVT=接地形計器用変圧器・ZVT/EVT/GVT同一)",
+   "jis_no": "慣用",
+   "symbol_shape": "接地形計器用変圧器",
+   "symbol_styles": 1,
+   "conventional": true
   },
   {
    "canonical": "パルス変成器/検出器",
@@ -159,7 +200,11 @@
     "52"
    ],
    "kind": "機器",
-   "db_code_family": "43001-43013/受電セット内包"
+   "db_code_family": "43001-43013/受電セット内包",
+   "jis_no": "07-13-05",
+   "symbol_shape": "接点+真空(遮断)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "高圧真空/電磁接触器",
@@ -169,7 +214,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "43101-43112(VCS)"
+   "db_code_family": "43101-43112(VCS)",
+   "jis_no": "07-13-02",
+   "symbol_shape": "接点+真空(電磁接触)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "高圧負荷開閉器",
@@ -179,7 +228,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "43320/43321/43330"
+   "db_code_family": "43320/43321/43330",
+   "jis_no": "07-21-09",
+   "symbol_shape": "接点+限流ヒューズ(負荷開閉)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "断路器",
@@ -188,7 +241,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "43401-43421"
+   "db_code_family": "43401-43421",
+   "jis_no": "07-13-06",
+   "symbol_shape": "接点(断路・ブレード)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "配線用遮断器",
@@ -198,7 +255,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "40/50/60系(端子台で系統別)"
+   "db_code_family": "40/50/60系(端子台で系統別)",
+   "jis_no": "07-13-05",
+   "symbol_shape": "接点(配線用遮断)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "漏電遮断器",
@@ -208,7 +269,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "41/51/61系"
+   "db_code_family": "41/51/61系",
+   "symbol_shape": "接点(遮断)+漏電(零相/接地)マーク",
+   "jis_no": "07-13-05+漏電",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "高圧真空開閉器",
@@ -217,7 +282,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "43系 ※VSは電圧計切換SWと二義"
+   "db_code_family": "43系 ※VSは電圧計切換SWと二義",
+   "symbol_shape": "接点+真空(開閉器)",
+   "jis_no": "07-13-02系",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "電源切替電磁接触器(MCTT)",
@@ -238,7 +307,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "50系"
+   "db_code_family": "50系",
+   "symbol_shape": "接点(配線用遮断)",
+   "jis_no": "07-13-05",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "電磁接触器/マグネット",
@@ -249,7 +322,11 @@
     "52"
    ],
    "kind": "機器",
-   "db_code_family": "開閉器"
+   "db_code_family": "開閉器",
+   "jis_no": "07-13-02",
+   "symbol_shape": "接点(電磁接触)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "エネセーバ(励磁突入抑制)",
@@ -267,7 +344,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "43622-43631"
+   "db_code_family": "43622-43631",
+   "jis_no": "07-21-01",
+   "symbol_shape": "長方形(ヒューズ)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "ヒューズ",
@@ -276,7 +357,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "ヒューズ"
+   "db_code_family": "ヒューズ",
+   "jis_no": "07-21-01",
+   "symbol_shape": "長方形(ヒューズ)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "サーキットプロテクタ",
@@ -285,7 +370,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "CP"
+   "db_code_family": "CP",
+   "symbol_shape": "接点(配線用遮断)",
+   "jis_no": "07-13-05",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "変圧器(単相/三相/スコット)",
@@ -297,7 +386,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "17系(低圧セット)/45000-45039(高圧支給)"
+   "db_code_family": "17系(低圧セット)/45000-45039(高圧支給)",
+   "jis_no": "06-09-01",
+   "symbol_shape": "二重丸(変圧器)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "進相コンデンサ",
@@ -307,7 +400,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "45100-45113(高圧支給)/53系(低圧)"
+   "db_code_family": "45100-45113(高圧支給)/53系(低圧)",
+   "jis_no": "04-02-01",
+   "symbol_shape": "箱入りコンデンサ平行線",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "直列リアクトル",
@@ -316,7 +413,11 @@
    ],
    "ansi_no": [],
    "kind": "機器",
-   "db_code_family": "45200-45207(高圧支給)/53系(低圧)"
+   "db_code_family": "45200-45207(高圧支給)/53系(低圧)",
+   "jis_no": "04-03-01",
+   "symbol_shape": "コイル(直列リアクトル)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "放電コイル(ディスチャージ)",
@@ -336,7 +437,11 @@
     "55"
    ],
    "kind": "機器",
-   "db_code_family": "力率制御"
+   "db_code_family": "力率制御",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "過電流継電器",
@@ -347,7 +452,11 @@
     "51"
    ],
    "kind": "継電器",
-   "db_code_family": "46000/46001/46387"
+   "db_code_family": "46000/46001/46387",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "地絡方向継電器(高圧)",
@@ -358,7 +467,11 @@
     "67"
    ],
    "kind": "継電器",
-   "db_code_family": "46040/46041"
+   "db_code_family": "46040/46041",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "地絡過電圧継電器",
@@ -369,7 +482,11 @@
     "64"
    ],
    "kind": "継電器",
-   "db_code_family": "46360"
+   "db_code_family": "46360",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "不足電圧継電器",
@@ -382,7 +499,11 @@
     "27R(遅延)"
    ],
    "kind": "継電器",
-   "db_code_family": "継電器"
+   "db_code_family": "継電器",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "逆電力継電器",
@@ -391,7 +512,11 @@
    ],
    "ansi_no": [],
    "kind": "継電器",
-   "db_code_family": "継電器"
+   "db_code_family": "継電器",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "低圧地絡継電器",
@@ -401,7 +526,11 @@
    ],
    "ansi_no": [],
    "kind": "継電器",
-   "db_code_family": "46系"
+   "db_code_family": "46系",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "電圧継電器",
@@ -412,7 +541,11 @@
     "84"
    ],
    "kind": "継電器",
-   "db_code_family": "継電器"
+   "db_code_family": "継電器",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "漏電継電器",
@@ -421,7 +554,11 @@
    ],
    "ansi_no": [],
    "kind": "継電器",
-   "db_code_family": "独立新規不要。文脈で選定: 低圧地絡=46401(LG-RY)/漏電警報=46410(ELR)/分岐内蔵=40x31(漏電アラーム)。EL(漏電継電器)≠ELB(漏電遮断器)に注意"
+   "db_code_family": "独立新規不要。文脈で選定: 低圧地絡=46401(LG-RY)/漏電警報=46410(ELR)/分岐内蔵=40x31(漏電アラーム)。EL(漏電継電器)≠ELB(漏電遮断器)に注意",
+   "symbol_shape": "JEM1090制御器具番号付き箱(例 27=UVR/51=OCR/64=OVGR/67=DGR/55=APFC)",
+   "conventional": true,
+   "symbol_styles": 1,
+   "jis_no": "JEM1090(器具番号)"
   },
   {
    "canonical": "漏電警報器(ELR)",
@@ -462,7 +599,11 @@
    ],
    "ansi_no": [],
    "kind": "継電器",
-   "db_code_family": "保護"
+   "db_code_family": "保護",
+   "jis_no": "07-15-21",
+   "symbol_shape": "箱+熱動(継電器)",
+   "symbol_styles": 1,
+   "conventional": false
   },
   {
    "canonical": "電圧計",
@@ -472,7 +613,11 @@
    ],
    "ansi_no": [],
    "kind": "計器",
-   "db_code_family": "42001-42003"
+   "db_code_family": "42001-42003",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "電流計",
@@ -482,7 +627,11 @@
    ],
    "ansi_no": [],
    "kind": "計器",
-   "db_code_family": "42010-42014"
+   "db_code_family": "42010-42014",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "電力計",
@@ -492,7 +641,11 @@
    ],
    "ansi_no": [],
    "kind": "計器",
-   "db_code_family": "42系"
+   "db_code_family": "42系",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "力率計",
@@ -505,7 +658,11 @@
    ],
    "ansi_no": [],
    "kind": "計器",
-   "db_code_family": "42系"
+   "db_code_family": "42系",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "電力量計",
@@ -516,7 +673,11 @@
    ],
    "ansi_no": [],
    "kind": "計器",
-   "db_code_family": "62系(WHM)"
+   "db_code_family": "62系(WHM)",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "周波数計",
@@ -526,7 +687,11 @@
    ],
    "ansi_no": [],
    "kind": "計器",
-   "db_code_family": "42系"
+   "db_code_family": "42系",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "無効電力計",
@@ -535,7 +700,11 @@
    ],
    "ansi_no": [],
    "kind": "計器",
-   "db_code_family": "42系"
+   "db_code_family": "42系",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "時間計",
@@ -544,7 +713,11 @@
    ],
    "ansi_no": [],
    "kind": "計器",
-   "db_code_family": "42系"
+   "db_code_family": "42系",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "最大需要/マルチ指示計",
@@ -557,7 +730,11 @@
    ],
    "ansi_no": [],
    "kind": "計器",
-   "db_code_family": "42075-42088"
+   "db_code_family": "42075-42088",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "トランスデューサ",
@@ -579,7 +756,11 @@
     "26"
    ],
    "kind": "計器",
-   "db_code_family": "計装/74系"
+   "db_code_family": "計装/74系",
+   "symbol_shape": "丸+文字(V/A/W/Wh/PF/F/θ 等, JIS08系の計器丸)",
+   "conventional": false,
+   "symbol_styles": 1,
+   "jis_no": "08系(計器丸)"
   },
   {
    "canonical": "圧力センサー",
@@ -609,5 +790,7 @@
   "open_item": "(1)CCT単体計上の要否 (2)LD漏電火災警報器を防災で対象外としてよいか — の2点のみ茂泉様確認",
   "note": "方針5(新規追加せず)を満たす。両者は別名辞書への登録のみ。",
   "decision": "茂泉様確定(2026-11): 別名登録のみ。db.jsonへの新規コード追加はしない(既存コードに名寄せ=漏れゼロ・重複ゼロ)。CCT単体計上/LD防災扱いも現状は既存/対象外のまま。"
- }
+ },
+ "symbol_boundary_rule": "規格の図記号は「記号本体(グリフ=接点/丸/箱/コイル/文字箱)」であり、接続線(リード線・配線)は含まない。ゆえに着色・記号検出はグリフのみを対象とし、貫通配線・母線は除外する(黒のまま)。CT/VT/ZCTは様式1(丸系)・様式2(格子/コイル系)の2図記号があり、両様式のテンプレートを用意する。※慣用記号(VCT/MOF/TB/NP/VS/AS/CH/CVT/EVT/BCT等)はJIS規定外で文字入り箱・慣用図形のため、記号検出＋近傍OCRで判定する。",
+ "symbol_sources": "農水省 電気設備工事標準仕様 §7.3「文字記号〔JEM1115(2010)抜粋〕及び図記号〔JIS C0617(2011)〕」/制御器具番号〔JEM1090(2008)〕"
 }
