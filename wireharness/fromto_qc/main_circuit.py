@@ -1375,6 +1375,11 @@ def generate(draw_paths, load_factor=None, seiban=None):
             if circ not in contactors:       # 給電回路のみ 遮断器:2/4/6→TB(電動機回路は熱動51経由で出さない)
                 wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'{tb}:{circ}{ph}',
                               'circuit': circ, 'phase': ph, 'confidence': conf})
+                if _EXP_LUG_INCOMING and tb == 'TB':
+                    # 出力が汎用TB(台番号無し)=配電バス(LUG/LugTB)へ母線配電する盤がある
+                    # (1-12188_117: 主幹MCCB-1出力→LUG→分岐)。素LUGへも併記し手本と一致。
+                    wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': 'LUG:',
+                                  'circuit': circ, 'phase': ph, 'confidence': conf})
             elif ph in ('U', 'W'):           # 電動機回路: 遮断器出力→接触器入力(U:2→1 / W:6→5)。
                 # V(4→3)は変流器(CT)経由で直結でないため出さない(手本一致・◎誤答ゼロ)。接触器=52-回路。
                 wires.append({'from': f'{bsym}:{_OUT[ph]}', 'to': f'52-{circ}:{_IN[ph]}',
