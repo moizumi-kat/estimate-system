@@ -1,0 +1,129 @@
+{
+ "title": "記号検出テンプレート(advisory・積算額に無関係)",
+ "note": "支給図面の凡例・本図から切り出した機器記号glyph。JIS/JEM規格と照合済(核が一致)。検出・着色は確認ビューアの当たり付け用で、選定エンジンには一切流さない=回帰ゼロ。",
+ "boundary_rule": "記号本体(glyph)のみ対象。接続線(リード・配線)は記号ではない→着色・検出から除外。",
+ "verification": "JIS C0617/JEM1115で照合。TR=06-09-01(二重丸)/VCB=07-13-05/DS=07-13-06/CT=06-09-10/ZCT=06-13-10/VT=06-13-01/SC=04-02-01/SR=04-03-01/VMC=07-13-02/LBS=07-21-09。御社図面は開閉機器を箱囲みで描くため、核記号+箱でテンプレ化。",
+ "count": 15,
+ "templates": [
+  {
+   "device": "TR",
+   "name": "変圧器",
+   "jis_no": "06-09-01",
+   "file": "TR.png",
+   "w": 35,
+   "h": 42
+  },
+  {
+   "device": "SC",
+   "name": "進相コンデンサ",
+   "jis_no": "04-02-01",
+   "file": "SC.png",
+   "w": 27,
+   "h": 29
+  },
+  {
+   "device": "SR",
+   "name": "直列リアクトル",
+   "jis_no": "04-03-01",
+   "file": "SR.png",
+   "w": 26,
+   "h": 30
+  },
+  {
+   "device": "VMC",
+   "name": "真空電磁接触器",
+   "jis_no": "07-13-02",
+   "file": "VMC.png",
+   "w": 26,
+   "h": 38
+  },
+  {
+   "device": "LBS",
+   "name": "高圧負荷開閉器",
+   "jis_no": "07-21-09",
+   "file": "LBS.png",
+   "w": 19,
+   "h": 28
+  },
+  {
+   "device": "ELR",
+   "name": "漏電継電器",
+   "jis_no": "-",
+   "file": "ELR.png",
+   "w": 28,
+   "h": 18
+  },
+  {
+   "device": "VCB",
+   "name": "真空遮断器",
+   "jis_no": "07-13-05",
+   "file": "VCB.png",
+   "w": 26,
+   "h": 36
+  },
+  {
+   "device": "DS",
+   "name": "断路器",
+   "jis_no": "07-13-06",
+   "file": "DS.png",
+   "w": 26,
+   "h": 32
+  },
+  {
+   "device": "VT",
+   "name": "計器用変圧器",
+   "jis_no": "06-13-01",
+   "file": "VT.png",
+   "w": 42,
+   "h": 16
+  },
+  {
+   "device": "CT",
+   "name": "変流器",
+   "jis_no": "06-09-10",
+   "file": "CT.png",
+   "w": 18,
+   "h": 18
+  },
+  {
+   "device": "ZCT",
+   "name": "零相変流器",
+   "jis_no": "06-13-10",
+   "file": "ZCT.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "device": "METER_V",
+   "name": "計器(V)",
+   "jis_no": "08系",
+   "file": "METER_V.png",
+   "w": 28,
+   "h": 28
+  },
+  {
+   "device": "METER_A",
+   "name": "計器(A)",
+   "jis_no": "08系",
+   "file": "METER_A.png",
+   "w": 28,
+   "h": 28
+  },
+  {
+   "device": "RELAY",
+   "name": "継電器",
+   "jis_no": "JEM1090",
+   "file": "RELAY.png",
+   "w": 34,
+   "h": 26
+  },
+  {
+   "device": "CH",
+   "name": "ケーブルヘッド",
+   "jis_no": "慣用",
+   "file": "CH.png",
+   "w": 22,
+   "h": 28
+  }
+ ]
+}

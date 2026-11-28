@@ -4672,6 +4672,33 @@ def api_locate():
     except Exception as e:
         return jsonify(ok=False,pos=[],error=str(e)[:120])
 
+@app.route('/api/symcolor', methods=['POST'])
+@login_required
+def api_symcolor():
+    """図面ページ画像の機器記号をテンプレートマッチングで検出し、記号だけを機器別色で着色して返す(advisory)。
+    抽出・選定とは完全に独立(積算額に無関係・選定エンジン不変=回帰ゼロ)。
+    OpenCV未導入の本番では ok=False を返すだけで既存機能に影響しない。"""
+    try:
+        import symbol_detect as _sd
+    except Exception:
+        return jsonify(ok=False, reason='module', msg='記号認識モジュールが読み込めません')
+    if not _sd.available():
+        return jsonify(ok=False, reason='no_cv2', msg='記号認識にはサーバにOpenCV(opencv-python-headless)が必要です')
+    fn,data=_src_or_stored()
+    if data is None: return jsonify(ok=False, reason='no_file', msg='図面がありません')
+    try: idx=int(request.form.get('page','0') or 0)
+    except Exception: idx=0
+    png=_page_png(fn, data, idx, zoom=2)
+    if png is None: return jsonify(ok=False, reason='no_page', msg='ページを描画できません')
+    try:
+        cpng, counts = _sd.colorize(png)
+        if cpng is None:
+            return jsonify(ok=False, reason='detect', msg='記号検出に失敗しました', counts=counts)
+        b64='data:image/png;base64,'+base64.standard_b64encode(cpng).decode()
+        return jsonify(ok=True, img=b64, counts=counts)
+    except Exception as e:
+        return jsonify(ok=False, reason='error', msg=str(e)[:120])
+
 # 確実ダウンロード(GET): ブラウザでURLを開くだけで保存できる。iOS/PC問わず動作。
 @app.route('/api/excel/download', methods=['GET'])
 @login_required

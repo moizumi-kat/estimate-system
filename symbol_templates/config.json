@@ -1,0 +1,22 @@
+{
+ "_note": "記号検出(テンプレートマッチング)の設定。color=BGR, th=一致閾値. 検出・着色はadvisory(積算額に無関係・選定エンジン不変)。",
+ "scales": [0.72, 0.80, 0.88, 0.96, 1.0, 1.08, 1.16, 1.24],
+ "nms_iou": 0.35,
+ "devices": {
+  "TR":      {"file":"TR.png",      "jis":"06-09-01", "name":"変圧器",       "color":[0,0,255],   "th":0.70},
+  "SC":      {"file":"SC.png",      "jis":"04-02-01", "name":"進相コンデンサ","color":[200,0,200], "th":0.78},
+  "SR":      {"file":"SR.png",      "jis":"04-03-01", "name":"直列リアクトル","color":[140,70,0],   "th":0.80},
+  "VMC":     {"file":"VMC.png",     "jis":"07-13-02", "name":"真空電磁接触器","color":[0,200,255],  "th":0.80},
+  "LBS":     {"file":"LBS.png",     "jis":"07-21-09", "name":"高圧負荷開閉器","color":[200,200,0],  "th":0.80},
+  "ELR":     {"file":"ELR.png",     "jis":"-",        "name":"漏電継電器",   "color":[0,160,0],   "th":0.76},
+  "VCB":     {"file":"VCB.png",     "jis":"07-13-05", "name":"真空遮断器",   "color":[0,140,255], "th":0.78},
+  "DS":      {"file":"DS.png",      "jis":"07-13-06", "name":"断路器",       "color":[255,0,0],   "th":0.80},
+  "VT":      {"file":"VT.png",      "jis":"06-13-01", "name":"計器用変圧器", "color":[180,0,220], "th":0.80},
+  "CT":      {"file":"CT.png",      "jis":"06-09-10", "name":"変流器",       "color":[150,110,0], "th":0.80},
+  "ZCT":     {"file":"ZCT.png",     "jis":"06-13-10", "name":"零相変流器",   "color":[255,128,0], "th":0.82},
+  "METER_V": {"file":"METER_V.png", "jis":"08系",     "name":"計器(V)",      "color":[90,90,90],  "th":0.80},
+  "METER_A": {"file":"METER_A.png", "jis":"08系",     "name":"計器(A)",      "color":[110,110,110],"th":0.80},
+  "RELAY":   {"file":"RELAY.png",   "jis":"JEM1090",  "name":"継電器",       "color":[150,0,200], "th":0.84},
+  "CH":      {"file":"CH.png",      "jis":"慣用",     "name":"ケーブルヘッド","color":[0,90,160],  "th":0.82}
+ }
+}

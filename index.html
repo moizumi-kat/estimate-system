@@ -535,6 +535,7 @@ function bulkReset(){
 let _dwgURLs=[], _dvList=[], _dwgFile=0, _dwgPage=0, _dwgPages=1, _dwgCur=null;
 let _dwgPos={};     // seq -> {file,page,x,y}  位置(AI推定・ページ移動後も保持)
 let _dwgChk={};     // seq -> true  確認済み(消し込み)
+let _dwgColored=false;   // 記号着色の表示中フラグ(advisory)
 let _dwgFiles=[];   // 表示対象の図面: [{name, file?(端末メモリ), fidx?(サーバ保存)}]
 // 現在の図面を file(端末メモリ) か fidx(サーバ保存) でFormDataに積む
 function _dwgSrcFd(fd){ var e=_dwgFiles[_dwgFile]; if(e&&e.file){ fd.append('file',e.file); } else if(e){ fd.append('fidx',e.fidx); } return fd; }
@@ -580,9 +581,11 @@ async function toggleDrawing(){
      '<span id="dwgPg" style="font-size:12px;min-width:84px;text-align:center"></span>'+
      '<button onclick="dwgNav(1)" style="padding:4px 10px;border:0;border-radius:5px;cursor:pointer">▶</button>'+
      '<button id="dwgLoc" onclick="dwgLocate()" style="margin-left:6px;background:#e0a000;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer">この図面の位置を自動付け(AI)</button>'+
+     '<button id="dwgSym" onclick="dwgSymColor()" style="margin-left:6px;background:#1565c0;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer">🎨 記号で着色(AI)</button>'+
      '<button onclick="toggleDrawing()" style="margin-left:auto;background:#c0504d;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-weight:600;cursor:pointer">閉じる</button>'+
    '</div>'+
-   '<div style="font-size:11px;color:#7a5c1a;background:#fffbe9;padding:5px 10px">表の行or赤数字をタップで対応箇所が光ります。確認したら「確認」ボタンで部品をマーカー塗り(消し込み)。 <b id="dwgProg" style="color:#2e7d46">確認 0 / '+_dvList.length+'</b> ／「位置を自動付け(AI)」で現在ページの機器に番号を付けます（位置は概略・要目視確認）。</div>'+
+   '<div style="font-size:11px;color:#7a5c1a;background:#fffbe9;padding:5px 10px">表の行or赤数字をタップで対応箇所が光ります。確認したら「確認」ボタンで部品をマーカー塗り(消し込み)。 <b id="dwgProg" style="color:#2e7d46">確認 0 / '+_dvList.length+'</b> ／「位置を自動付け(AI)」で機器に番号、「記号で着色(AI)」で機器記号を色分け（どちらも位置は概略・要目視確認）。</div>'+
+   '<div id="dwgSymInfo" style="display:none;font-size:11px;color:#0d47a1;background:#e8f1fb;padding:5px 10px;border-top:1px solid #c7ddf3"></div>'+
    '<div id="dwgBody" style="flex:1;display:flex;min-height:0">'+
      '<div id="dwgImgWrap" style="flex:1 1 62%;position:relative;overflow:auto;background:#e8e8e8;min-width:0">'+
        '<div id="dwgInner" style="position:relative;display:inline-block;min-width:100%">'+
@@ -622,6 +625,9 @@ async function dwgSetFile(i){
 async function dwgShowPage(){
   const img=document.getElementById('dwgImg'); if(!img)return;
   const pg=document.getElementById('dwgPg'); if(pg)pg.textContent=(_dwgPage+1)+' / '+_dwgPages+' ページ';
+  // 記号着色は元画像に戻す(ページが変わると着色は無効)
+  _dwgColored=false; var _si=document.getElementById('dwgSymInfo'); if(_si)_si.style.display='none';
+  var _sb=document.getElementById('dwgSym'); if(_sb)_sb.textContent='🎨 記号で着色(AI)';
   _dwgClearPins(); _dwgRevoke(); _dwgDrawMarks();   // このページに既に位置付け済みの機器はマーク再描画
   try{
     const fd=_dwgSrcFd(new FormData()); fd.append('page',_dwgPage);
@@ -663,6 +669,27 @@ async function dwgLocate(){
     if(!pos.length) alert('この図面上で位置を特定できる機器が見つかりませんでした（別のページの可能性）。ページを切替えてお試しください。');
   }catch(e){ alert('位置付けに失敗しました: '+e); }
   finally{ if(btn){btn.disabled=false;btn.textContent='この図面の位置を自動付け(AI)';} }
+}
+// 記号で着色: サーバで記号をテンプレート照合→機器だけ色分けしたページ画像を取得して表示(advisory)。
+// 抽出・選定には一切影響しない。もう一度押すと元の図面に戻る。
+async function dwgSymColor(){
+  const btn=document.getElementById('dwgSym'); const img=document.getElementById('dwgImg');
+  const info=document.getElementById('dwgSymInfo');
+  if(!img)return;
+  if(_dwgColored){ _dwgColored=false; if(info)info.style.display='none'; if(btn)btn.textContent='🎨 記号で着色(AI)'; dwgShowPage(); return; }
+  if(btn){btn.disabled=true;btn.textContent='AIが記号を検出中…';}
+  try{
+    const fd=_dwgSrcFd(new FormData()); fd.append('page',_dwgPage);
+    const r=await fetch('/api/symcolor',{method:'POST',body:fd}); const j=await r.json();
+    if(!j||!j.ok){ alert('記号着色: '+((j&&j.msg)||'失敗しました')); return; }
+    img.src=j.img; _dwgColored=true;
+    const cnt=j.counts||{}; const parts=Object.keys(cnt).map(k=>esc(k)+'×'+cnt[k]);
+    const total=Object.values(cnt).reduce((a,b)=>a+b,0);
+    if(info){ info.style.display='block';
+      info.innerHTML='🎨 <b>記号検出 '+total+'件</b>（'+ (parts.join('／')||'0') +'）　— 記号だけを機器別色で着色（配線は黒）。位置・台数は概略の当たり付け。'; }
+    if(btn)btn.textContent='🎨 元の図面に戻す';
+  }catch(e){ alert('記号着色に失敗しました: '+e); }
+  finally{ if(btn){btn.disabled=false; if(!_dwgColored)btn.textContent='🎨 記号で着色(AI)';} }
 }
 function dwgSelDev(seq){
   if(_dwgCur!==null){ var op=document.getElementById('dpin'+_dwgCur),or=document.getElementById('dv'+_dwgCur),ob=document.getElementById('dblob'+_dwgCur); if(op)op.classList.remove('hot'); if(or)or.classList.remove('hot'); if(ob)ob.classList.remove('sel'); }
