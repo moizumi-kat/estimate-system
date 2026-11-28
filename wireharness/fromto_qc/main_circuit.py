@@ -992,9 +992,14 @@ def _chuketsu(draw_paths):
             if dev == 'ﾏﾙﾁﾒｰﾀ' and re.fullmatch(r'\d+', dv1):
                 meters.add(dv1)
     n_dev = len(dev_pos)
-    if not (has_tb and n_dev):
+    if not n_dev:
         return []
     wires = []
+    if not has_tb:
+        # 中欠用の端子台(TD-02)が無い盤(5-26012): 中欠用は直接LUGへ圧着(手本 中欠用→LUG)。
+        wires.append({'from': '中欠用:', 'to': 'LUG:',
+                      'circuit': '', 'phase': '', 'confidence': '要確認'})
+        return wires
     for i in range(1, n_dev + 1):
         wires.append({'from': '中欠用:', 'to': f'中欠用-TB{i}:',
                       'circuit': '', 'phase': '', 'confidence': '要確認'})
